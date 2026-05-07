@@ -9,6 +9,11 @@
       "entry": "src/index.ts",
       "project": "src/**/*.ts"
     },
+    "packages/core": {
+      "entry": "src/index.ts",
+      "project": "src/**/*.ts",
+      "ignoreDependencies": ["@t3-oss/env-nextjs", "pino", "pino-pretty", "zod"]
+    },
     "apps/*": {
       "entry": [
         "src/app/**/page.tsx",
