@@ -30,15 +30,19 @@ Read the prior phase plans' "learnings inherited" sections. Critical reminders u
 
 ### Task D1: Sentry module package skeleton
 
-**Files:** `_modules/observability-sentry/package.json`, `tsconfig.json`, `src/server.ts`, `src/client.ts`, `src/index.ts`, `README.md`
+**Files:** `_modules/observability-sentry/package.json`, `tsconfig.json`, `src/server.ts`, `src/edge.ts`, `src/client.ts`, `src/index.ts`, `README.md`
 
-- [ ] **Read Sentry Next.js docs**: `https://docs.sentry.io/platforms/javascript/guides/nextjs/`. Confirm:
+- [ ] **Read Sentry Next.js docs**: `https://docs.sentry.io/platforms/javascript/guides/nextjs/` and `https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/`. Confirm:
   - `@sentry/nextjs` package version
-  - `Sentry.init` API (server vs client config split)
+  - `Sentry.init` API (server vs edge vs client config split)
   - Tunnel option name and recommended path
   - Source maps upload config
 
+NOTE (verified 2026-05-07): `@sentry/nextjs` is at 10.x on npm. The modern setup splits into FOUR files: `instrumentation.ts` (Next.js root - dispatches to server/edge configs), `instrumentation-client.ts` (Next.js root - client init, replaces the old `sentry.client.config.ts`), `sentry.server.config.ts`, `sentry.edge.config.ts`. The wrapper `withSentryConfig(nextConfig, { ... })` is still recommended; the tunnel option is `tunnelRoute: '/sentry-tunnel'` (not just `tunnel`). A `global-error.tsx` page is also required for App Router error capture. The `onRequestError` export from `instrumentation.ts` (= `Sentry.captureRequestError`) is needed in Next.js 15+.
+
 - [ ] **Create `_modules/observability-sentry/package.json`**
+
+// Updated 2026-05-07 from initial draft: bumped @sentry/nextjs to ^10.0.0; added an edge.ts source file to mirror the modern setup.
 
 ```json
 {
@@ -48,6 +52,7 @@ Read the prior phase plans' "learnings inherited" sections. Critical reminders u
   "type": "module",
   "exports": {
     "./server": "./src/server.ts",
+    "./edge": "./src/edge.ts",
     "./client": "./src/client.ts"
   },
   "scripts": {
@@ -55,7 +60,7 @@ Read the prior phase plans' "learnings inherited" sections. Critical reminders u
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@sentry/nextjs": "^8.40.0",
+    "@sentry/nextjs": "^10.0.0",
     "@void/core": "workspace:*"
   },
   "devDependencies": {
@@ -71,10 +76,32 @@ Read the prior phase plans' "learnings inherited" sections. Critical reminders u
 
 - [ ] **Create `src/server.ts`**
 
+// Updated 2026-05-07 from initial draft: this module now exposes a registerServer() that callers wire from instrumentation.ts behind the runtime check, matching the modern Sentry pattern.
+
 ```ts
 import * as Sentry from '@sentry/nextjs';
 
-export async function register() {
+export function registerServer() {
+  const dsn = process.env['SENTRY_DSN'];
+  if (!dsn) return;
+
+  Sentry.init({
+    dsn,
+    tracesSampleRate: Number(process.env['SENTRY_TRACES_SAMPLE_RATE'] ?? '0.1'),
+    environment: process.env['NODE_ENV'] ?? 'development',
+    sendDefaultPii: true,
+  });
+}
+
+export const onRequestError = Sentry.captureRequestError;
+```
+
+- [ ] **Create `src/edge.ts`**
+
+```ts
+import * as Sentry from '@sentry/nextjs';
+
+export function registerEdge() {
   const dsn = process.env['SENTRY_DSN'];
   if (!dsn) return;
 
@@ -88,10 +115,13 @@ export async function register() {
 
 - [ ] **Create `src/client.ts`**
 
+// Updated 2026-05-07 from initial draft: tunnel option is `tunnelRoute` (passed via withSentryConfig in next.config.ts, not in Sentry.init). Removed it from here; left a comment pointing callers to next.config wiring. The DSN env var name is still NEXT_PUBLIC_SENTRY_DSN.
+
 ```ts
-'use client';
 import * as Sentry from '@sentry/nextjs';
 
+// This file is consumed from apps/web/instrumentation-client.ts. Do NOT add
+// 'use client' here - instrumentation-client.ts is not a React component.
 export function initSentryClient() {
   const dsn = process.env['NEXT_PUBLIC_SENTRY_DSN'];
   if (!dsn) return;
@@ -100,19 +130,25 @@ export function initSentryClient() {
     dsn,
     tracesSampleRate: Number(process.env['NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE'] ?? '0.1'),
     environment: process.env['NODE_ENV'] ?? 'development',
-    tunnel: '/monitoring',
+    sendDefaultPii: true,
+    // The tunnel route is configured in next.config.ts via
+    // withSentryConfig(..., { tunnelRoute: '/sentry-tunnel' }).
   });
 }
 ```
 
 - [ ] **Create `_modules/observability-sentry/README.md`** documenting:
   - Required env vars: `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, optional `SENTRY_TRACES_SAMPLE_RATE`
-  - Install steps:
+  - Install steps (modern Sentry 10.x pattern):
     1. Add to `apps/web/package.json` deps: `"@void/sentry": "workspace:*"`
     2. Run `bun install`
-    3. Uncomment the dynamic import in `apps/web/src/instrumentation.ts`
-    4. Add `Sentry.withSentryConfig(config, { ... })` wrapper in `apps/web/next.config.ts`
-    5. Create `apps/web/src/app/monitoring/route.ts` for the tunnel proxy (per docs)
+    3. In `apps/web/instrumentation.ts`, dispatch on `process.env.NEXT_RUNTIME`:
+       - if `'nodejs'`, dynamically import and call `registerServer()` from `@void/sentry/server`
+       - if `'edge'`, dynamically import and call `registerEdge()` from `@void/sentry/edge`
+       - re-export `onRequestError` from `@void/sentry/server`
+    4. Create `apps/web/instrumentation-client.ts` that imports and calls `initSentryClient()` from `@void/sentry/client`
+    5. Wrap `next.config.ts` with `withSentryConfig(config, { org, project, authToken, tunnelRoute: '/sentry-tunnel', silent: !process.env.CI })`
+    6. Add `apps/web/src/app/global-error.tsx` per the Sentry docs to capture React render errors
   - Removal steps to undo
 
 - [ ] Add to knip.json with `ignoreDependencies: []` once consumed by apps/web (later step).
@@ -120,9 +156,11 @@ export function initSentryClient() {
 
 ### Task D2: Sentry tunnel route handler template
 
-**Files:** `_modules/observability-sentry/templates/monitoring-route.ts.template`
+**Files:** `_modules/observability-sentry/templates/sentry-tunnel-route.ts.template`
 
 A copy-paste template that the install instructions reference. Documented because the tunnel route needs to live in `apps/web/`, not in the package itself.
+
+NOTE (verified 2026-05-07): Modern Sentry sets `tunnelRoute: '/sentry-tunnel'` via `withSentryConfig`, which is automatically wired by Sentry's webpack plugin and does NOT require a manual route handler in most setups. If a manual handler is still needed (custom CSP, custom proxy logic), the file lives at `apps/web/src/app/sentry-tunnel/route.ts`. The earlier `/monitoring` path was an older convention; use `/sentry-tunnel` for new setups.
 
 - [ ] Author per Sentry docs.
 - [ ] Commit: `feat(modules): add Sentry tunnel route template`
@@ -131,9 +169,13 @@ A copy-paste template that the install instructions reference. Documented becaus
 
 This task DEMONSTRATES the install procedure end-to-end so future MVPs can mirror it. Activate it but only in dev (no real DSN); verify the conditional dynamic import path works.
 
+NOTE (verified 2026-05-07): Modern Sentry on Next.js requires both `instrumentation.ts` (server/edge dispatch) AND `instrumentation-client.ts` (client init). Both files live at the apps/web/ root (or `apps/web/src/` if `srcDir` is configured). The `withSentryConfig` wrapper in `next.config.ts` handles tunnel-route generation and source-map upload automatically.
+
 - [ ] Add `@void/sentry: workspace:*` to apps/web/package.json deps.
-- [ ] Update `apps/web/src/instrumentation.ts` to dynamically import.
-- [ ] Run `bun run build` and verify Sentry is NOT in the bundle when SENTRY_DSN is unset.
+- [ ] Update `apps/web/instrumentation.ts` to dispatch on NEXT_RUNTIME and dynamically import `@void/sentry/server` or `@void/sentry/edge`. Re-export `onRequestError`.
+- [ ] Create `apps/web/instrumentation-client.ts` calling `initSentryClient()` from `@void/sentry/client`.
+- [ ] Wrap apps/web/next.config.ts with `withSentryConfig(config, { tunnelRoute: '/sentry-tunnel', silent: !process.env.CI })`.
+- [ ] Run `bun run build` and verify Sentry is NOT in the bundle when SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN are unset.
 - [ ] Commit: `feat(web): wire Sentry module via instrumentation.ts (build-time activation)`
 
 ## _modules/analytics-posthog
@@ -142,12 +184,16 @@ This task DEMONSTRATES the install procedure end-to-end so future MVPs can mirro
 
 **Files:** `_modules/analytics-posthog/package.json`, `tsconfig.json`, `src/AnalyticsProvider.tsx`, `src/index.ts`, `README.md`
 
-- [ ] **Read PostHog Next.js docs**: `https://posthog.com/docs/libraries/next-js`. Confirm:
+- [ ] **Read PostHog Next.js docs**: `https://posthog.com/docs/libraries/next-js` and `https://posthog.com/docs/advanced/proxy/nextjs`. Confirm:
   - `posthog-js` for client init, `posthog-node` for server (if needed)
   - Reverse proxy patterns to bypass ad-blockers
   - Recommended init options (capture_pageview, autocapture, etc.)
 
+NOTE (verified 2026-05-07 against the URLs above): `posthog-js` is at 1.372.x on npm. The modern PostHog Next.js setup recommends initialising in a Next.js `instrumentation-client.ts` file rather than (or in addition to) a React Provider, but a client-side `<PostHogProvider>` from `posthog-js/react` is still supported and remains the cleanest "drop-in" pattern for opt-in modules. The recommended init now uses the `defaults: '2026-01-30'` option which sets sensible modern defaults; passing it instead of fine-grained `capture_pageview`/`capture_pageleave` is the canonical 2026 pattern. The reverse proxy rewrite rules use a catch-all under a chosen prefix (we use `/ingest`) and target `*-assets.i.posthog.com` for static + array files plus the bare host for everything else. `skipTrailingSlashRedirect: true` MUST be set on the Next.js config or the rewrite chain breaks.
+
 - [ ] **Create `_modules/analytics-posthog/package.json`**
+
+// Updated 2026-05-07 from initial draft: bumped posthog-js range to ^1.370.0 (latest is 1.372.x); kept posthog-js/react Provider pattern since it's still supported and cleaner for an opt-in module than instrumentation-client.ts.
 
 ```json
 {
@@ -163,7 +209,7 @@ This task DEMONSTRATES the install procedure end-to-end so future MVPs can mirro
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "posthog-js": "^1.180.0"
+    "posthog-js": "^1.370.0"
   },
   "devDependencies": {
     "@void/config": "workspace:*",
@@ -178,6 +224,8 @@ This task DEMONSTRATES the install procedure end-to-end so future MVPs can mirro
 ```
 
 - [ ] **Create `src/AnalyticsProvider.tsx`**
+
+// Updated 2026-05-07 from initial draft: switched init options to use `defaults: '2026-01-30'` (modern PostHog convention) instead of hand-picked capture_pageview/capture_pageleave; kept person_profiles override since 'identified_only' is a deliberate privacy choice; kept ui_host for EU dashboard linking.
 
 ```tsx
 'use client';
@@ -195,8 +243,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     posthog.init(key, {
       api_host: host,
       ui_host: 'https://eu.posthog.com',
-      capture_pageview: true,
-      capture_pageleave: true,
+      defaults: '2026-01-30',
       person_profiles: 'identified_only',
     });
   }, [key, host]);
@@ -208,14 +255,30 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
 - [ ] **Create README** documenting:
   - Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` (default `/ingest`)
-  - Install: add `@void/posthog: workspace:*` to apps/web; wrap `RootLayout` children with `<AnalyticsProvider>`; add `next.config.ts` rewrites for the proxy:
+  - Install: add `@void/posthog: workspace:*` to apps/web; wrap `RootLayout` children with `<AnalyticsProvider>`; add `next.config.ts` rewrites for the EU proxy and `skipTrailingSlashRedirect`:
+
+    // Updated 2026-05-07 from initial draft: rewrite rules now match the canonical PostHog Next.js proxy pattern (static + array + catch-all) and rely on skipTrailingSlashRedirect at the config level. The previous /decide one-off rule is no longer needed - it's covered by the catch-all.
+
     ```ts
-    async rewrites() {
-      return [
-        { source: '/ingest/decide', destination: 'https://eu.i.posthog.com/decide' },
-        { source: '/ingest/static/:path*', destination: 'https://eu-assets.i.posthog.com/static/:path*' },
-        { source: '/ingest/:path*', destination: 'https://eu.i.posthog.com/:path*' },
-      ];
+    // next.config.ts excerpt
+    {
+      skipTrailingSlashRedirect: true,
+      async rewrites() {
+        return [
+          {
+            source: '/ingest/static/:path*',
+            destination: 'https://eu-assets.i.posthog.com/static/:path*',
+          },
+          {
+            source: '/ingest/array/:path*',
+            destination: 'https://eu-assets.i.posthog.com/array/:path*',
+          },
+          {
+            source: '/ingest/:path*',
+            destination: 'https://eu.i.posthog.com/:path*',
+          },
+        ];
+      },
     }
     ```
   - The `useEffect` reads env at runtime, but because `NEXT_PUBLIC_*` is build-time inlined, the entire branch is DCE'd when the var is absent at build.
@@ -226,7 +289,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
 - [ ] Add `@void/posthog: workspace:*` to apps/web deps.
 - [ ] Wrap `RootLayout` with `<AnalyticsProvider>`.
-- [ ] Add the rewrites in `next.config.ts`.
+- [ ] Add the rewrites in `next.config.ts` AND set `skipTrailingSlashRedirect: true` (verified 2026-05-07: rewrite chain breaks without it).
 - [ ] Verify `bun run build` produces a bundle WITHOUT PostHog when `NEXT_PUBLIC_POSTHOG_KEY` is unset at build time.
 - [ ] Commit: `feat(web): wire PostHog AnalyticsProvider with EU proxy rewrites`
 

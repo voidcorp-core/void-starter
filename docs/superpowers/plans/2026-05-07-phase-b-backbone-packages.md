@@ -115,20 +115,20 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
   },
   "dependencies": {
     "@void/core": "workspace:*",
-    "drizzle-orm": "^0.36.0",
+    "drizzle-orm": "^0.45.0",
     "postgres": "^3.4.0"
   },
   "devDependencies": {
     "@void/config": "workspace:*",
     "@types/node": "^22.0.0",
-    "drizzle-kit": "^0.28.0",
+    "drizzle-kit": "^0.31.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
 }
 ```
 
-NOTE: Drizzle versions in this draft may be stale. The executor MUST verify the current Drizzle major version on npm and adjust the `^` ranges accordingly. Drizzle ORM has had several major versions; check `https://orm.drizzle.team/docs` first.
+NOTE: Versions verified against npm registry on 2026-05-07. drizzle-orm latest is 0.45.x and drizzle-kit latest is 0.31.x. The executor should still re-check `bun pm view <pkg> version` at exec time in case a new release lands. (Versions verified 2026-05-07.)
 
 - [ ] **Step 2: Create `packages/db/tsconfig.json`**
 
@@ -195,10 +195,12 @@ git push
 
 - [ ] **Step 1: Read Drizzle ORM official docs**
 
-Reference: `https://orm.drizzle.team/docs/get-started/postgresql-new`. Confirm:
+Reference: `https://orm.drizzle.team/docs/get-started/postgresql-new` and `https://orm.drizzle.team/docs/connect-postgresql`. Confirm:
 - The current `drizzle()` API for postgres adapter
 - `drizzle.config.ts` schema for the installed `drizzle-kit` major
 - Whether `postgres` (postgres-js) or `pg` is the recommended adapter for the installed major
+
+NOTE (verified 2026-05-07): The current Drizzle 0.45.x docs default the "PostgreSQL new" guide to `node-postgres` (`pg`), but `postgres-js` is still fully supported and is the choice this plan keeps. The `drizzle(client, { schema })` two-arg signature for postgres-js is still supported (verified against `drizzle-orm/src/postgres-js/driver.ts`). Both `drizzle(client, { schema })` and `drizzle({ client, schema })` work.
 
 - [ ] **Step 2: Create `packages/db/src/client.ts`**
 
@@ -223,7 +225,7 @@ export const db = drizzle(queryClient, { schema });
 export type DbClient = typeof db;
 ```
 
-If the docs show a different drizzle initialization for the installed version, follow the docs and adjust this code.
+If the docs show a different drizzle initialization for the installed version, follow the docs and adjust this code. (API verified against https://orm.drizzle.team/docs/connect-postgresql on 2026-05-07.)
 
 - [ ] **Step 3: Create `packages/db/drizzle.config.ts`**
 
@@ -257,19 +259,23 @@ git push
 
 ### Task B3: schema/users table
 
+> CRITICAL (added 2026-05-07): Better-Auth 1.6.x has a CANONICAL schema shape that the Drizzle adapter expects: singular table names (`user`, `session`, `account`, `verification`), `id` as a TEXT primary key (not uuid), `emailVerified` as a BOOLEAN (not timestamp), session has a `token` column, account has `accessTokenExpiresAt` / `refreshTokenExpiresAt` / `scope` / `password`, and verification has an `updatedAt`. The fields below have been REWRITTEN on 2026-05-07 to match Better-Auth canonical schema - the plural-name aesthetic is preserved by remapping via `modelName` in Better-Auth's adapter config (Task B13). The `role` and `deletedAt` columns are extensions that Better-Auth tolerates but does not manage. If Better-Auth schema drifts at exec time, run `bunx @better-auth/cli generate` and reconcile. (See https://www.better-auth.com/docs/concepts/database for the canonical shape.)
+
 **Files:**
 - Create: `packages/db/src/schema/users.ts`
 - Create: `packages/db/src/schema/index.ts`
 
 - [ ] **Step 1: Create `packages/db/src/schema/users.ts`**
 
+// Updated 2026-05-07 from initial draft: id changed from uuid to text (Better-Auth canonical), emailVerified changed from timestamp to boolean (Better-Auth canonical), added explicit name (NOT NULL is Better-Auth canonical but we keep nullable + default empty string-friendly so OAuth signup with no name still works), kept role/deletedAt as extensions.
+
 ```ts
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
+  id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  emailVerified: timestamp('email_verified', { withTimezone: true }),
+  emailVerified: boolean('email_verified').notNull().default(false),
   name: text('name'),
   image: text('image'),
   role: text('role').notNull().default('user'),
@@ -312,19 +318,23 @@ git push
 
 - [ ] **Step 1: Create `packages/db/src/schema/sessions.ts`**
 
+// Updated 2026-05-07 from initial draft: userId column type changed from uuid to text (matches new users.id type), added `token` column (Better-Auth canonical), added `updatedAt` (Better-Auth canonical).
+
 ```ts
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
 
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Session = typeof sessions.$inferSelect;
@@ -355,13 +365,15 @@ git push
 
 - [ ] **Step 1: Create `packages/db/src/schema/accounts.ts`**
 
+// Updated 2026-05-07 from initial draft: userId column type changed from uuid to text; field names aligned with Better-Auth canonical schema (accessTokenExpiresAt + refreshTokenExpiresAt + scope + password) instead of the simpler legacy `expiresAt`.
+
 ```ts
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
 
 export const accounts = pgTable('accounts', {
   id: text('id').primaryKey(),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   providerId: text('provider_id').notNull(),
@@ -369,7 +381,10 @@ export const accounts = pgTable('accounts', {
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
+  scope: text('scope'),
+  password: text('password'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -396,6 +411,8 @@ git push
 
 - [ ] **Step 1: Create `packages/db/src/schema/verifications.ts`**
 
+// Updated 2026-05-07 from initial draft: added `updatedAt` (Better-Auth canonical schema requires it).
+
 ```ts
 import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -405,6 +422,7 @@ export const verifications = pgTable('verifications', {
   value: text('value').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Verification = typeof verifications.$inferSelect;
@@ -569,7 +587,10 @@ Confirm whether to use a test database, transactions with rollback, or pglite. F
 
 - [ ] **Step 2: Create the integration test**
 
+// Updated 2026-05-07 from initial draft: users.id is now text (not uuid with defaultRandom), so the test must supply an id explicitly. Better-Auth normally provides ids via cuid/nanoid at the application layer.
+
 ```ts
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -593,9 +614,11 @@ describe.skipIf(!databaseUrl)('users schema integration', () => {
   });
 
   it('inserts and retrieves a user with default role', async () => {
+    const id = randomUUID();
     const email = `test-${Date.now()}@example.com`;
-    const [inserted] = await db.insert(users).values({ email }).returning();
+    const [inserted] = await db.insert(users).values({ id, email }).returning();
     expect(inserted?.role).toBe('user');
+    expect(inserted?.emailVerified).toBe(false);
     expect(inserted?.deletedAt).toBeNull();
 
     if (inserted) {
@@ -607,8 +630,10 @@ describe.skipIf(!databaseUrl)('users schema integration', () => {
 
   it('enforces email uniqueness', async () => {
     const email = `dup-${Date.now()}@example.com`;
-    const [first] = await db.insert(users).values({ email }).returning();
-    await expect(db.insert(users).values({ email })).rejects.toThrow();
+    const [first] = await db.insert(users).values({ id: randomUUID(), email }).returning();
+    await expect(
+      db.insert(users).values({ id: randomUUID(), email }),
+    ).rejects.toThrow();
     if (first) {
       await db.delete(users).where(eq(users.id, first.id));
     }
@@ -668,7 +693,8 @@ This is the most architecturally dense section. **Read Better-Auth docs (https:/
   "dependencies": {
     "@void/core": "workspace:*",
     "@void/db": "workspace:*",
-    "better-auth": "^1.0.0"
+    "better-auth": "^1.6.0",
+    "@better-auth/drizzle-adapter": "^1.6.0"
   },
   "devDependencies": {
     "@void/config": "workspace:*",
@@ -678,7 +704,7 @@ This is the most architecturally dense section. **Read Better-Auth docs (https:/
 }
 ```
 
-NOTE: Better-Auth was at 0.x in 2024 and may be 1.x or higher in 2026. Check current major and adjust the `^` range accordingly.
+NOTE (verified 2026-05-07 against npm registry): Better-Auth is at 1.6.x and the drizzle adapter is now a SEPARATE package `@better-auth/drizzle-adapter` (NOT a sub-path of `better-auth/adapters/drizzle` as earlier docs implied). Both packages must be installed and version-aligned.
 
 - [ ] **Step 2: Create `packages/auth/tsconfig.json`**
 
@@ -702,7 +728,7 @@ export {};
 "packages/auth": {
   "entry": "src/index.ts",
   "project": "src/**/*.ts",
-  "ignoreDependencies": ["better-auth"]
+  "ignoreDependencies": ["better-auth", "@better-auth/drizzle-adapter"]
 }
 ```
 
@@ -723,6 +749,8 @@ git push
 
 - [ ] **Step 1: Create the types**
 
+// Updated 2026-05-07 from initial draft: id is now z.string() (was z.string().uuid()), since Better-Auth assigns its own id format (cuid-like), not strict uuid v4. This aligns with the schema rewrite in Task B3.
+
 ```ts
 import { z } from 'zod';
 
@@ -730,7 +758,7 @@ export const roleSchema = z.enum(['user', 'admin']);
 export type Role = z.infer<typeof roleSchema>;
 
 export const sessionUserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
   email: z.string().email(),
   name: z.string().nullable(),
   image: z.string().url().nullable(),
@@ -763,13 +791,19 @@ git push
 
 Confirm the current API of `betterAuth({...})`, the `drizzleAdapter` import, and how to enable plugins (admin, magic-link).
 
+NOTE (API verified 2026-05-07 against the URLs above):
+- The drizzle adapter is now a SEPARATE package: `@better-auth/drizzle-adapter` (import: `import { drizzleAdapter } from '@better-auth/drizzle-adapter'`). The earlier `better-auth/adapters/drizzle` sub-path is GONE in 1.6.x.
+- The admin plugin's option is `adminRoles` (array), not `adminRole` (singular). Defaults: `defaultRole: 'user'`, `adminRoles: ['admin']`.
+- The magicLink `sendMagicLink` callback receives `({ email, token, url, metadata }, ctx)` - NOT just `{ email, url }`. The `token` and `metadata` args are useful for custom flows.
+- Schema mapping uses the `schema` option in `drizzleAdapter` to map from canonical Better-Auth model names (`user`, `session`, `account`, `verification`) to the actual Drizzle table objects (`schema.users`, etc., which we keep plural).
+
 - [ ] **Step 2: Create `packages/auth/src/auth.repository.ts`**
 
-This is a draft. Adjust to match the docs you just read.
+// Updated 2026-05-07 from initial draft: drizzleAdapter import path moved to '@better-auth/drizzle-adapter'; admin plugin uses adminRoles array; magicLink sendMagicLink signature widened to include token + metadata.
 
 ```ts
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { admin, magicLink } from 'better-auth/plugins';
 import { createAppEnv } from '@void/core/env';
 import { db } from '@void/db/client';
@@ -797,6 +831,7 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   database: drizzleAdapter(db, {
     provider: 'pg',
+    // Map canonical Better-Auth model names -> our plural Drizzle tables.
     schema: {
       user: schema.users,
       session: schema.sessions,
@@ -812,13 +847,16 @@ export const auth = betterAuth({
     },
   },
   plugins: [
-    admin({ defaultRole: 'user', adminRole: 'admin' }),
+    admin({ defaultRole: 'user', adminRoles: ['admin'] }),
     magicLink({
-      sendMagicLink: async ({ email, url }) => {
+      sendMagicLink: async ({ email, url, token }, _ctx) => {
         // In Phase A/B we only console.warn the link in dev. The Resend module
         // (in _modules/email-resend) will replace this in Phase D when installed.
         const { logger } = await import('@void/core/logger');
-        logger.warn({ email, url }, 'magic link (dev only - install @void/email module for prod)');
+        logger.warn(
+          { email, url, token },
+          'magic link (dev only - install @void/email module for prod)',
+        );
       },
     }),
   ],
@@ -827,7 +865,7 @@ export const auth = betterAuth({
 export type Auth = typeof auth;
 ```
 
-If Better-Auth's API differs significantly, follow its docs and update this file. Document deviations in the commit message.
+If Better-Auth's API differs significantly, follow its docs and update this file. Document deviations in the commit message. As a final exec-time check, run `bunx @better-auth/cli generate` to confirm the schema the live Better-Auth version expects, and reconcile with `packages/db/src/schema/*` if needed.
 
 - [ ] **Step 3: Update knip.json - remove better-auth from packages/auth ignoreDependencies**
 
@@ -848,6 +886,8 @@ git push
 - [ ] **Step 1: Read Better-Auth API surface**
 
 Confirm how to read sessions on the server (typically `auth.api.getSession({ headers })` or similar). The next/headers import for server contexts is standard.
+
+NOTE (API verified 2026-05-07 against https://www.better-auth.com/docs/integrations/next): `auth.api.getSession({ headers: await headers() })` is the canonical server-side session read. `auth.api.signInEmail` exists and takes `{ body: { email, password, ... } }`. `auth.api.signInSocial` takes `{ body: { provider, callbackURL? } }`. The magic-link server-side method is `auth.api.signInMagicLink` (also exposed as `auth.api.sendMagicLink` in older code paths - the canonical is `signInMagicLink` since 1.5.x). Most apps drive sign-in from the client (auth.client.ts) anyway; these server APIs are for Server Actions / route handlers that need to bypass the client.
 
 - [ ] **Step 2: Create the service**
 
@@ -878,9 +918,13 @@ export async function requireRole(role: Role): Promise<SessionUser> {
   return user;
 }
 
+// Thin server-side wrappers around Better-Auth's auth.api.* surface. Most flows
+// should use the client (auth.client.ts) instead; these are for Server Actions
+// or route handlers that need to bypass the browser fetch.
 export const signIn = {
   email: auth.api.signInEmail,
-  google: () => auth.api.signInSocial({ body: { provider: 'google' } }),
+  google: (callbackURL?: string) =>
+    auth.api.signInSocial({ body: { provider: 'google', callbackURL } }),
   magicLink: auth.api.signInMagicLink,
 };
 
@@ -889,7 +933,7 @@ export async function signOut() {
 }
 ```
 
-NOTE: `next/headers` is a peer-dependency from Next.js. Since `@void/auth` is consumed by `apps/web` which has Next, this import will resolve at runtime. Add `"peerDependencies": { "next": "^16.0.0" }` to packages/auth/package.json. Also adjust if Better-Auth's actual API differs.
+NOTE: `next/headers` is a peer-dependency from Next.js. Since `@void/auth` is consumed by `apps/web` which has Next, this import will resolve at runtime. Add `"peerDependencies": { "next": "^16.0.0" }` to packages/auth/package.json. Also adjust if Better-Auth's actual API differs - if `auth.api.signInMagicLink` is not exported in the installed version, fall back to `auth.api.sendMagicLink` and document the deviation.
 
 - [ ] **Step 3: Type-check + commit**
 
@@ -1035,14 +1079,19 @@ git push
 
 Confirm the current API of `createAuthClient` for browser use.
 
+NOTE (API verified 2026-05-07): `createAuthClient` is exported from `better-auth/react` (not `better-auth/client`). To use admin/magic-link features on the client, the matching `*Client` plugins must be loaded from `better-auth/client/plugins`. `signIn`, `signUp`, `signOut`, `useSession` are all destructurable from the returned client.
+
 - [ ] **Step 2: Create the client**
+
+// Updated 2026-05-07 from initial draft: added adminClient + magicLinkClient plugins so the client can call admin.* and signIn.magicLink directly.
 
 ```ts
 import { createAuthClient } from 'better-auth/react';
+import { adminClient, magicLinkClient } from 'better-auth/client/plugins';
 
 export const authClient = createAuthClient({
-  baseURL:
-    process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000',
+  baseURL: process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000',
+  plugins: [adminClient(), magicLinkClient()],
 });
 
 export const { signIn, signOut, signUp, useSession } = authClient;
@@ -1516,13 +1565,13 @@ This test exercises the full auth flow against a real Better-Auth + Postgres set
 - [ ] **Step 1: Create the integration test**
 
 The test should:
-1. Sign up a new user via `auth.api.signUpEmail`
-2. Sign in with the same credentials
-3. Verify session contains the user
-4. Sign out
-5. Clean up by deleting the test user
+1. Sign up a new user via `auth.api.signUpEmail({ body: { email, password, name } })`
+2. Sign in with the same credentials via `auth.api.signInEmail({ body: { email, password } })`
+3. Verify session contains the user (use the returned token to read session)
+4. Sign out via `auth.api.signOut({ headers })`
+5. Clean up by deleting the test user from the `users` table directly
 
-Implement based on Better-Auth's actual server-side test utilities; consult `https://www.better-auth.com/docs/concepts/typescript` for typings.
+Implement based on Better-Auth's actual server-side test utilities. (API verified 2026-05-07 against https://www.better-auth.com/docs/basic-usage and https://www.better-auth.com/docs/integrations/next.) If `requireEmailVerification: true` blocks the signup-then-signin flow in tests, either use a test-mode flag or pre-set `users.emailVerified = true` after signup before testing signin.
 
 - [ ] **Step 2: Run with DB up**
 
@@ -1568,7 +1617,7 @@ git push
   },
   "dependencies": {
     "clsx": "^2.1.0",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.14.0",
     "tailwind-merge": "^2.5.0"
   },
   "devDependencies": {
@@ -1579,7 +1628,7 @@ git push
     "jsdom": "^25.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.0.0",
+    "tailwindcss": "^4.2.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
@@ -1591,7 +1640,7 @@ git push
 }
 ```
 
-NOTE: The lucide-react and tailwindcss versions in this draft may be stale. Verify the current majors and adjust ranges.
+NOTE (versions verified 2026-05-07 against npm registry): lucide-react has crossed its 1.x boundary (latest 1.14.x); tailwindcss is at 4.2.x. The executor should still re-check `bun pm view <pkg> version` at exec time.
 
 - [ ] **Step 2: Create `packages/ui/tsconfig.json`**
 
