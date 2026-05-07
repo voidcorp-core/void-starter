@@ -125,18 +125,33 @@ For business services inside a package or app:
 
 ```
 serviceName/
-├── serviceName.service.ts        # public façade, orchestration, business logic
-├── serviceName.repository.ts     # data access (DB or external API)
-├── serviceName.helper.ts         # pure functions
-├── serviceName.types.ts          # types + Zod schemas
-├── serviceName.policy.ts         # OPTIONAL - authorization rules
-├── serviceName.errors.ts         # OPTIONAL - domain-specific errors
-├── serviceName.service.test.ts
-├── serviceName.helper.test.ts
-└── index.ts                      # public API export only
+├── serviceName.service.ts          # public façade, orchestration, "use cache" for reads
+├── serviceName.repository.ts       # data access (DB or external API)
+├── serviceName.helper.ts           # pure functions
+├── serviceName.mapper.ts           # OPTIONAL - DB row <-> domain transformation (when shapes differ)
+├── serviceName.types.ts            # types + Zod schemas (merged by default)
+├── serviceName.events.ts           # OPTIONAL - event names + payload Zod schemas, emitted by service
+├── serviceName.policy.ts           # OPTIONAL - authorization rules
+├── serviceName.errors.ts           # OPTIONAL - domain-specific typed errors
+├── serviceName.service.test.ts     # unit, repository mocked
+├── serviceName.helper.test.ts      # unit, pure
+├── serviceName.integration.test.ts # OPTIONAL but recommended for I/O services - real DB/API
+└── index.ts                        # exports service + public types only
 ```
 
-Server Actions live separately in the app:
+**Layer responsibilities:**
+
+- **Service** owns transactions and cache strategy, never touches I/O directly
+- **Repository** is the only layer that touches DB or external API; accepts optional `tx` parameter
+- **Helper** is pure (no I/O, no side effects), unit-testable in isolation
+- **Mapper** is the only layer that knows both DB row shape AND domain shape; lives between repository (raw) and service (clean)
+- **Events** are emitted by the service (e.g., `userEvents.created.emit(payload)`), consumed by other services or async workers in `_modules/events-*`
+- **Policy** answers `canActorDoX(actor, target)`; called by service before mutation
+- **Types + Schemas** are merged in `types.ts` by default (use `z.infer`). Split into separate `schema.ts` / `types.ts` ONLY when bundle size hurts a heavily client-imported type (Zod is ~50KB and bundlers cannot reliably tree-shake it across `z.infer`)
+- **Integration tests** spin up a real Postgres (Docker testcontainers or pglite) and verify cascade rules, transactions, constraint failures; unit tests with mocks cannot catch these
+- **`index.ts`** exposes ONLY the service + public types; repository, helper, mapper, events, policy, errors stay internal
+
+Server Actions live separately in the app (never inside packages):
 
 ```
 apps/web/src/actions/
@@ -144,6 +159,16 @@ apps/web/src/actions/
 ├── user.actions.ts
 └── ...
 ```
+
+When an action grows past ~40 lines or orchestrates 3+ services, extract into a use-case:
+
+```
+apps/web/src/use-cases/
+├── onboardCustomer.ts            # orchestrates userService + emailService + analyticsService
+└── ...
+```
+
+Use-cases live in `apps/web/src/use-cases/` initially. **Promotion rule:** if a use-case is consumed by 2+ apps (e.g. `apps/web` and `apps/admin`), promote it to a domain package (`packages/onboarding/` or similar) and remove from the app. Do not create `packages/use-cases/` as a generic catch-all (anti-pattern: micro-package with no domain scope).
 
 Multi-source services may split repositories: `checkout.db.repository.ts`, `checkout.stripe.repository.ts`. The service still owns transaction boundaries; repositories accept an optional `tx` parameter.
 
@@ -343,6 +368,9 @@ The starter ships with a `CLAUDE.md` at the root that instructs AI assistants:
 - In-starter design tooling (gstack handles it externally)
 - Runtime feature flag service (build-time activation is the pattern)
 - Micro-packages (no `@void/utils`, `@void/constants`, `@void/hooks`)
+- DI container (no `tsyringe`, no `awilix`); services export functions, tests inject deps via parameters
+- Explicit CQRS pattern; soft CQRS via Cache Components is sufficient (cache reads at service layer, mutate via Server Actions with `updateTag`)
+- `packages/use-cases/` generic package (use-cases live in `apps/*/src/use-cases/` initially, promoted to domain packages on cross-app reuse)
 
 ## What we DO want
 

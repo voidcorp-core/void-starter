@@ -102,3 +102,35 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Atomic-style decomposition (`@void/types`, `@void/utils`, etc.): premature abstraction, slow iteration, unclear ownership
   - Single mega-package (`@void/lib`): defeats the purpose of monorepo isolation
 - **When to revisit:** If a real cross-app reuse case emerges that does not fit existing packages. Then create the new package with clear domain scope; do not split existing packages into smaller ones for ergonomic reasons.
+
+### 08. Service file layout: 5 standard layers + 5 optional
+
+- **Date:** 2026-05-07
+- **Decision:** A service folder ships 5 standard files (`service.ts`, `repository.ts`, `helper.ts`, `types.ts`, `index.ts`) plus 5 optional layers used when the domain warrants: `mapper.ts`, `events.ts`, `policy.ts`, `errors.ts`, `integration.test.ts`.
+- **Why:** Each optional layer earns its place by addressing a specific failure mode of inline code. `mapper.ts` keeps DB shape out of the domain when they differ. `events.ts` declares event names and payload schemas for async workflows (Inngest-style modules consume them). `policy.ts` pulls authorization out of the service for testability. `errors.ts` types domain errors when generic `AppError` is too coarse. `integration.test.ts` catches cascade / constraint / transaction bugs that mocked unit tests miss. By marking them OPTIONAL, the starter teaches the pattern but does not impose it on trivial services.
+- **Rejected alternatives:**
+  - Always-required layers: bloats trivial services and slows iteration; engineers create empty files just to satisfy the convention
+  - Free-form structure: AI assistants generate inconsistent code, harder to navigate across MVPs
+  - `use-case.ts` as a service-level layer: rejected because use-cases by definition cross multiple services, so they don't belong inside one. They live in `apps/*/src/use-cases/` instead, with a documented promotion rule to a domain package on cross-app reuse
+- **When to revisit:** If we find ourselves systematically using all 5 optional layers on every service, those should become standard. If we never use one across multiple MVPs, retire it from the catalogue.
+
+### 09. Schemas and types merged by default (split only on bundle pressure)
+
+- **Date:** 2026-05-07
+- **Decision:** Zod schemas and TypeScript types live together in `serviceName.types.ts` using `z.infer`, by default. Split into separate `schema.ts` and `types.ts` only when a heavily client-imported type causes Zod (~50KB) to bloat the client bundle.
+- **Why:** Merged keeps one source of truth (changes to schema propagate to types automatically). Splitting requires manual sync and adds friction. The split is real but situational, not universal.
+- **Rejected alternatives:**
+  - Always split: trades automatic sync for theoretical bundle savings on types that may never be client-imported
+  - Always merged: ignores the real bundle cost of Zod when types ARE pulled into client components at scale
+- **When to revisit:** When `bun run build` reports a Client Component pulling Zod through a `types.ts` import, split that specific module's types out.
+
+### 10. No DI container, no explicit CQRS
+
+- **Date:** 2026-05-07
+- **Decision:** The starter forbids dependency-injection containers (tsyringe, awilix) and explicit CQRS (Command/Query bus separation). Services export plain functions; tests inject mocks via constructor parameters. Read/write separation is achieved through Cache Components (`"use cache"` on service reads, `updateTag()` on action writes).
+- **Why:** DI containers add ~100KB runtime overhead, opaque indirection, and decorator metadata that the team must learn for zero return at this scale (under 50 services per MVP). Explicit CQRS adds a Command bus and Query bus that nobody on a 4-week MVP needs. The Cache Components pattern delivers soft CQRS for free: cache aggressively at the service read path, invalidate via `updateTag` on writes.
+- **Rejected alternatives:**
+  - tsyringe / awilix: solve a problem we do not have at this scale
+  - Explicit CQRS: appropriate for read-heavy systems with denormalized projections, not for B2C MVPs
+  - Hand-rolled DI helpers: sneak DI complexity in through the back door
+- **When to revisit:** If a project legitimately grows past 50 services with complex lifecycle needs, evaluate awilix at that point. If a project requires event-sourcing-grade read/write separation, evaluate full CQRS at that point. The starter does not prepay this cost.
