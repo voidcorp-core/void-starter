@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":semanticCommitTypeAll(chore)"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Paris",
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "automerge": false,
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^next$", "^react$", "^react-dom$"],
+      "groupName": "Next.js + React"
+    },
+    {
+      "matchPackagePatterns": ["^@tailwindcss/", "^tailwindcss$"],
+      "groupName": "Tailwind ecosystem"
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "dev dependencies (non-major)",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchPackagePatterns": ["^@biomejs/", "^lefthook$", "^knip$", "^gitleaks$"],
+      "groupName": "tooling"
+    }
+  ]
+}
