@@ -276,6 +276,7 @@ Commit: `feat(examples): add canonical component examples`
 
 Write per the meta-rule: every convention or primitive introduced in earlier steps must be reflected here. Each doc opens with intent + rules + examples. Under 600 lines.
 
+- `docs/DECISIONS.md` - ADR-lite: each non-obvious architectural choice with `Decision / Why / Rejected alternatives / When to revisit`. Maintained continuously: any new non-obvious decision in implementation MUST be appended here in the same commit. Already seeded during the brainstorming phase.
 - `docs/PATTERNS.md` - KISS / DRY / SoC + naming + service file layout + when to split a package
 - `docs/ARCHITECTURE.md` - package boundaries + dependency direction + service vs action vs repository placement + tier 1 (always-on) vs tier 2 (opt-in)
 - `docs/SECURITY.md` - OWASP Top 10 mapping + RGPD checklist + primitive references with code pointers

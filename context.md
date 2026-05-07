@@ -76,6 +76,7 @@ void-starter/
 │   ├── cookie-consent/
 │   └── cms-payload/
 ├── docs/
+│   ├── DECISIONS.md                  # ADR-lite: non-obvious choices + rejected alternatives
 │   ├── PATTERNS.md                   # KISS, DRY, SoC + code conventions
 │   ├── ARCHITECTURE.md               # layers, package boundaries, dependency rules
 │   ├── SECURITY.md                   # OWASP Top 10 + RGPD checklist
@@ -242,12 +243,13 @@ Each module has a README with: env vars required, install command, integration p
 
 ## Documentation policy
 
-**Meta-rule**: any new convention, primitive, or architecture decision MUST be reflected in the relevant `docs/*.md` at the moment it is introduced. Removed concepts must be removed from the docs at the same time. The starter is wrong if its docs disagree with its code.
+**Meta-rule**: any new convention, primitive, or architecture decision MUST be reflected in the relevant `docs/*.md` at the moment it is introduced. Removed concepts must be removed from the docs at the same time. Non-obvious decisions where alternatives were considered MUST be logged in `docs/DECISIONS.md` with the rejected alternatives. The starter is wrong if its docs disagree with its code.
 
 Files:
 
 - `CLAUDE.md` (repo root) - rules for AI assistants, points to `docs/`
 - `README.md` (repo root) - human entry point
+- `docs/DECISIONS.md` - ADR-lite: non-obvious architectural choices with rejected alternatives and revisit conditions
 - `docs/PATTERNS.md` - KISS, DRY, SoC + code conventions, file naming, exports
 - `docs/ARCHITECTURE.md` - package boundaries, layering rules, dependency direction
 - `docs/SECURITY.md` - OWASP Top 10 + RGPD checklist with primitive mapping
@@ -319,14 +321,16 @@ The starter MAY adopt conventions that happen to be gstack-friendly (`DESIGN.md`
 
 The starter ships with a `CLAUDE.md` at the root that instructs AI assistants:
 
-1. Before writing any new component, read `apps/web/src/components/_examples/*` first
-2. Before writing any new service, read the canonical service in `packages/auth/` first
-3. Match the file structure and naming conventions exactly
-4. Follow conventions in `docs/PATTERNS.md`
-5. Never modify the layering pattern without explicit user approval
-6. Any new convention MUST be added to the relevant `docs/*.md` at the time of introduction
-7. Use `defineAction()` from `@void/core/server-action` for all Server Actions
-8. Read the official documentation of any third-party integration before implementing it (do not invent the configuration)
+1. Read `docs/DECISIONS.md` before challenging any architectural choice (Better-Auth vs Clerk, monorepo, build-time activation, etc.). The alternatives were already considered.
+2. Before writing any new component, read `apps/web/src/components/_examples/*` first
+3. Before writing any new service, read the canonical service in `packages/auth/` first
+4. Match the file structure and naming conventions exactly
+5. Follow conventions in `docs/PATTERNS.md`
+6. Never modify the layering pattern without explicit user approval
+7. Any new convention MUST be added to the relevant `docs/*.md` at the time of introduction
+8. Any non-obvious decision (where a credible alternative exists) MUST be logged in `docs/DECISIONS.md`
+9. Use `defineAction()` from `@void/core/server-action` for all Server Actions
+10. Read the official documentation of any third-party integration before implementing it (do not invent the configuration)
 
 ## What we DON'T want
 
