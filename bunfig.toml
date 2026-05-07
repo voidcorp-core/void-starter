@@ -1,0 +1,8 @@
+[install]
+# Use exact versions for reproducibility in starter
+exact = false
+# Hoist all workspace deps to root node_modules
+linker = "hoisted"
+
+[install.scopes]
+# No private registries at J0
