@@ -12,7 +12,7 @@
     "packages/core": {
       "entry": "src/index.ts",
       "project": "src/**/*.ts",
-      "ignoreDependencies": ["@t3-oss/env-nextjs", "pino-pretty", "zod"]
+      "ignoreDependencies": ["pino-pretty"]
     },
     "apps/*": {
       "entry": [
