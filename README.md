@@ -43,3 +43,4 @@ Each module activates via env var presence at build time; full installation guid
 MIT - see [`LICENSE`](./LICENSE). Free to use, fork, modify.
 
 Copyright (c) 2026 VoidCorp.
+
