@@ -1,5 +1,6 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,12 +8,13 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": [
-      "**/.next/**",
-      "**/dist/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "**/node_modules/**"
+    "includes": [
+      "**",
+      "!**/.next/**",
+      "!**/dist/**",
+      "!**/.turbo/**",
+      "!**/coverage/**",
+      "!**/node_modules/**"
     ]
   },
   "formatter": {
@@ -33,7 +35,7 @@
         "useExportType": "error",
         "noNonNullAssertion": "warn"
       },
-      "suspicious": { "noConsoleLog": "error" }
+      "suspicious": { "noConsole": "error" }
     }
   },
   "javascript": {
@@ -48,5 +50,5 @@
   "json": {
     "formatter": { "trailingCommas": "none" }
   },
-  "organizeImports": { "enabled": true }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } }
 }
