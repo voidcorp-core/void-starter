@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "packages/config": {
+      "entry": "vitest.base.ts",
+      "project": ["*.ts"]
+    },
+    "packages/*": {
+      "entry": "src/index.ts",
+      "project": "src/**/*.ts"
+    },
+    "apps/*": {
+      "entry": [
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/app/**/route.ts",
+        "src/middleware.ts",
+        "src/instrumentation.ts",
+        "next.config.ts"
+      ],
+      "project": "src/**/*.{ts,tsx}"
+    }
+  },
+  "ignore": ["**/*.test.ts", "**/_examples/**"],
+  "ignoreDependencies": []
+}

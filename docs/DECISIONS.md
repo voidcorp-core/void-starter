@@ -9,6 +9,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 **Add to it** when you make a new decision where a credible alternative existed. Format below.
 
 **Do not log** here:
+
 - Implementation details (those go in `PATTERNS.md`)
 - Security mappings (those go in `SECURITY.md`)
 - Caching rules (those go in `CACHING.md`)

@@ -16,5 +16,11 @@
     "./tsconfig.next.json": "./tsconfig.next.json",
     "./biome.base.json": "./biome.base.json",
     "./vitest.base": "./vitest.base.ts"
+  },
+  "peerDependencies": {
+    "vitest": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
   }
 }

@@ -1,0 +1,22 @@
+title = "void-starter gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Repo-level allowlist for placeholders that look like secrets in docs"
+paths = [
+  '''docs/.*\.md$''',
+  '''CLAUDE\.md$''',
+  '''README\.md$''',
+  '''context\.md$''',
+  '''starter-plan\.md$''',
+]
+regexes = [
+  '''EXAMPLE_API_KEY''',
+  '''YOUR_DSN_HERE''',
+  '''SENTRY_DSN''',
+  '''GOOGLE_CLIENT_(ID|SECRET)''',
+  '''BETTER_AUTH_SECRET''',
+  '''NEXT_PUBLIC_POSTHOG_KEY''',
+]
