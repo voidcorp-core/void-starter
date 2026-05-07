@@ -1,0 +1,32 @@
+{
+  "name": "@void/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logger": "./src/logger.ts",
+    "./env": "./src/env.ts",
+    "./errors": "./src/errors.ts",
+    "./server-action": "./src/server-action.ts",
+    "./security-headers": "./src/security-headers.ts",
+    "./rate-limit": "./src/rate-limit.ts",
+    "./sanitize": "./src/sanitize.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@t3-oss/env-nextjs": "^0.11.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
