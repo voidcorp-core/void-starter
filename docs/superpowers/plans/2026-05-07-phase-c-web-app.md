@@ -13,7 +13,7 @@
 **Pre-conditions:**
 - `git tag phase-b-complete` exists on origin
 - `bun run test` passes all unit tests across `@void/core`, `@void/db`, `@void/auth`, `@void/ui`
-- Local Postgres is running (`bun run db:up`) and migration applied
+- Neon dev branch URL pulled into `.env.local` (`vercel env pull .env.local`) and migration applied (DECISIONS entry 11)
 
 ---
 
@@ -850,8 +850,8 @@ All six must pass. Do not proceed if any fail.
 ### Task C34: dev server end-to-end manual smoke
 
 ```
-bun run db:up
-export DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
+vercel env pull .env.local
+# .env.local now contains DATABASE_URL (Neon dev branch) and any other Vercel-injected vars.
 export BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 export BETTER_AUTH_URL=http://localhost:3000
 export NEXT_PUBLIC_APP_URL=http://localhost:3000

@@ -356,9 +356,34 @@ Internationalization via next-intl. README documents the locale routing setup an
 
 - [ ] Commit: `feat(modules): scaffold i18n-next-intl placeholder`
 
+### Task D14a: _modules/db-self-hosted-postgres stub
+
+**Files:** `_modules/db-self-hosted-postgres/README.md` + `_modules/db-self-hosted-postgres/templates/docker-compose.yml.template`
+
+The starter defaults to Neon Postgres via Vercel Marketplace (DECISIONS.md
+entry 11). This module documents the rare migration path to a self-hosted
+Postgres on a VPS or your own infrastructure.
+
+The README documents:
+- When to activate this module: data sovereignty hard requirement (regulated
+  industries, specific country/hardware), cost optimization at scale (>$500/mo
+  Neon bill), exotic Postgres extensions Neon does not support, or contractual
+  refusal of US-based vendors
+- Migration steps:
+  1. Provision the self-hosted Postgres (the docker-compose template is a
+     starting point; production-grade setups need backup, monitoring, replication)
+  2. `pg_dump` from Neon: `pg_dump $NEON_DATABASE_URL > backup.sql`
+  3. `psql` into the self-hosted DB: `psql $SELF_HOSTED_DATABASE_URL < backup.sql`
+  4. Update `DATABASE_URL` env var in Vercel and locally
+  5. Test thoroughly before flipping prod traffic
+- The `docker-compose.yml.template` is a starting point with healthcheck and
+  named volume; not production-grade
+
+- [ ] Commit: `feat(modules): scaffold db-self-hosted-postgres placeholder`
+
 ### Task D14: _modules README
 
-**Files:** `_modules/README.md` listing all modules, their state (real/placeholder), env vars, and quick install pointers.
+**Files:** `_modules/README.md` listing all modules, their state (real/placeholder), env vars, and quick install pointers. The catalogue MUST include `db-self-hosted-postgres` (Task D14a) alongside the other placeholders, with a one-line note that it exists for the rare cases where Neon-via-Vercel (the default per DECISIONS entry 11) is not acceptable.
 
 - [ ] Commit: `docs(modules): add _modules catalogue README`
 
@@ -535,6 +560,10 @@ Confirm every referenced file exists. Fix dangling links.
 **Files:** `.github/workflows/ci.yml`
 
 ```yaml
+# CI uses a postgres service container (16-alpine) instead of a Neon CI branch.
+# Rationale: CI tests verify schema migrations and queries, not connection pool
+# behavior. Drift between docker postgres and Neon is negligible for these tests.
+# Production and dev use Neon (DECISIONS entry 11).
 name: CI
 
 on:
@@ -762,7 +791,7 @@ Sections:
 - Project description (1-2 paragraphs)
 - Stack overview (table from context.md)
 - Topology (tree diagram)
-- Quick start: `gh repo create my-mvp --template voidcorp-core/void-starter`, then `bun install && bun run db:up && bun run dev`
+- Quick start: `gh repo create my-mvp --template voidcorp-core/void-starter`, then `bun install`, link the repo to a Vercel project with the Neon Marketplace integration enabled, run `vercel env pull .env.local` to fetch the Neon dev branch URL, then `bun run dev` (DECISIONS entry 11)
 - Module activation (link to docs/MODULES.md)
 - Documentation (links to all docs/*.md)
 - Contributing (conventional commits, hooks, branch protection)
@@ -807,12 +836,12 @@ All six MUST pass. Zero tolerance.
 
 ### Task D37: apps/web E2E in fresh dev environment
 
+Reset the Neon dev branch to a clean state (Neon dashboard: "Reset from parent" on the dev branch, OR drop and recreate via the Vercel Neon integration UI). Then:
+
 ```
-bun run db:down
-bun run db:up
-sleep 5
+vercel env pull .env.local
+source <(grep -v '^#' .env.local | sed -e 's/^/export /')
 cd packages/db && bunx drizzle-kit migrate && cd ../..
-export DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
 export BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 export BETTER_AUTH_URL=http://localhost:3000
 export NEXT_PUBLIC_APP_URL=http://localhost:3000

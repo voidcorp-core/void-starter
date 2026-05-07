@@ -193,6 +193,15 @@ git push
 - Create: `packages/db/src/client.ts`
 - Create: `packages/db/drizzle.config.ts`
 
+The starter uses Neon Postgres (free tier via Vercel Marketplace) for both dev
+and prod. Local dev workflow:
+1. Provision a Neon project via Vercel Marketplace (10 projects free per team)
+2. Pull env vars: `vercel env pull .env.local` (drops DATABASE_URL,
+   DATABASE_URL_UNPOOLED, etc.)
+3. The `postgres-js` driver works directly with the Neon Node connection string
+   (no driver swap needed)
+4. For preview deploys, Vercel + Neon auto-create branch databases per PR
+
 - [ ] **Step 1: Read Drizzle ORM official docs**
 
 Reference: `https://orm.drizzle.team/docs/get-started/postgresql-new` and `https://orm.drizzle.team/docs/connect-postgresql`. Confirm:
@@ -249,7 +258,7 @@ export default defineConfig({
 
 - [ ] **Step 4: Stage and commit (without running drizzle commands; we have no DB yet)**
 
-The `drizzle-kit generate` and `drizzle-kit migrate` commands require a real Postgres connection and migration files. They will be exercised in Phase C with the docker-compose dev setup.
+The `drizzle-kit generate` and `drizzle-kit migrate` commands require a real Postgres connection and migration files. They will be exercised in Task B9 against the Neon dev branch (DATABASE_URL pulled via `vercel env pull .env.local`).
 
 ```
 git add packages/db/src/client.ts packages/db/drizzle.config.ts
@@ -476,99 +485,73 @@ git commit -m "feat(db): expose public API via barrel export"
 git push
 ```
 
-### Task B8: docker-compose for local Postgres
+### Task B8: REMOVED - see DECISIONS entry 11
 
-**Files:**
-- Create: `tooling/docker-compose.yml`
+The original Task B8 created `tooling/docker-compose.yml` plus `db:up` / `db:down` / `db:logs` scripts for a local Postgres container. That approach has been dropped: the starter defaults to Neon Postgres via Vercel Marketplace for both dev and prod (DECISIONS.md entry 11). No docker-compose ships in the core repo. A self-hosted Postgres path is documented in `_modules/db-self-hosted-postgres/` (Phase D Task D14a) for the rare cases where Neon is not acceptable (data sovereignty, exotic extensions, or a >$500/mo Neon bill).
 
-- [ ] **Step 1: Create `tooling/docker-compose.yml`**
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: void-starter-postgres
-    environment:
-      POSTGRES_USER: void
-      POSTGRES_PASSWORD: void
-      POSTGRES_DB: void_starter
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U void -d void_starter"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
-```
-
-- [ ] **Step 2: Add a script to root `package.json`**
-
-In root `package.json` `scripts`:
-```json
-"db:up": "docker compose -f tooling/docker-compose.yml up -d",
-"db:down": "docker compose -f tooling/docker-compose.yml down",
-"db:logs": "docker compose -f tooling/docker-compose.yml logs -f postgres"
-```
-
-- [ ] **Step 3: Add `.env.example` at repo root**
+Practical consequences for downstream tasks:
+- `bun run db:up` / `db:down` / `db:logs` are NOT added to `package.json`.
+- `tooling/docker-compose.yml` is NOT created. (removed; see `_modules/db-self-hosted-postgres/` in Phase D for opt-in self-hosted setup.)
+- `.env.example` (still useful at repo root) should document the Neon-via-Vercel pattern instead. Suggested content:
 
 ```
-DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
+# Pull from Vercel: `vercel env pull .env.local`
+# DATABASE_URL is auto-injected by the Vercel + Neon Marketplace integration.
+DATABASE_URL=postgres://<user>:<password>@<host>/<db>?sslmode=require
 ```
 
-- [ ] **Step 4: Commit**
-
-```
-git add tooling/docker-compose.yml package.json .env.example
-git commit -m "chore(db): add docker-compose for local Postgres + db scripts"
-git push
-```
+Add a `.env.example` commit if it has not already been created in an earlier task: `chore(db): document Neon DATABASE_URL in .env.example`.
 
 ### Task B9: First migration generation
 
 **Files:**
 - Create: `packages/db/migrations/*` (auto-generated)
 
-- [ ] **Step 1: Start local Postgres**
+Pre-requisite: a Neon Postgres project provisioned via the Vercel Marketplace integration (see DECISIONS.md entry 11). The Vercel project is linked locally (`vercel link`).
+
+- [ ] **Step 1: Pull the Neon dev branch URL**
 
 ```
-bun run db:up
+vercel env pull .env.local
 ```
 
-Wait until healthy:
+This drops `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, and any other Neon-injected vars into `.env.local` at repo root. Verify the file contains a `DATABASE_URL=postgres://...neon.tech/...` line.
+
+- [ ] **Step 2: Make DATABASE_URL available to drizzle-kit**
+
+Either source the env into the current shell:
+
 ```
-docker compose -f tooling/docker-compose.yml ps
+source <(grep -v '^#' .env.local | sed -e 's/^/export /')
 ```
 
-- [ ] **Step 2: Set DATABASE_URL and generate migration**
+Or rely on dotenv via drizzle-kit (if `drizzle.config.ts` already loads from `.env.local`, skip this step).
+
+- [ ] **Step 3: Generate migration**
 
 ```
-export DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
 cd packages/db && bunx drizzle-kit generate && cd ../..
 ```
 
 This creates `packages/db/migrations/0000_*.sql` with CREATE TABLE for all 4 tables.
 
-- [ ] **Step 3: Apply the migration**
+- [ ] **Step 4: Apply the migration**
 
 ```
 cd packages/db && bunx drizzle-kit migrate && cd ../..
 ```
 
-- [ ] **Step 4: Verify schema in DB**
+- [ ] **Step 5: Verify schema in the Neon dev branch**
+
+Either via Drizzle Studio:
 
 ```
-docker exec -it void-starter-postgres psql -U void -d void_starter -c "\dt"
+cd packages/db && bunx drizzle-kit studio && cd ../..
 ```
 
-Should show users, sessions, accounts, verifications, plus `__drizzle_migrations`.
+Or via the Neon dashboard (Tables tab on the dev branch). Should show users, sessions, accounts, verifications, plus `__drizzle_migrations`.
 
-- [ ] **Step 5: Commit migration files**
+- [ ] **Step 6: Commit migration files**
 
 ```
 git add packages/db/migrations/
@@ -583,7 +566,7 @@ git push
 
 - [ ] **Step 1: Read Drizzle docs on testing**
 
-Confirm whether to use a test database, transactions with rollback, or pglite. For this starter, use a real Postgres connection (the docker-compose one) and wrap each test in a transaction that rolls back.
+Confirm whether to use a test database, transactions with rollback, or pglite. For this starter, use a real Postgres connection (the Neon dev branch pulled via `vercel env pull .env.local`) and wrap each test in a transaction that rolls back.
 
 - [ ] **Step 2: Create the integration test**
 
@@ -641,12 +624,12 @@ describe.skipIf(!databaseUrl)('users schema integration', () => {
 });
 ```
 
-NOTE: this test uses `describe.skipIf` so it skips when DATABASE_URL is not set. The CI in Phase D will set DATABASE_URL via service container.
+NOTE: this test uses `describe.skipIf` so it skips when DATABASE_URL is not set. Locally, DATABASE_URL points at the Neon dev branch (pulled via `vercel env pull .env.local`). The CI in Phase D sets DATABASE_URL via a Postgres service container for speed (see Task D26).
 
-- [ ] **Step 3: Run the integration test (DB must be up)**
+- [ ] **Step 3: Run the integration test (Neon dev branch URL in env)**
 
 ```
-export DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
+source <(grep -v '^#' .env.local | sed -e 's/^/export /')
 cd packages/db && bunx vitest run && cd ../..
 ```
 
@@ -1573,11 +1556,11 @@ The test should:
 
 Implement based on Better-Auth's actual server-side test utilities. (API verified 2026-05-07 against https://www.better-auth.com/docs/basic-usage and https://www.better-auth.com/docs/integrations/next.) If `requireEmailVerification: true` blocks the signup-then-signin flow in tests, either use a test-mode flag or pre-set `users.emailVerified = true` after signup before testing signin.
 
-- [ ] **Step 2: Run with DB up**
+- [ ] **Step 2: Run against the Neon dev branch**
 
 ```
-bun run db:up
-export DATABASE_URL=postgresql://void:void@localhost:5432/void_starter
+vercel env pull .env.local
+source <(grep -v '^#' .env.local | sed -e 's/^/export /')
 cd packages/auth && bunx vitest run && cd ../..
 ```
 
