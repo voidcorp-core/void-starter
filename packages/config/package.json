@@ -1,0 +1,20 @@
+{
+  "name": "@void/config",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.lib.json",
+    "tsconfig.next.json",
+    "biome.base.json",
+    "vitest.base.ts"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.lib.json": "./tsconfig.lib.json",
+    "./tsconfig.next.json": "./tsconfig.next.json",
+    "./biome.base.json": "./biome.base.json",
+    "./vitest.base": "./vitest.base.ts"
+  }
+}
