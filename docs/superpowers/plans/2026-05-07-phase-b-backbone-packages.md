@@ -1595,6 +1595,8 @@ git push
 
 `@void/ui` exposes Tailwind v4 design tokens via `@theme` and a small set of base components used across apps (Button, Input, Card, Label, Avatar). Components follow the canonical layout from `context.md`.
 
+> NOTE (2026-05-07 Tailwind v4 verification pass): The verification subagent's network access (curl, WebFetch, WebSearch, defuddle, `bun pm view`) was sandboxed and could not reach `registry.npmjs.org` or `tailwindcss.com`. Patches below are based on the documented Tailwind v4 architecture (stable since Jan 2025) and the contract shape the v4 engine has maintained through 4.x. The executor MUST re-verify the items flagged `// TO RE-VERIFY at exec time:` in each task before pinning versions.
+
 ### Task B26: @void/ui package skeleton
 
 - [ ] **Step 1: Create `packages/ui/package.json`**
@@ -1618,7 +1620,7 @@ git push
   "dependencies": {
     "clsx": "^2.1.0",
     "lucide-react": "^1.14.0",
-    "tailwind-merge": "^2.5.0"
+    "tailwind-merge": "^3.0.0"
   },
   "devDependencies": {
     "@void/config": "workspace:*",
@@ -1640,7 +1642,9 @@ git push
 }
 ```
 
-NOTE (versions verified 2026-05-07 against npm registry): lucide-react has crossed its 1.x boundary (latest 1.14.x); tailwindcss is at 4.2.x. The executor should still re-check `bun pm view <pkg> version` at exec time.
+NOTE (versions): A prior subagent claimed to verify against the npm registry that lucide-react is at 1.14.x and tailwindcss at 4.2.x. The 2026-05-07 follow-up verifier was sandboxed off the network and could NOT confirm. The executor MUST run `bun pm view tailwindcss version`, `bun pm view @tailwindcss/postcss version`, `bun pm view lucide-react version`, `bun pm view tailwind-merge version`, and `bun pm view clsx version` at exec time and update the `^X.Y.0` floors before `bun install`.
+
+`@tailwindcss/postcss` itself is NOT a dep of `@void/ui` — it lives in `apps/web` (Phase C Task C3) where PostCSS is configured. `@void/ui` ships pre-author CSS via the `@theme` block; the postcss plugin runs at the consumer's build step.
 
 - [ ] **Step 2: Create `packages/ui/tsconfig.json`**
 
@@ -1690,15 +1694,31 @@ git push
 
 - [ ] **Step 1: Read Tailwind v4 docs on `@theme`**
 
-Reference: `https://tailwindcss.com/docs/theme`. Confirm the `@theme` directive syntax for v4.
+Reference: `https://tailwindcss.com/docs/theme`. Confirm the `@theme` directive syntax for v4. // TO RE-VERIFY at exec time: that the namespaces below (`--color-*`, `--spacing-*`, `--radius-*`, `--font-*`) still auto-generate the matching utilities in the latest v4.x.
 
 - [ ] **Step 2: Create `packages/ui/src/styles/globals.css`**
 
 ```css
+/*
+ * Updated 2026-05-07 from initial draft:
+ *   - Switched from individual `--spacing-N` keys to v4's idiomatic single
+ *     `--spacing` base. In Tailwind v4 the spacing scale is derived dynamically
+ *     from one base value (any `p-N`/`m-N`/`gap-N`/`w-N`/`h-N` etc.
+ *     multiplies it). Defining `--spacing-1`, `--spacing-2`, etc. individually
+ *     is the v3-style override pattern; only do it if you need to break the
+ *     uniform scale, which we don't.
+ *   - Kept OKLCH colors (v4's recommended modern color format; the default
+ *     v4 palette ships in OKLCH).
+ *   - Kept `@import "tailwindcss"` (the canonical v4 single-line entry
+ *     that replaces v3's `@tailwind base/components/utilities`).
+ *   - Kept `@layer base { body { ... } }` (still the v4-supported pattern).
+ */
+
 @import "tailwindcss";
 
 @theme {
-  /* Colors */
+  /* Colors — defining --color-NAME auto-generates bg-NAME, text-NAME,
+     border-NAME, ring-NAME, fill-NAME, stroke-NAME, etc. */
   --color-background: oklch(0.99 0.005 270);
   --color-foreground: oklch(0.15 0.02 270);
   --color-muted: oklch(0.95 0.005 270);
@@ -1710,22 +1730,15 @@ Reference: `https://tailwindcss.com/docs/theme`. Confirm the `@theme` directive 
   --color-border: oklch(0.9 0.005 270);
   --color-ring: oklch(0.55 0.2 250);
 
-  /* Spacing */
-  --spacing-0: 0;
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-12: 3rem;
-  --spacing-16: 4rem;
+  /* Spacing — single base value drives the entire dynamic scale.
+     p-1 → 0.25rem, p-4 → 1rem, p-16 → 4rem, etc. (v4 idiomatic). */
+  --spacing: 0.25rem;
 
-  /* Typography */
+  /* Typography — defining --font-NAME generates font-NAME utility. */
   --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, monospace;
 
-  /* Radii */
+  /* Radii — defining --radius-NAME generates rounded-NAME utility. */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -1783,6 +1796,8 @@ git push
 - Create: `packages/ui/src/cn.ts`
 - Create: `packages/ui/src/cn.test.ts`
 
+NOTE on `tailwind-merge` in Tailwind v4: the v4 release changed the build engine (Oxide / Rust) and the configuration model (CSS-first `@theme`), but did NOT add runtime class-conflict resolution. When you compose classes in JS like `cn("px-2", props.className)` where `props.className` is `"px-4"`, you still need `twMerge` to keep the later one. `tailwind-merge` ships v4-aware presets — keep it. // TO RE-VERIFY at exec time: that the installed `tailwind-merge` major version supports v4 (the v2.x line was the v3-only branch; v3.x of tailwind-merge added v4 support).
+
 - [ ] **Step 1: Write failing tests**
 
 ```ts
@@ -1835,6 +1850,8 @@ git push
 - Create: `packages/ui/src/Button/Button.helper.test.ts`
 - Create: `packages/ui/src/Button/Button.types.ts`
 - Create: `packages/ui/src/Button/index.ts`
+
+NOTE on the v4 token-to-utility contract: every `--color-NAME` / `--radius-NAME` declared in `@theme` (Task B27) auto-generates the matching utility (`bg-NAME`, `text-NAME`, `border-NAME`, `ring-NAME`, `rounded-NAME`, etc.). The classes used in B29-B33 (`bg-primary`, `text-primary-foreground`, `rounded-md`, `focus-visible:ring-ring`, `border-border`, `bg-muted`, `text-muted-foreground`, `bg-destructive`, `border-destructive`, `bg-background`, `text-foreground`, `rounded-lg`) all map 1:1 to tokens declared in B27 — no extra config needed.
 
 - [ ] **Step 1: Types** (`Button.types.ts`)
 
