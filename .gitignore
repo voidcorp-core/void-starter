@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Test outputs
+coverage/
+*.lcov
+.vitest-cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+
+# Lefthook
+.lefthook-local.yml
