@@ -196,12 +196,25 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 
 - **Date:** 2026-05-09
 - **Decision:** Components in `@void/ui` declare `'use client'` only when they own behavior that requires client-side React (DOM event handlers via props that React must serialize through the boundary, refs forwarded to interactive elements, or hooks). Layout primitives that only render markup based on props remain pure server components with no directive. Initial inventory:
-  - `'use client'`: `Button`, `Input`, `Label` (all use `forwardRef` + accept event handlers like `onClick` / `onChange` from consumers).
+  - `'use client'`: `Button`, `Input`, `Label` (all accept event handlers like `onClick` / `onChange` from consumers and forward `ref` to the underlying interactive element).
   - Server (no directive): `Card` (+ `CardHeader` / `CardBody`), `Avatar` (pure markup, no interactivity, no refs forwarded).
 - **Why:** Next.js 16 with React 19 RSC means every directive choice has runtime cost. A blanket `'use client'` on every UI primitive forfeits server rendering for the entire subtree, ships unnecessary JavaScript, and defeats the point of using App Router. Conversely, omitting `'use client'` on a component that consumers want to attach `onClick` to surfaces a confusing `Functions cannot be passed directly to Client Components` error at the wrong layer (the `apps/web` page boundary) instead of at the primitive itself. The convention "interactive primitive = client, layout primitive = server" gives consumers a predictable mental model: if you can imagine a `useState` inside it, it's a client component; otherwise server.
+- **Ref forwarding idiom:** Interactive primitives accept `ref` as a regular prop (typed as `Ref<HTMLElement>`) rather than wrapping the component in `forwardRef`. React 19 dropped the requirement: refs are now forwarded automatically when declared as a prop, and `forwardRef` is on the deprecation runway. This keeps the component a plain function (cleaner stack traces, no `displayName` boilerplate) while preserving full ref support for consumers who need it.
 - **Rejected alternatives:**
   - Mark all `@void/ui` components `'use client'`: simpler rule, but eliminates server-rendering benefits for the bulk of layout markup (cards, avatars, future `Stack`, `Container`, `Divider`, etc.). Doesn't scale.
   - Mark none and let consumers wrap interactive uses in their own client components: shifts boilerplate to every consumer call site and makes `<Button onClick={...}>` impossible to use directly in a server component, which is the primary ergonomic win of shared primitives.
   - Split into two packages (`@void/ui-server` + `@void/ui-client`): premature, doubles the import surface, and the boundary is already enforced per-file by the directive — no need to encode it in package layout.
+  - Keeping `forwardRef` for ecosystem inertia — rejected because React 19 deprecated the requirement; the project's quality bar is 2026 idiomatic, not lowest-common-denominator.
 - **Convention going forward:** When adding a new `@void/ui` component, the first question is "does this component receive function props or hold state?" If yes, file starts with `'use client';`. If no, no directive. If the component composes children that may be interactive (e.g., a `Modal` that wraps arbitrary content), the wrapper itself decides based on whether IT needs interactivity, not based on what children might pass through.
 - **When to revisit:** If a layout primitive (e.g., `Card`) ever grows interactive behavior (collapsible state, hover-controlled animations driven from JS), promote it to `'use client'` in the same commit that adds the behavior — never speculatively.
+
+### 17. CVA for typed variant primitives in `@void/ui`
+
+- **Date:** 2026-05-09
+- **Decision:** `@void/ui` uses `class-variance-authority` (CVA) to declare variant-driven components (`Button`, future complex primitives). Variant types are derived via `VariantProps<typeof X>` rather than hand-written.
+- **Why:** CVA is the de-facto 2026 standard (used by shadcn/ui v3), gives type inference for free, supports compound variants, and weighs ~2KB. Manual `Record<Variant, string>` helpers re-invent this with worse ergonomics — no inference, no compound variants, more code to maintain across N components.
+- **Rejected alternatives:**
+  - Hand-rolled `getButtonClasses(variant, size)` helper: works for one component but rots into duplication as soon as a second variant component lands. No type inference; types like `ButtonVariant` / `ButtonSize` must be hand-written and kept in sync.
+  - tailwind-variants (tw-variants): newer, supports slots/composition, but adds a layer of API surface `@void/ui` doesn't need yet. Revisit if multi-slot components become common.
+  - Stitches / vanilla-extract: full CSS-in-JS solutions; out of scope for a Tailwind-first design system.
+- **When to revisit:** When `@void/ui` needs multi-slot composition primitives (e.g., a Card with named regions), evaluate tailwind-variants as a successor. Until then, CVA is sufficient and lighter.
