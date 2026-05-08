@@ -14,6 +14,11 @@
       "project": "src/**/*.ts",
       "ignoreDependencies": ["pino-pretty"]
     },
+    "packages/db": {
+      "entry": "src/index.ts",
+      "project": "src/**/*.ts",
+      "ignoreDependencies": ["drizzle-orm", "postgres", "drizzle-kit"]
+    },
     "apps/*": {
       "entry": [
         "src/app/**/page.tsx",
