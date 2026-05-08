@@ -179,3 +179,15 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Inline duplication of the full base config in every `vitest.config.ts`: same drift problem, and changes to the base require touching every package.
   - Skipping the test step entirely on empty packages via Turborepo task filters: hides genuinely missing test files behind a config quirk and is harder to debug than a one-liner config.
 - **When to revisit:** If a package legitimately wants to fail-on-empty (e.g. a contracts package where missing tests are a regression), override `passWithNoTests` locally in that package's `vitest.config.ts`.
+
+### 15. `@void/auth` opts out of `.d.ts` declaration emit (TS2742 dual-zod workaround)
+
+- **Date:** 2026-05-09
+- **Decision:** `packages/auth/tsconfig.json` overrides the `tsconfig.lib.json` defaults with `declaration: false` and `declarationMap: false`. Type-checking still runs via `tsc --noEmit`; only declaration emit is disabled, scoped to this one package.
+- **Why:** Better-Auth 1.6.x ships its own nested `zod@4` under `node_modules/better-auth/node_modules/zod`, while the monorepo standardizes on `zod@3.x` at the root. The inferred return type of `betterAuth(...)` therefore traverses `better-auth/node_modules/zod/v4/core`, a path TypeScript refuses to synthesize into a portable `.d.ts` (TS2742). Workspace consumers of `@void/auth` resolve types straight from TypeScript source via `package.json#exports` (the entire monorepo uses `./src/*.ts` exports, never built outputs), so the declaration files were never consumed downstream — the declaration emit was pure overhead AND a blocker. Disabling it lets `betterAuth(...)` keep its full plugin-augmented inferred type at every call site.
+- **Rejected alternatives:**
+  - `as Auth<typeof options>` annotation: `Auth` from `better-auth` defaulted to base options drops plugin-injected fields (admin's `banned`, `role`, etc.); annotating with `Auth<typeof options>` shifts the same TS2742 onto the inferred `options` const because the magicLink callback parameter type also traverses `zod/v4/core`. Both regress consumer ergonomics.
+  - `// @ts-expect-error` / `// @ts-ignore` directives: TS2742 is a declaration-emit diagnostic, not a typechecker diagnostic — suppression directives are reported as unused and do not affect emit-time errors.
+  - Adding a Bun `overrides` / `resolutions` for zod to force a single hoisted version: forces `zod@4` upstream on every `@void/*` package; that is a project-wide migration (Phase D backlog), not a Phase B local fix.
+  - Disabling `declaration` at the `tsconfig.lib.json` root: bleeds the workaround into every package whether or not it has the dual-zod problem; loses declaration emit for packages that may legitimately want it (e.g., future external publication).
+- **When to revisit:** When the project migrates to `zod@4` across all `@void/*` packages and the install dedupes to a single zod copy, drop this override and re-enable `declaration: true`. Verify with `cd packages/auth && bunx tsc --noEmit --declaration` returning zero errors.
