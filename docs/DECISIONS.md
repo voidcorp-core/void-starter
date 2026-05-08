@@ -145,3 +145,19 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Supabase dev + prod: Supabase's RLS-by-default conflicts with the application-level authorization in `requireRole()`; Better-Auth + Supabase is awkward
   - Self-hosted Postgres on VPS for everything: ops overhead does not fit the venture builder velocity model
 - **When to revisit:** If Vercel + Neon integration changes terms (price tier shift, free tier reduction); if a specific MVP requires Postgres extensions Neon does not support; if data sovereignty becomes a hard requirement on a per-MVP basis (in which case activate the self-hosted module for that project only).
+
+### 12. `required()` env helper + lazy globalThis Drizzle singleton
+
+- **Date:** 2026-05-08
+- **Decision:** `@void/core/env` exports a small `required(name: string): string` helper that throws `Missing required env var: <NAME>` on absent or empty values. `@void/db` consumes it both in `drizzle.config.ts` (via a `dbCredentials.url` getter) and in `client.ts`, where the Drizzle instance is wrapped in a Proxy that lazily resolves env via `createAppEnv` and caches the postgres-js pool on `globalThis` in non-production. `passWithNoTests` is set once in `packages/config/vitest.base.ts` instead of per-package.
+- **Why:**
+  - `required()` keeps env presence checks one-line and consistent across config files where the full `createAppEnv` schema is overkill.
+  - The drizzle-kit `dbCredentials.url` getter defers the env read to command-time so static analyzers (knip's drizzle plugin only reads `schema`) load the file without `DATABASE_URL`, while `migrate`/`studio`/`push` still fail loud if the URL is missing. `generate` does not need a URL by design.
+  - The `globalThis`-cached lazy singleton in `client.ts` is the canonical Next.js 16 / RSC pattern: hot reload does not leak postgres-js pools, env validation runs once on first `db.*` access (not at module evaluation), and Zod URL validation via `createAppEnv` catches typos at first access.
+  - No `{ max }` on postgres-js: the Neon pooled endpoint manages connection limits server-side; postgres-js defaults are correct for serverless.
+- **Rejected alternatives:**
+  - Empty-string fallback in `drizzle.config.ts` to please knip: silent failure mode on `drizzle-kit migrate`. Loud failure beats silent default.
+  - Eager pool construction at module load: leaks connections on Next.js hot reload and forces env validation at import time, breaking type-check / knip on packages that import `@void/db/client`.
+  - Replacing `createAppEnv` with `required()` in `client.ts`: loses Zod URL validation that catches `localhost` typos and missing `postgres://` schemes.
+  - `--passWithNoTests` per-package plaster: replicates across every future skeleton; centralised in `packages/config/vitest.base.ts` instead.
+- **When to revisit:** If knip ever exposes a directive to skip a single config file from plugin-driven evaluation, the `dbCredentials.url` getter trick can be replaced by a plain expression with `required()`. If we ever ship a non-Vercel deploy target without a Neon pooler, reconsider postgres-js options.

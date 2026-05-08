@@ -14,7 +14,8 @@
       "!**/dist/**",
       "!**/.turbo/**",
       "!**/coverage/**",
-      "!**/node_modules/**"
+      "!**/node_modules/**",
+      "!**/migrations/**"
     ]
   },
   "formatter": {

@@ -1,23 +1,14 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     "packages/config": {
-      "entry": "vitest.base.ts",
       "project": ["*.ts"]
     },
     "packages/*": {
-      "entry": "src/index.ts",
       "project": "src/**/*.ts"
     },
     "packages/core": {
-      "entry": "src/index.ts",
-      "project": "src/**/*.ts",
       "ignoreDependencies": ["pino-pretty"]
-    },
-    "packages/db": {
-      "entry": "src/index.ts",
-      "project": "src/**/*.ts",
-      "ignoreDependencies": ["drizzle-orm", "postgres", "drizzle-kit"]
     },
     "apps/*": {
       "entry": [
@@ -30,7 +21,5 @@
       ],
       "project": "src/**/*.{ts,tsx}"
     }
-  },
-  "ignore": ["**/*.test.ts", "**/_examples/**"],
-  "ignoreDependencies": []
+  }
 }
