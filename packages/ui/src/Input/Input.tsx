@@ -1,11 +1,15 @@
 'use client';
 
-import { forwardRef } from 'react';
+import type { InputHTMLAttributes, Ref } from 'react';
 import { cn } from '../cn';
-import type { InputProps } from './Input.types';
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, invalid, ...props }, ref) => (
+export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  invalid?: boolean;
+  ref?: Ref<HTMLInputElement>;
+};
+
+export function Input({ className, invalid, ref, ...props }: InputProps) {
+  return (
     <input
       ref={ref}
       className={cn(
@@ -15,7 +19,5 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       )}
       {...props}
     />
-  ),
-);
-
-Input.displayName = 'Input';
+  );
+}
