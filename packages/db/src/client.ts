@@ -4,34 +4,16 @@ import postgres from 'postgres';
 import { z } from 'zod';
 import * as schema from './schema';
 
-/**
- * Lazy, hot-reload-safe Drizzle client.
- *
- * Design notes:
- * - Lazy: env validation and pool construction run on first `db.*` access,
- *   not on module evaluation. Build-time tools that may statically import
- *   `@void/db/client` (knip, type-check) do not require `DATABASE_URL`.
- * - `globalThis` cache: Next.js dev-mode hot reload re-evaluates modules on
- *   every save; without this cache we'd open (and leak) a fresh postgres
- *   pool per change. Production keeps a single per-process instance.
- * - No explicit `{ max }`: the Neon pooled endpoint manages connection
- *   limits server-side and postgres-js defaults are correct for serverless.
- * - Zod URL validation via `createAppEnv` catches typos (missing scheme,
- *   `localhost` without `postgres://`) at first access.
- *
- * Idiomatic 2026 Drizzle + Next.js 16 / RSC singleton pattern.
- */
-
 type Schema = typeof schema;
 type QueryClient = ReturnType<typeof postgres>;
-type Database = ReturnType<typeof drizzle<Schema>>;
+export type Database = ReturnType<typeof drizzle<Schema>>;
 
-const globalForDb = globalThis as typeof globalThis & {
-  __voidQueryClient?: QueryClient;
-  __voidDb?: Database;
-};
+declare global {
+  var __voidQueryClient: QueryClient | undefined;
+  var __voidDb: Database | undefined;
+}
 
-const isProduction = process.env['NODE_ENV'] === 'production';
+let cached: Database | undefined;
 
 function initDb(): Database {
   const env = createAppEnv({
@@ -40,24 +22,33 @@ function initDb(): Database {
     runtimeEnv: { DATABASE_URL: process.env['DATABASE_URL'] },
   });
 
-  const queryClient = globalForDb.__voidQueryClient ?? postgres(env['DATABASE_URL']);
-  if (!isProduction) globalForDb.__voidQueryClient = queryClient;
+  const queryClient = globalThis.__voidQueryClient ?? postgres(env['DATABASE_URL']);
+  const db = globalThis.__voidDb ?? drizzle(queryClient, { schema });
 
-  const instance = drizzle(queryClient, { schema });
-  if (!isProduction) globalForDb.__voidDb = instance;
+  if (process.env['NODE_ENV'] !== 'production') {
+    globalThis.__voidQueryClient = queryClient;
+    globalThis.__voidDb = db;
+  }
 
-  return instance;
+  return db;
 }
 
 /**
- * Drizzle client. Connection pool opens lazily on first `db.*` access and is
- * cached on `globalThis` in development to survive Next.js hot reload.
+ * Returns the Drizzle client. Lazy + memoized: the postgres-js pool is created
+ * on first call, then cached for the lifetime of the process. In non-production
+ * the cache is also stashed on `globalThis` so HMR-reloaded modules reuse the
+ * same pool instead of leaking a new one per save.
+ *
+ * This is a Node singleton, not request-scoped. For request-scoped caching
+ * layered above (Cache Components, `"use cache"`), see ADR 10.
+ *
+ * Call once per request handler / Server Action and reuse the returned
+ * reference within that scope.
  */
-export const db: Database = new Proxy({} as Database, {
-  get(_target, prop, receiver) {
-    const instance = globalForDb.__voidDb ?? initDb();
-    return Reflect.get(instance, prop, receiver);
-  },
-});
+export function getDb(): Database {
+  if (cached) return cached;
+  cached = globalThis.__voidDb ?? initDb();
+  return cached;
+}
 
 export type DbClient = Database;
