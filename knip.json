@@ -10,6 +10,20 @@
     "packages/core": {
       "ignoreDependencies": ["pino-pretty"]
     },
+    "packages/ui": {
+      "project": "src/**/*.{ts,tsx}",
+      "ignoreDependencies": [
+        "clsx",
+        "lucide-react",
+        "tailwind-merge",
+        "tailwindcss",
+        "@types/react",
+        "@types/react-dom",
+        "@testing-library/react",
+        "react",
+        "react-dom"
+      ]
+    },
     "apps/*": {
       "entry": [
         "src/app/**/page.tsx",
