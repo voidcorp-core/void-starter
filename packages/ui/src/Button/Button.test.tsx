@@ -30,4 +30,16 @@ describe('Button', () => {
     expect(captured).toBeInstanceOf(HTMLButtonElement);
     expect(screen.getByRole('button').textContent).toBe('click');
   });
+
+  it('renders as child element when asChild is true', () => {
+    render(
+      <Button asChild>
+        <a href="/x">Go</a>
+      </Button>,
+    );
+    const link = screen.getByRole('link');
+    expect(link).toBeInstanceOf(HTMLAnchorElement);
+    expect(link.textContent).toBe('Go');
+    expect(link.className).toContain('bg-primary');
+  });
 });
