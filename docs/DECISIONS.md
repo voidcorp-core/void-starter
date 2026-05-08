@@ -146,18 +146,36 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Self-hosted Postgres on VPS for everything: ops overhead does not fit the venture builder velocity model
 - **When to revisit:** If Vercel + Neon integration changes terms (price tier shift, free tier reduction); if a specific MVP requires Postgres extensions Neon does not support; if data sovereignty becomes a hard requirement on a per-MVP basis (in which case activate the self-hosted module for that project only).
 
-### 12. `required()` env helper + lazy globalThis Drizzle singleton
+### 12. Lazy globalThis-cached Drizzle singleton
 
 - **Date:** 2026-05-08
-- **Decision:** `@void/core/env` exports a small `required(name: string): string` helper that throws `Missing required env var: <NAME>` on absent or empty values. `@void/db` consumes it both in `drizzle.config.ts` (via a `dbCredentials.url` getter) and in `client.ts`, where the Drizzle instance is wrapped in a Proxy that lazily resolves env via `createAppEnv` and caches the postgres-js pool on `globalThis` in non-production. `passWithNoTests` is set once in `packages/config/vitest.base.ts` instead of per-package.
-- **Why:**
-  - `required()` keeps env presence checks one-line and consistent across config files where the full `createAppEnv` schema is overkill.
-  - The drizzle-kit `dbCredentials.url` getter defers the env read to command-time so static analyzers (knip's drizzle plugin only reads `schema`) load the file without `DATABASE_URL`, while `migrate`/`studio`/`push` still fail loud if the URL is missing. `generate` does not need a URL by design.
-  - The `globalThis`-cached lazy singleton in `client.ts` is the canonical Next.js 16 / RSC pattern: hot reload does not leak postgres-js pools, env validation runs once on first `db.*` access (not at module evaluation), and Zod URL validation via `createAppEnv` catches typos at first access.
-  - No `{ max }` on postgres-js: the Neon pooled endpoint manages connection limits server-side; postgres-js defaults are correct for serverless.
+- **Decision:** `@void/db/client` exposes a single `getDb(): Database` function. The postgres-js pool and Drizzle instance are constructed on first call, memoized in a module-local slot for the lifetime of the process, and additionally stashed on `globalThis` in non-production so Next.js HMR-reloaded modules reuse the same pool. No `{ max }` is set on postgres-js.
+- **Why:** Eager pool construction at module load leaks a fresh connection on every Next.js dev hot-reload and forces every importer (knip, tsc, biome, build-time scripts) to have `DATABASE_URL` set just to load the module. Lazy + memoized + globalThis-cached avoids both, while keeping a single per-process pool in production. The Neon pooled endpoint manages connection limits server-side, so a hand-tuned `{ max }` is cargo-culted noise.
+- **Rejected alternatives:**
+  - Eager pool construction at module load: leaks connections on Next.js hot reload and forces env validation at import time, breaking type-check / knip / biome on any package that transitively imports `@void/db/client`.
+  - Eager env validation + lazy pool: would catch `DATABASE_URL` typos at module load. Rejected because static analyzers (knip, tsc, biome) import `@void/db/client` without `DATABASE_URL` set, and Zod URL validation at module load would break those workflows the same way eager pool construction did.
+  - `Proxy`-wrapped `db: Database` const: the Proxy hop fires on every property read, breaks `instanceof` / type narrowing / devtools display, and adds zero capability over a function call. No 2026 reference (Vercel, Drizzle docs, Neon docs, next-forge, t3-stack) prescribes it.
+  - Replacing `createAppEnv` with `required()` inside the client: loses Zod URL validation that catches `localhost` typos and missing `postgres://` schemes.
+- **When to revisit:** If we ship a non-Vercel deploy target without a Neon-style server-side pooler, reconsider postgres-js options (explicit `{ max }`, `idle_timeout`). If a future Drizzle release ships a first-party request-scoped client, evaluate replacing the Node singleton with it.
+
+### 13. `required()` env helper + drizzle-kit `dbCredentials.url` getter
+
+- **Date:** 2026-05-08
+- **Decision:** `@void/core/env` exports a small `required(name: string): string` that throws `Missing required env var: <NAME>` on absent or empty values. `packages/db/drizzle.config.ts` consumes it through a `dbCredentials.url` getter, so the env read fires at command-time rather than at config-load time.
+- **Why:** Config files consumed by CLIs (drizzle-kit) need a one-line, loud presence check; the full `createAppEnv` schema is overkill there. The getter is the load-bearing trick: knip's drizzle plugin only reads the `schema` key and loads the config without `DATABASE_URL`, while `drizzle-kit migrate`/`studio`/`push` still fail loud the moment they reach for the URL. `drizzle-kit generate` does not need a URL by design.
 - **Rejected alternatives:**
   - Empty-string fallback in `drizzle.config.ts` to please knip: silent failure mode on `drizzle-kit migrate`. Loud failure beats silent default.
-  - Eager pool construction at module load: leaks connections on Next.js hot reload and forces env validation at import time, breaking type-check / knip on packages that import `@void/db/client`.
-  - Replacing `createAppEnv` with `required()` in `client.ts`: loses Zod URL validation that catches `localhost` typos and missing `postgres://` schemes.
-  - `--passWithNoTests` per-package plaster: replicates across every future skeleton; centralised in `packages/config/vitest.base.ts` instead.
-- **When to revisit:** If knip ever exposes a directive to skip a single config file from plugin-driven evaluation, the `dbCredentials.url` getter trick can be replaced by a plain expression with `required()`. If we ever ship a non-Vercel deploy target without a Neon pooler, reconsider postgres-js options.
+  - Inline `process.env['DATABASE_URL'] ?? throw ...` at the top of `drizzle.config.ts`: same behaviour at the cost of repeating the error message everywhere; centralising in `required()` keeps the contract uniform across packages.
+  - Reusing `createAppEnv` in `drizzle.config.ts`: pulls Zod and the t3-env runtime into a config file that only needs a presence check, and would still need the getter trick to defer the read.
+- **When to revisit:** If knip exposes a directive to skip a single config file from plugin-driven evaluation, the getter can be replaced by a plain expression with `required()`. If `required()` grows beyond presence checks (validation, defaults, transforms), promote those use cases to `createAppEnv` rather than expanding the helper.
+
+### 14. Centralized vitest base config with `passWithNoTests`
+
+- **Date:** 2026-05-08
+- **Decision:** `packages/config/vitest.base.ts` owns the shared vitest defaults for the monorepo, including `passWithNoTests: true`. Each package's `vitest.config.ts` re-exports the base config and only diverges when a package has package-specific needs (custom setup files, environment, coverage thresholds).
+- **Why:** Skeleton packages without tests yet (typical mid-phase state) would otherwise fail `bun run test` and break the Turborepo pipeline. Setting `passWithNoTests` once at the source means every future package skeleton inherits it instead of replicating a `--passWithNoTests` plaster in each `package.json`. Aligns with how the monorepo already centralizes biome (`biome.base.json`) and tsconfig (`tsconfig.lib.json`).
+- **Rejected alternatives:**
+  - `--passWithNoTests` flag per-package: replicates across every future skeleton, drifts over time, and hides the convention from contributors.
+  - Inline duplication of the full base config in every `vitest.config.ts`: same drift problem, and changes to the base require touching every package.
+  - Skipping the test step entirely on empty packages via Turborepo task filters: hides genuinely missing test files behind a config quirk and is harder to debug than a one-liner config.
+- **When to revisit:** If a package legitimately wants to fail-on-empty (e.g. a contracts package where missing tests are a regression), override `passWithNoTests` locally in that package's `vitest.config.ts`.
