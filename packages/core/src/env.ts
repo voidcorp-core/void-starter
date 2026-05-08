@@ -22,3 +22,21 @@ export function createAppEnv<
     skipValidation: process.env['SKIP_ENV_VALIDATION'] === 'true',
   });
 }
+
+/**
+ * Read a required environment variable, throwing a clear error when missing.
+ *
+ * Use this for env reads that should fail loud at command-time (e.g. config
+ * files consumed by CLIs such as drizzle-kit, where the schema-based
+ * `createAppEnv` is overkill but a silent default is a footgun).
+ *
+ * For Next.js runtime env validation prefer {@link createAppEnv}, which adds
+ * Zod schema validation on top of presence checks.
+ */
+export function required(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value === '') {
+    throw new Error(`Missing required env var: ${name}`);
+  }
+  return value;
+}
