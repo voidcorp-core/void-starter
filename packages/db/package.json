@@ -11,7 +11,7 @@
   "scripts": {
     "lint": "biome check .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -19,7 +19,8 @@
   "dependencies": {
     "@void/core": "workspace:*",
     "drizzle-orm": "^0.45.0",
-    "postgres": "^3.4.0"
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@void/config": "workspace:*",
