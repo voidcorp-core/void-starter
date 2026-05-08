@@ -16,7 +16,6 @@
         "clsx",
         "lucide-react",
         "tailwind-merge",
-        "tailwindcss",
         "@types/react",
         "@types/react-dom",
         "@testing-library/react",

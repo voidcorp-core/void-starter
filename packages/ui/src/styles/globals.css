@@ -1,0 +1,47 @@
+/*
+ * @void/ui — design tokens via Tailwind v4 @theme.
+ *
+ * Defining `--color-NAME`, `--font-NAME`, `--radius-NAME` auto-generates the
+ * matching utilities (bg-NAME, text-NAME, font-NAME, rounded-NAME, etc.).
+ *
+ * Spacing uses a single base value: `--spacing: 0.25rem` drives the entire
+ * dynamic scale (p-1 = 0.25rem, p-4 = 1rem, p-16 = 4rem). This is the v4
+ * idiomatic pattern — defining `--spacing-1`, `--spacing-2`, etc. individually
+ * is the v3-era override pattern.
+ *
+ * Colors use OKLCH (v4's recommended modern color format).
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.99 0.005 270);
+  --color-foreground: oklch(0.15 0.02 270);
+  --color-muted: oklch(0.95 0.005 270);
+  --color-muted-foreground: oklch(0.45 0.02 270);
+  --color-primary: oklch(0.55 0.2 250);
+  --color-primary-foreground: oklch(0.98 0.005 250);
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-destructive-foreground: oklch(0.98 0.005 25);
+  --color-border: oklch(0.9 0.005 270);
+  --color-ring: oklch(0.55 0.2 250);
+
+  --spacing: 0.25rem;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
