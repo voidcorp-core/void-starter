@@ -15,8 +15,7 @@
         "@void/core",
         "@void/db",
         "better-auth",
-        "@better-auth/drizzle-adapter",
-        "zod"
+        "@better-auth/drizzle-adapter"
       ]
     },
     "apps/*": {
