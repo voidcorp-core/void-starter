@@ -13,9 +13,7 @@
     "packages/ui": {
       "project": "src/**/*.{ts,tsx}",
       "ignoreDependencies": [
-        "clsx",
         "lucide-react",
-        "tailwind-merge",
         "@types/react",
         "@types/react-dom",
         "@testing-library/react",
