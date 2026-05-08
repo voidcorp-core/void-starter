@@ -10,6 +10,15 @@
     "packages/core": {
       "ignoreDependencies": ["pino-pretty"]
     },
+    "packages/auth": {
+      "ignoreDependencies": [
+        "@void/core",
+        "@void/db",
+        "better-auth",
+        "@better-auth/drizzle-adapter",
+        "zod"
+      ]
+    },
     "apps/*": {
       "entry": [
         "src/app/**/page.tsx",

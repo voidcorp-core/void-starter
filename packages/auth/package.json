@@ -1,0 +1,31 @@
+{
+  "name": "@void/auth",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./service": "./src/auth.service.ts",
+    "./repository": "./src/auth.repository.ts",
+    "./client": "./src/auth.client.ts",
+    "./types": "./src/auth.types.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@void/core": "workspace:*",
+    "@void/db": "workspace:*",
+    "better-auth": "^1.6.0",
+    "@better-auth/drizzle-adapter": "^1.6.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@void/config": "workspace:*",
+    "@vitest/coverage-v8": "^2.1.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
