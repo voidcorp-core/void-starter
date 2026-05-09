@@ -8,7 +8,14 @@
  * the DSN is set, the import resolves and `Sentry.init` runs.
  */
 if (process.env['NEXT_PUBLIC_SENTRY_DSN']) {
-  import('@void/sentry/client').then(({ initSentryClient }) => {
-    initSentryClient();
-  });
+  import('@void/sentry/client')
+    .then(({ initSentryClient }) => {
+      initSentryClient();
+    })
+    .catch(() => {
+      // Swallow: a chunk-load failure here means Sentry will not capture
+      // browser errors, but the rest of the app stays functional. There is
+      // no useful action to take in the user's tab, and surfacing the
+      // failure would itself require Sentry.
+    });
 }

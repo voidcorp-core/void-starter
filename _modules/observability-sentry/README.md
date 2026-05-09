@@ -79,17 +79,16 @@ The module is already wired into `apps/web` so a fresh starter clone activates S
 
    const config: NextConfig = {
      // ... cacheComponents, headers, transpilePackages
-     transpilePackages: ['@void/auth', '@void/core', '@void/db', '@void/ui', '@void/sentry'],
+     transpilePackages: ['@void/auth', '@void/core', '@void/db', '@void/sentry', '@void/ui'],
    };
 
    export default withSentryConfig(config, {
-     org: process.env['SENTRY_ORG'],
-     project: process.env['SENTRY_PROJECT'],
-     authToken: process.env['SENTRY_AUTH_TOKEN'],
      tunnelRoute: '/sentry-tunnel',
      silent: !process.env['CI'],
    });
    ```
+
+   The bundler plugin reads `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` from the environment at build time, so they don't need to be passed explicitly.
 
 6. Add `apps/<app>/src/app/global-error.tsx` so React render errors at the root layout level get captured. Use a dynamic `@sentry/nextjs` import inside the effect so the SDK never ships into the eager bundle when `NEXT_PUBLIC_SENTRY_DSN` is unset:
 
@@ -129,11 +128,12 @@ A manual `apps/<app>/src/app/sentry-tunnel/route.ts` is only required if the pro
 If a future MVP needs to remove Sentry entirely:
 
 1. Drop `"@void/sentry": "workspace:*"` from `apps/<app>/package.json` deps.
-2. Remove `'@void/sentry'` from `transpilePackages` in `next.config.ts`.
-3. Replace the `withSentryConfig(config, {...})` wrapper with a plain `export default config;`.
-4. Revert `instrumentation.ts` to a noop `register()` (or remove the dynamic import branch).
-5. Delete `instrumentation-client.ts` and `app/global-error.tsx`.
-6. Run `bun install` to drop the lockfile entry.
+2. Drop `"@sentry/nextjs": "^10.0.0"` from `apps/<app>/package.json` deps (both are listed because the app also imports `@sentry/nextjs` directly from `next.config.ts` and `app/global-error.tsx`; once those call sites are removed in the steps below, the SDK is unused).
+3. Remove `'@void/sentry'` from `transpilePackages` in `next.config.ts`.
+4. Replace the `withSentryConfig(config, {...})` wrapper with a plain `export default config;`.
+5. Revert `instrumentation.ts` to a noop `register()` (or remove the dynamic import branch).
+6. Delete `instrumentation-client.ts` and `app/global-error.tsx`.
+7. Run `bun install` to drop the lockfile entries.
 
 The env vars (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) can be unset in Vercel without a code change; the module already short-circuits when they are absent. Use the full removal procedure above only when the dependency itself is no longer wanted.
 

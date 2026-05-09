@@ -15,9 +15,16 @@ import { useEffect } from 'react';
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   useEffect(() => {
     if (process.env['NEXT_PUBLIC_SENTRY_DSN']) {
-      import('@sentry/nextjs').then((Sentry) => {
-        Sentry.captureException(error);
-      });
+      import('@sentry/nextjs')
+        .then((Sentry) => {
+          Sentry.captureException(error);
+        })
+        .catch(() => {
+          // Swallow: this is best-effort capture from a global error
+          // boundary. The user is already in an error state and the UI
+          // below already surfaces the error; failing to load Sentry on
+          // top of that should not throw a second time.
+        });
     }
   }, [error]);
 
