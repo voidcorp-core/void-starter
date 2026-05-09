@@ -6,4 +6,4 @@
  * level. If the component ever needs additional pure helpers (e.g. a role
  * badge formatter) they can be added here alongside the re-exports.
  */
-export { computeInitials, displayName } from '@void/auth';
+export { computeInitials, displayName } from '@void/auth/helper';

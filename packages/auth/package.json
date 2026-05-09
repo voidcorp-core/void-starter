@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./helper": "./src/auth.helper.ts",
     "./service": "./src/auth.service.ts",
     "./repository": "./src/auth.repository.ts",
     "./client": "./src/auth.client.ts",
