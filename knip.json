@@ -21,12 +21,15 @@
         "src/app/**/route.ts",
         "src/proxy.ts",
         "src/instrumentation.ts",
-        "next.config.ts"
+        "next.config.ts",
+        "playwright.config.ts",
+        "tests/e2e/**/*.spec.ts"
       ],
       "project": "src/**/*.{ts,tsx}",
       "ignoreDependencies": [
         "@hookform/resolvers",
         "@void/db",
+        "drizzle-orm",
         "react-hook-form",
         "zod",
         "@testing-library/jest-dom",
