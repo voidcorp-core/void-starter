@@ -132,11 +132,10 @@ For Pattern B, mirror `_modules/payment-stripe/`:
 
 ```
 _modules/<name>/
-  package.json                # minimal stub for catalogue presence
   README.md                   # the integration recipe IS the implementation
 ```
 
-The README is the artifact. It must include: status banner ("placeholder, README only"), scope, env vars table, install steps, integration points, upstream docs links, removal procedure.
+The README is the artifact and the only file. Pattern B placeholders deliberately stay out of the workspace graph (no `package.json`, no `src/`, no `tsconfig.json`) per ADR 29 so knip, Turborepo, and Renovate do not generate noise for unused scaffolds. The README must include: status banner ("placeholder, README only"), scope, env vars table, install steps, integration points, upstream docs links, removal procedure.
 
 ### Step 3 -- update the catalogue and consuming apps
 

@@ -37,7 +37,7 @@ The starter ships Better-Auth as default for data sovereignty, brand integrity, 
 
 ## Placeholders
 
-The following eight modules are intentional scaffolds, not abandoned work. Each ships a `README.md`, `package.json`, and minimal stubs so the module exists in the workspace graph and shows up in module listings, but the integration code lives only as a recipe in the README. Implement when a real MVP needs the capability.
+The following eight modules are intentional scaffolds, not abandoned work. Each ships a `README.md` ONLY, with the full integration recipe inside. They deliberately stay out of the workspace graph (no `package.json`, no `src/`) so knip, Turborepo, and Renovate do not generate noise for capabilities no MVP has activated yet. See [ADR 29](../docs/DECISIONS.md) for the rationale. Implement when a real MVP needs the capability.
 
 ### @void/payment-stripe -- Stripe checkout, customer portal, webhooks
 
@@ -123,7 +123,7 @@ The DCE story matters here: client-side modules (`@void/posthog`, `@void/sentry`
 
 ### Pattern B. Copy-paste / scaffold
 
-The module is README-only (or README + minimal stubs). The integration steps live as a recipe in the README, designed to be executed by a developer or AI agent against the current `apps/web` source. There is no workspace dep to add for the placeholder itself; the README tells you what to install in the consuming app.
+The module is README-only. The integration steps live as a recipe in the README, designed to be executed by a developer or AI agent against the current `apps/web` source. There is no workspace dep to add for the placeholder itself; the README tells you what to install in the consuming app. See [ADR 29](../docs/DECISIONS.md) for why placeholders deliberately stay out of the workspace graph.
 
 Used by all eight placeholders. The "module" is the recipe + scope contract, not a shipped package. This avoids dead workspace deps and keeps the workspace graph honest about what is actually consumed.
 
