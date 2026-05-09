@@ -15,7 +15,8 @@
       "!**/.turbo/**",
       "!**/coverage/**",
       "!**/node_modules/**",
-      "!**/migrations/**"
+      "!**/migrations/**",
+      "!**/next-env.d.ts"
     ]
   },
   "formatter": {

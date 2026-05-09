@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { createAppEnv } from '@void/core/env';
 import { logger } from '@void/core/logger';
@@ -10,11 +12,12 @@ import { z } from 'zod';
 /**
  * Better-Auth wiring for `@void/auth`.
  *
- * This module is server-only. It constructs the canonical Better-Auth
- * instance used by every server-side caller (Server Actions, route
- * handlers, the auth.service facade). The instance is lazy at the I/O
- * layer: `getDb()` returns a memoized Drizzle client, and Better-Auth
- * itself only opens DB connections on the first auth API call.
+ * This module is server-only. The `getAuth()` factory constructs the
+ * canonical Better-Auth instance on first call, then caches it for the
+ * lifetime of the process (lazy + memoized, same pattern as `getDb()`).
+ * Env validation is deferred to the first `getAuth()` invocation so that
+ * `next build` can complete without auth env vars being set — they are only
+ * required at runtime (dev server start or first request in production).
  *
  * Schema mapping: our Drizzle tables use plural names (`users`,
  * `sessions`, ...) while Better-Auth's canonical models are singular
@@ -44,58 +47,74 @@ import { z } from 'zod';
  * `zod@4` (Phase D backlog) and the install dedupes to a single copy.
  */
 
-const env = createAppEnv({
-  server: {
-    BETTER_AUTH_SECRET: z.string().min(32),
-    BETTER_AUTH_URL: z.string().url(),
-    GOOGLE_CLIENT_ID: z.string().min(1),
-    GOOGLE_CLIENT_SECRET: z.string().min(1),
-  },
-  client: {},
-  runtimeEnv: {
-    BETTER_AUTH_SECRET: process.env['BETTER_AUTH_SECRET'],
-    BETTER_AUTH_URL: process.env['BETTER_AUTH_URL'],
-    GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'],
-    GOOGLE_CLIENT_SECRET: process.env['GOOGLE_CLIENT_SECRET'],
-  },
-});
+function initAuth() {
+  const env = createAppEnv({
+    server: {
+      BETTER_AUTH_SECRET: z.string().min(32),
+      BETTER_AUTH_URL: z.string().url(),
+      GOOGLE_CLIENT_ID: z.string().min(1),
+      GOOGLE_CLIENT_SECRET: z.string().min(1),
+    },
+    client: {},
+    runtimeEnv: {
+      BETTER_AUTH_SECRET: process.env['BETTER_AUTH_SECRET'],
+      BETTER_AUTH_URL: process.env['BETTER_AUTH_URL'],
+      GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'],
+      GOOGLE_CLIENT_SECRET: process.env['GOOGLE_CLIENT_SECRET'],
+    },
+  });
 
-export const auth = betterAuth({
-  secret: env['BETTER_AUTH_SECRET'],
-  baseURL: env['BETTER_AUTH_URL'],
-  database: drizzleAdapter(getDb(), {
-    provider: 'pg',
-    schema: {
-      user: schema.users,
-      session: schema.sessions,
-      account: schema.accounts,
-      verification: schema.verifications,
-    },
-  }),
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-  },
-  socialProviders: {
-    google: {
-      clientId: env['GOOGLE_CLIENT_ID'],
-      clientSecret: env['GOOGLE_CLIENT_SECRET'],
-    },
-  },
-  plugins: [
-    admin({
-      defaultRole: 'user',
-      adminRoles: ['admin'],
-    }),
-    magicLink({
-      sendMagicLink: async ({ email, token, url }) => {
-        logger.warn(
-          { email, url, token },
-          'magic link (dev only - install @void/email module for prod)',
-        );
+  return betterAuth({
+    secret: env['BETTER_AUTH_SECRET'],
+    baseURL: env['BETTER_AUTH_URL'],
+    database: drizzleAdapter(getDb(), {
+      provider: 'pg',
+      schema: {
+        user: schema.users,
+        session: schema.sessions,
+        account: schema.accounts,
+        verification: schema.verifications,
       },
     }),
-  ],
-});
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+    },
+    socialProviders: {
+      google: {
+        clientId: env['GOOGLE_CLIENT_ID'],
+        clientSecret: env['GOOGLE_CLIENT_SECRET'],
+      },
+    },
+    plugins: [
+      admin({
+        defaultRole: 'user',
+        adminRoles: ['admin'],
+      }),
+      magicLink({
+        sendMagicLink: async ({ email, token, url }) => {
+          logger.warn(
+            { email, url, token },
+            'magic link (dev only - install @void/email module for prod)',
+          );
+        },
+      }),
+    ],
+  });
+}
 
-export type Auth = typeof auth;
+let cached: ReturnType<typeof initAuth> | undefined;
+
+/**
+ * Returns the Better-Auth instance. Lazy + memoized: the instance is created
+ * on first call (env validation + DB adapter init), then cached for the
+ * lifetime of the process. Never evaluated at module load time, so `next build`
+ * can complete without auth env vars being present.
+ */
+export function getAuth() {
+  if (cached) return cached;
+  cached = initAuth();
+  return cached;
+}
+
+export type Auth = ReturnType<typeof getAuth>;

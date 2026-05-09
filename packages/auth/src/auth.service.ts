@@ -1,6 +1,9 @@
+import 'server-only';
+
 import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
 import { headers } from 'next/headers';
-import { auth } from './auth.repository';
+import { connection } from 'next/server';
+import { getAuth } from './auth.repository';
 import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
 
 /**
@@ -39,7 +42,10 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
  * minor releases.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  // `connection()` signals to Next.js cacheComponents / dynamicIO that this
+  // render requires a real request context and must not be statically prerendered.
+  await connection();
+  const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session?.user) return null;
   const parsed = sessionUserSchema.safeParse(session.user);
   return parsed.success ? parsed.data : null;
@@ -82,5 +88,5 @@ export async function requireRole(role: Role): Promise<SessionUser> {
  * though sign-in does not — the symmetry breaks intentionally.
  */
 export async function signOut() {
-  return auth.api.signOut({ headers: await headers() });
+  return getAuth().api.signOut({ headers: await headers() });
 }

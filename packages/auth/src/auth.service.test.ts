@@ -1,31 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
 vi.mock('next/headers', () => ({
   headers: () => Promise.resolve(new Headers()),
 }));
+vi.mock('next/server', () => ({
+  connection: () => Promise.resolve(undefined),
+}));
+
+const mockGetSession = vi.fn();
 
 vi.mock('./auth.repository', () => ({
-  auth: {
+  getAuth: () => ({
     api: {
-      getSession: vi.fn(),
+      getSession: mockGetSession,
     },
-  },
+  }),
 }));
 
 import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
-import { auth } from './auth.repository';
 import { getCurrentUser, requireAuth, requireRole } from './auth.service';
-
-const getSessionMock = vi.mocked(auth.api.getSession);
 
 describe('getCurrentUser', () => {
   it('returns null when no session', async () => {
-    getSessionMock.mockResolvedValueOnce(null);
+    mockGetSession.mockResolvedValueOnce(null);
     expect(await getCurrentUser()).toBeNull();
   });
 
   it('returns parsed user when session exists', async () => {
-    getSessionMock.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValueOnce({
       user: {
         id: '00000000-0000-0000-0000-000000000001',
         email: 'a@b.co',
@@ -41,14 +44,14 @@ describe('getCurrentUser', () => {
 
 describe('requireAuth', () => {
   it('throws UnauthorizedError when not signed in', async () => {
-    getSessionMock.mockResolvedValueOnce(null);
+    mockGetSession.mockResolvedValueOnce(null);
     await expect(requireAuth()).rejects.toBeInstanceOf(UnauthorizedError);
   });
 });
 
 describe('requireRole', () => {
   it('throws ForbiddenError when user lacks role', async () => {
-    getSessionMock.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValueOnce({
       user: {
         id: '00000000-0000-0000-0000-000000000001',
         email: 'a@b.co',
@@ -61,7 +64,7 @@ describe('requireRole', () => {
   });
 
   it('passes when user is admin', async () => {
-    getSessionMock.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValueOnce({
       user: {
         id: '00000000-0000-0000-0000-000000000001',
         email: 'a@b.co',

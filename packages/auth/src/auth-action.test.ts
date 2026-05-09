@@ -9,6 +9,7 @@ import { z } from 'zod';
  * its own resolved value via `mockResolvedValueOnce`, which scopes the
  * stub to a single call and avoids cross-test bleed.
  */
+vi.mock('server-only', () => ({}));
 vi.mock('./auth.service', () => ({
   getCurrentUser: vi.fn(),
 }));

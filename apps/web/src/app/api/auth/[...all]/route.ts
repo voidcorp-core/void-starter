@@ -1,4 +1,9 @@
-import { auth } from '@void/auth/repository';
+import { getAuth } from '@void/auth/repository';
 import { toNextJsHandler } from 'better-auth/next-js';
 
-export const { GET, POST } = toNextJsHandler(auth);
+// Lazy handler: `getAuth()` validates env vars on first call (not at module
+// load time), so `next build` can run without auth env vars being present.
+// `getAuth()` is memoized, so `toNextJsHandler` receives the same instance on
+// every request after the first.
+export const GET = (req: Request) => toNextJsHandler(getAuth()).GET(req);
+export const POST = (req: Request) => toNextJsHandler(getAuth()).POST(req);

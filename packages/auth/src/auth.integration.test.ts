@@ -2,15 +2,20 @@ import { randomUUID } from 'node:crypto';
 import { getDb } from '@void/db';
 import { users } from '@void/db/schema';
 import { eq, like } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// `server-only` throws in non-Next.js environments (including vitest). Mock it
+// globally here so imports of `@void/db` and `@void/auth` work in tests.
+vi.mock('server-only', () => ({}));
 
 /**
  * Integration test for the full Better-Auth flow against a real Postgres DB.
  *
  * Skip semantics: this suite skips unless BOTH `DATABASE_URL` and
- * `BETTER_AUTH_SECRET` are present in the environment, because importing
- * `auth.repository` eagerly calls `createAppEnv` and would throw at module
- * load if either is missing. The same gating pattern as
+ * `BETTER_AUTH_SECRET` are present in the environment. Although
+ * `auth.repository` is now lazy (`getAuth()` defers env validation to first
+ * call), the gating is kept here so CI never runs these against a missing DB.
+ * The same gating pattern as
  * `packages/db/src/schema/users.integration.test.ts`.
  *
  * To run locally:
@@ -54,7 +59,8 @@ describe.skipIf(!databaseUrl || !authSecret)('auth integration', () => {
     // Lazy-import the repository so module-load env validation only runs when
     // the suite actually executes. With the skipIf gate above, this import
     // path is only ever reached when BETTER_AUTH_SECRET is set.
-    const { auth } = await import('./auth.repository');
+    const { getAuth } = await import('./auth.repository');
+    const auth = getAuth();
 
     const id = randomUUID();
     const email = `${TEST_EMAIL_PREFIX}${id}@example.com`;

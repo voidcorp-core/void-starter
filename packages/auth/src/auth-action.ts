@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
 import {
   type ActionAuth,

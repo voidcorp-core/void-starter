@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { auth } from '@void/auth/repository';
+import { getAuth } from '@void/auth/repository';
 import { getDb } from '@void/db';
 import { users } from '@void/db/schema';
 import { eq } from 'drizzle-orm';
@@ -13,7 +13,7 @@ test.describe('role guard for /admin', () => {
   const testPassword = 'TestPassword123!';
 
   test.beforeAll(async () => {
-    await auth.api.signUpEmail({
+    await getAuth().api.signUpEmail({
       body: { email: testEmail, password: testPassword, name: 'E2E Role User' },
     });
   });

@@ -1,5 +1,6 @@
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@void/ui';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { VerifyEmailClient } from './VerifyEmailClient';
 
 interface VerifyEmailPageProps {
@@ -7,6 +8,9 @@ interface VerifyEmailPageProps {
 }
 
 export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageProps) {
+  // `connection()` opts this page out of static prerendering in Next 16
+  // cacheComponents mode — `searchParams` is request-bound data.
+  await connection();
   const { token } = await searchParams;
 
   if (!token) {

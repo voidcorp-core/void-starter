@@ -53,6 +53,7 @@
         "@void/core": "workspace:*",
         "@void/db": "workspace:*",
         "better-auth": "^1.6.0",
+        "server-only": "^0.0.1",
         "zod": "^3.23.0",
       },
       "devDependencies": {
@@ -101,6 +102,7 @@
         "@void/core": "workspace:*",
         "drizzle-orm": "^0.45.0",
         "postgres": "^3.4.0",
+        "server-only": "^0.0.1",
         "zod": "^3.23.0",
       },
       "devDependencies": {
@@ -1069,6 +1071,8 @@
     "secure-json-parse": ["secure-json-parse@2.7.0", "", {}, "sha512-6aU+Rwsezw7VR8/nyvKTx8QpWH9FrcYiXXlqC4z5d5XQBDRqtbfsRjnwGyqbi3gddNtWHuEk9OANUotL26qKUw=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
+
+    "server-only": ["server-only@0.0.1", "", {}, "sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA=="],
 
     "set-cookie-parser": ["set-cookie-parser@3.1.0", "", {}, "sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw=="],
 
