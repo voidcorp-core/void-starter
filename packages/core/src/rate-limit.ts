@@ -15,7 +15,20 @@ export type RateLimiter = {
 
 type Bucket = { count: number; resetAt: number };
 
-export function createInMemoryRateLimit(config: RateLimitConfig): RateLimiter {
+/**
+ * In-memory rate limiter. INTENT: tests + single-process dev only.
+ *
+ * On Vercel serverless or any horizontally-scaled deploy, the `Map` state
+ * is per-invocation/per-process and effectively grants every request its
+ * own counter — i.e. NO real rate limiting. Worse, this looks like it
+ * works locally and fails silently in production. Use only when you
+ * control the process model OR in unit tests.
+ *
+ * For production deployments use the `@void/rate-limit-upstash` module
+ * (Phase D Task D12), which backs the limiter with Upstash Redis and
+ * preserves the same `RateLimiter` interface for drop-in substitution.
+ */
+export function createMemoryRateLimit(config: RateLimitConfig): RateLimiter {
   const buckets = new Map<string, Bucket>();
 
   return {

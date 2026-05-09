@@ -5,6 +5,7 @@ import {
   ForbiddenError,
   isAppError,
   NotFoundError,
+  RateLimitError,
   UnauthorizedError,
   ValidationError,
 } from './errors';
@@ -47,6 +48,16 @@ describe('typed subclasses', () => {
 
   it('ConflictError uses 409', () => {
     expect(new ConflictError('dup').status).toBe(409);
+  });
+
+  it('RateLimitError carries 429, RATE_LIMITED, and retryAfterSeconds', () => {
+    const err = new RateLimitError(30);
+    expect(err.status).toBe(429);
+    expect(err.code).toBe('RATE_LIMITED');
+    expect(err.retryAfterSeconds).toBe(30);
+    expect(err.message).toContain('30s');
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.name).toBe('RateLimitError');
   });
 });
 

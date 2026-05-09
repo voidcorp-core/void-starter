@@ -54,6 +54,33 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * Throw inside a Server Action handler when the request exceeds a quota.
+ *
+ * `defineFormAction` maps this to
+ * `{ ok: false, formError: { code: 'RATE_LIMITED', message } }` via the
+ * existing `isAppError` branch. `defineAction` (RPC) re-throws it; consumers
+ * handle it in a try/catch or surface it through their error boundary.
+ *
+ * Production limiters (Upstash Redis, Vercel KV) should construct this
+ * with the `retryAfter` value derived from the limiter's response so the
+ * caller can render an accurate countdown / set a `Retry-After` header.
+ */
+export class RateLimitError extends AppError {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number, cause?: unknown) {
+    super({
+      message: `Too many requests. Retry after ${retryAfterSeconds}s.`,
+      code: 'RATE_LIMITED',
+      status: 429,
+      cause,
+    });
+    this.name = 'RateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 export function isAppError(value: unknown): value is AppError {
   return value instanceof AppError;
 }

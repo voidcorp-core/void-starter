@@ -5,12 +5,13 @@ export {
   ForbiddenError,
   isAppError,
   NotFoundError,
+  RateLimitError,
   UnauthorizedError,
   ValidationError,
 } from './errors';
 export { type Logger, logger } from './logger';
 export {
-  createInMemoryRateLimit,
+  createMemoryRateLimit,
   type RateLimitConfig,
   type RateLimiter,
   type RateLimitResult,
