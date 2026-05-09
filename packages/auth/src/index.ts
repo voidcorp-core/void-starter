@@ -6,13 +6,7 @@ export {
 } from './auth.errors';
 export { computeInitials, displayName } from './auth.helper';
 export { canAccessAdminPanel } from './auth.policy';
-export {
-  getCurrentUser,
-  requireAuth,
-  requireRole,
-  signIn,
-  signOut,
-} from './auth.service';
+export { getCurrentUser, requireAuth, requireRole, signOut } from './auth.service';
 export {
   type AuthSession,
   type Role,

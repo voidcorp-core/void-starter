@@ -13,13 +13,35 @@ Default auth implementation for the void-starter. Wraps Better-Auth with Drizzle
 
 ## Public API
 
+### Server-side (Server Components, route handlers, middleware)
+
 - `getCurrentUser(): Promise<SessionUser | null>` - read current session
 - `requireAuth(): Promise<SessionUser>` - throws `UnauthorizedError` if no session
 - `requireRole(role): Promise<SessionUser>` - throws `ForbiddenError` if role mismatch (admin always passes)
-- `signIn.email({ email, password })`, `signIn.google(callbackURL?)`, `signIn.magicLink({ email })`
-- `signOut()`
-- `defineAction({ schema, auth, handler })` - auth-aware Server Action wrapper around `@void/core/server-action`
-- `authClient` (from `@void/auth/client`) - browser-side client with React hooks (`useSession`)
+- `signOut()` - clear the current session
+
+### Server Actions
+
+- `defineAction({ schema, auth, handler })` - typed RPC Server Action factory; auth-aware wrapper around `@void/core/server-action`
+- `defineFormAction({ schema, auth, handler })` - `useActionState`-compatible Server Action factory for `<form action={...}>`
+
+### Browser (Client Components)
+
+All sign-in flows live on the browser client and ship cookies to the
+Better-Auth handler natively:
+
+- `authClient.signIn.email({ email, password })`
+- `authClient.signIn.social({ provider: 'google', callbackURL })`
+- `authClient.signIn.magicLink({ email })`
+- `authClient.signOut()`
+- `authClient.useSession()` - React hook returning `{ data, isPending, error }`
+
+Server-side sign-in is intentionally not exposed: it requires manual
+`Set-Cookie` passthrough and is a niche need (e.g. one-time token
+redemption). Add a deliberate typed helper if a flow demands it.
+
+### Other
+
 - Errors: `InvalidCredentialsError`, `EmailAlreadyTakenError`, `MagicLinkExpiredError`
 - Policies: `canAccessAdminPanel(user)`
 - Helpers: `displayName(input)`, `computeInitials(name)`

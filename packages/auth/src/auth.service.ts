@@ -6,19 +6,31 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
 /**
  * Public server-side auth API for `@void/auth`.
  *
- * Consumed by Server Actions, route handlers, and any other server context
+ * Consumed by React Server Components, route handlers, and middleware
  * inside `apps/web`. Browser code uses `auth.client.ts` (the Better-Auth
- * fetch client) instead. The functions here read the session from request
- * headers via `next/headers`, so they only work inside a Next.js request
- * scope (Server Actions, route handlers, RSC, middleware bridging).
+ * fetch client) instead, including all sign-in flows (`authClient.signIn.*`).
+ * The functions here read the session from request headers via
+ * `next/headers`, so they only work inside a Next.js request scope.
  *
  * Errors are thrown, never returned. The `defineAction` middleware in
  * `@void/core/server-action` maps `AppError` subclasses to API responses
  * with the appropriate HTTP status; let exceptions propagate.
+ *
+ * Sign-in is intentionally not exposed here. Server-side sign-in requires
+ * manual cookie passthrough (`returnHeaders: true` + Set-Cookie forwarding)
+ * which is a niche need; if a future flow needs it (e.g. token redemption),
+ * add a single typed helper deliberately rather than re-exposing
+ * `auth.api.signIn*` as a half-shaped surface.
  */
 
 /**
- * Returns the authenticated user, or `null` if no session exists.
+ * Read the current session user. Use in:
+ *   - React Server Components (page.tsx, layout.tsx) for conditional rendering
+ *   - Route handlers (route.ts) for non-action endpoints
+ *
+ * For Server Actions, prefer `defineAction({ auth: 'required', ... })` from
+ * `@void/auth` — it wires auth into the action's typed context so the handler
+ * receives `ctx.user` directly, without re-reading headers.
  *
  * Defensive parsing: if Better-Auth returns a session shape that does not
  * match `sessionUserSchema` (for example a future field we have not yet
@@ -34,8 +46,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 }
 
 /**
- * Returns the authenticated user, or throws `UnauthorizedError` (401).
- * Use at the top of any Server Action that requires a logged-in user.
+ * Require an authenticated user; throw `UnauthorizedError` (401) if not.
+ *
+ * Use in Server Components and route handlers. For Server Actions prefer
+ * `defineAction({ auth: 'required', ... })` from `@void/auth`, which raises
+ * the same error class but wires `ctx.user` into the handler.
  */
 export async function requireAuth(): Promise<SessionUser> {
   const user = await getCurrentUser();
@@ -44,10 +59,12 @@ export async function requireAuth(): Promise<SessionUser> {
 }
 
 /**
- * Returns the authenticated user when their role matches `role`, or when
- * they are `'admin'` (admin always satisfies any required role — standard
- * role-hierarchy pattern). Throws `UnauthorizedError` (401) when no session
- * exists, or `ForbiddenError` (403) when the role check fails.
+ * Require a specific role; throw `UnauthorizedError` (401) without a session
+ * or `ForbiddenError` (403) if the role check fails. Admin always satisfies
+ * any role check (standard role-hierarchy pattern).
+ *
+ * Use in Server Components and route handlers. For Server Actions prefer
+ * `defineAction({ auth: 'role:admin', ... })` from `@void/auth`.
  */
 export async function requireRole(role: Role): Promise<SessionUser> {
   const user = await requireAuth();
@@ -58,27 +75,11 @@ export async function requireRole(role: Role): Promise<SessionUser> {
 }
 
 /**
- * Server-side sign-in entry points. Most apps drive sign-in from the
- * browser via `auth.client.ts`; these wrappers exist for Server Actions
- * and route handlers that need to bypass the client. The `google` helper
- * is a thin wrapper over `signInSocial` to give a clean, named entry
- * point per provider and to satisfy `exactOptionalPropertyTypes` (the
- * underlying `callbackURL` field is omitted entirely when undefined,
- * rather than being passed as `undefined`).
- */
-export const signIn = {
-  email: auth.api.signInEmail,
-  google: (callbackURL?: string) =>
-    auth.api.signInSocial({
-      body: { provider: 'google', ...(callbackURL ? { callbackURL } : {}) },
-    }),
-  magicLink: auth.api.signInMagicLink,
-};
-
-/**
  * Sign the current session out. Returns Better-Auth's structured response
  * (the cookie clearing happens via the response object Better-Auth
- * attaches to the request context).
+ * attaches to the request context). Server Actions legitimately need this
+ * (e.g. a `<form action={signOutAction}>` button), so it stays here even
+ * though sign-in does not — the symmetry breaks intentionally.
  */
 export async function signOut() {
   return auth.api.signOut({ headers: await headers() });
