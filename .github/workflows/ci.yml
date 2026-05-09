@@ -13,13 +13,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# GitHub-published actions still embed Node 20 internally for backwards
-# compatibility; opting in to Node 24 silences the deprecation warning and
-# keeps the runner-internal runtime aligned with our test runtime
-# (DECISIONS entry 30). Will become the default June 2026.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -45,7 +38,7 @@ jobs:
       GOOGLE_CLIENT_ID: ci-stub
       GOOGLE_CLIENT_SECRET: ci-stub
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.13'
@@ -55,11 +48,11 @@ jobs:
       # files imported across `package.json#exports` boundaries load natively without
       # any flag. Pinned for reproducibility; matches `engines.node` >= 24. See
       # DECISIONS entry 30.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
       - name: Cache bun + turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.bun/install/cache
@@ -112,18 +105,18 @@ jobs:
       GOOGLE_CLIENT_ID: ci-stub
       GOOGLE_CLIENT_SECRET: ci-stub
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.13'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bunx drizzle-kit migrate
       - run: cd apps/web && bunx playwright install --with-deps chromium
       - run: cd apps/web && bun run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
