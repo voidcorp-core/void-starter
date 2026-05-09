@@ -191,6 +191,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Adding a Bun `overrides` / `resolutions` for zod to force a single hoisted version: forces `zod@4` upstream on every `@void/*` package; that is a project-wide migration (Phase D backlog), not a Phase B local fix.
   - Disabling `declaration` at the `tsconfig.lib.json` root: bleeds the workaround into every package whether or not it has the dual-zod problem; loses declaration emit for packages that may legitimately want it (e.g., future external publication).
 - **When to revisit:** When the project migrates to `zod@4` across all `@void/*` packages and the install dedupes to a single zod copy, drop this override and re-enable `declaration: true`. Verify with `cd packages/auth && bunx tsc --noEmit --declaration` returning zero errors.
+- **Last revised:** 2026-05-09 (TypeScript 6.0 bump). Re-tested with TS 6.0.3: the underlying inference issue persists, surfaced now as `TS2883` (was `TS2742` in 5.6) with the same root cause — `betterAuth(...)`'s inferred type still traverses `better-auth/node_modules/zod/v4/core` in the dual-zod install, and the diagnostic still triggers only at declaration emit. Workaround stays in place; revisit trigger is unchanged (single-zod install across `@void/*`).
 
 ### 16. `@void/ui` RSC boundary: `'use client'` only on interactive primitives
 

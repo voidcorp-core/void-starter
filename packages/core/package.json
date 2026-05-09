@@ -28,7 +28,7 @@
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.1.0",
     "@void/config": "workspace:*",
-    "typescript": "^5.6.0",
+    "typescript": "^6.0.3",
     "vitest": "^2.1.0"
   }
 }
