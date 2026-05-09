@@ -13,6 +13,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# GitHub-published actions still embed Node 20 internally for backwards
+# compatibility; opting in to Node 24 silences the deprecation warning and
+# keeps the runner-internal runtime aligned with our test runtime
+# (DECISIONS entry 30). Will become the default June 2026.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   quality:
     runs-on: ubuntu-latest
