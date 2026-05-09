@@ -2,7 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     "packages/config": {
-      "project": ["*.ts"]
+      "project": ["*.ts"],
+      "ignoreDependencies": ["next"]
     },
     "packages/*": {
       "project": "src/**/*.ts"
@@ -18,11 +19,20 @@
         "src/app/**/page.tsx",
         "src/app/**/layout.tsx",
         "src/app/**/route.ts",
-        "src/middleware.ts",
+        "src/proxy.ts",
         "src/instrumentation.ts",
         "next.config.ts"
       ],
-      "project": "src/**/*.{ts,tsx}"
+      "project": "src/**/*.{ts,tsx}",
+      "ignoreDependencies": [
+        "@hookform/resolvers",
+        "@void/db",
+        "react-hook-form",
+        "zod",
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "@testing-library/user-event"
+      ]
     }
   }
 }
