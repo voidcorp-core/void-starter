@@ -47,6 +47,17 @@ export async function promoteToAdmin(email: string): Promise<void> {
 }
 
 /**
+ * Mark a user's email as verified directly in the DB. Required after
+ * `signUpViaHttp` because the Better-Auth config has
+ * `requireEmailVerification: true`, which blocks sign-in until the
+ * verification flow completes. In real product use the user clicks an
+ * email link; in E2E we fast-forward the column.
+ */
+export async function markEmailVerified(email: string): Promise<void> {
+  await getTestSql()`UPDATE users SET email_verified = true WHERE email = ${email}`;
+}
+
+/**
  * Sign up a user via the public Better-Auth HTTP endpoint. Returns the
  * response so callers can assert status. Use this in `test.beforeAll`
  * for suites that need a pre-existing user without driving the UI.

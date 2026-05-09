@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { closeTestSql, deleteTestUser, signUpViaHttp } from './_helpers';
+import { closeTestSql, deleteTestUser, markEmailVerified, signUpViaHttp } from './_helpers';
 
 const hasDb = Boolean(process.env['DATABASE_URL']);
 
@@ -15,6 +15,7 @@ test.describe('sign-in / sign-out flow', () => {
       password: testPassword,
       name: 'E2E SignIn User',
     });
+    await markEmailVerified(testEmail);
   });
 
   test.afterAll(async () => {

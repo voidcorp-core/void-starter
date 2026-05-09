@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { closeTestSql, deleteTestUser, promoteToAdmin, signUpViaHttp } from './_helpers';
+import {
+  closeTestSql,
+  deleteTestUser,
+  markEmailVerified,
+  promoteToAdmin,
+  signUpViaHttp,
+} from './_helpers';
 
 const hasDb = Boolean(process.env['DATABASE_URL']);
 
@@ -15,6 +21,9 @@ test.describe('role guard for /admin', () => {
       password: testPassword,
       name: 'E2E Role User',
     });
+    // Better-Auth ships with requireEmailVerification: true; fast-forward
+    // the verification column so the sign-in form succeeds in tests.
+    await markEmailVerified(testEmail);
   });
 
   test.afterAll(async () => {
