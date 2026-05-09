@@ -27,13 +27,16 @@ Optional:
 
 The module is already wired into `apps/web` so a fresh starter clone activates Sentry simply by setting the env vars above and redeploying. The steps below document how to mirror the integration in any future app inside this monorepo.
 
-1. Add the dependency to the consuming app's `package.json`:
+1. Add two dependencies to the consuming app's `package.json`:
 
    ```json
    "dependencies": {
+     "@sentry/nextjs": "^10.0.0",
      "@void/sentry": "workspace:*"
    }
    ```
+
+   `@void/sentry` provides the gated init helpers used by `instrumentation.ts` and `instrumentation-client.ts`. `@sentry/nextjs` is a direct dependency because the app also calls into it from build-time config (`next.config.ts` -> `withSentryConfig`) and from the global error boundary (`app/global-error.tsx` -> `Sentry.captureException`); both call sites bypass the wrapper so pinning the SDK at the app level keeps the dependency graph honest.
 
 2. Run `bun install` from the repo root.
 
@@ -57,15 +60,17 @@ The module is already wired into `apps/web` so a fresh starter clone activates S
    export { onRequestError } from '@void/sentry/server';
    ```
 
-4. Create `apps/<app>/src/instrumentation-client.ts`. Gate the call on `NEXT_PUBLIC_SENTRY_DSN` so the entire branch dead-code-eliminates when the public DSN is unset:
+4. Create `apps/<app>/src/instrumentation-client.ts`. Use a dynamic import gated on `NEXT_PUBLIC_SENTRY_DSN` so the Sentry SDK chunks load lazily and never hit the user's bundle when the public DSN is unset:
 
    ```ts
-   import { initSentryClient } from '@void/sentry/client';
-
    if (process.env['NEXT_PUBLIC_SENTRY_DSN']) {
-     initSentryClient();
+     import('@void/sentry/client').then(({ initSentryClient }) => {
+       initSentryClient();
+     });
    }
    ```
+
+   Note on bundle output: Turbopack does not statically eliminate dead branches that reference `process.env['NEXT_PUBLIC_*']`, so the lazy SDK chunks still ship into `.next/static/chunks/` as build artifacts. They are referenced only from the gated dynamic import and never fetched by users when the env var is unset at runtime. Verify with `grep` against the chunks loaded by your homepage HTML; the chunks loaded eagerly should contain zero `SDK_VERSION` / `sentry_client` references.
 
 5. Wrap `next.config.ts` with `withSentryConfig`:
 
@@ -86,18 +91,19 @@ The module is already wired into `apps/web` so a fresh starter clone activates S
    });
    ```
 
-6. Add `apps/<app>/src/app/global-error.tsx` so React render errors at the root layout level get captured. Gate the `Sentry.captureException` call on `NEXT_PUBLIC_SENTRY_DSN` so the page also works when Sentry is not installed:
+6. Add `apps/<app>/src/app/global-error.tsx` so React render errors at the root layout level get captured. Use a dynamic `@sentry/nextjs` import inside the effect so the SDK never ships into the eager bundle when `NEXT_PUBLIC_SENTRY_DSN` is unset:
 
    ```tsx
    'use client';
 
-   import * as Sentry from '@sentry/nextjs';
    import { useEffect } from 'react';
 
    export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
      useEffect(() => {
        if (process.env['NEXT_PUBLIC_SENTRY_DSN']) {
-         Sentry.captureException(error);
+         import('@sentry/nextjs').then((Sentry) => {
+           Sentry.captureException(error);
+         });
        }
      }, [error]);
 

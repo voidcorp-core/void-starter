@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.0.0",
-    "@void/core": "workspace:*"
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@void/config": "workspace:*",

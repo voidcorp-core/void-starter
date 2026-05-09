@@ -25,3 +25,10 @@ export function initSentryClient(): void {
     // withSentryConfig(..., { tunnelRoute: '/sentry-tunnel' }).
   });
 }
+
+/**
+ * Required by `@sentry/nextjs` 10.x to instrument App Router navigation
+ * transitions. Must be re-exported from `instrumentation-client.ts` as a
+ * top-level export named `onRouterTransitionStart` for Next.js to pick it up.
+ */
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
