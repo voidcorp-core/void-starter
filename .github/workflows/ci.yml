@@ -67,9 +67,10 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bunx knip --no-progress
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Use the gitleaks CLI directly (same binary as local pre-commit and the
+      # D36 validation). The official gitleaks-action@v2 now requires a paid
+      # license for org repos; the CLI is free and respects .gitleaks.toml.
+      - run: bunx gitleaks git --redact --verbose
 
   e2e:
     needs: quality
