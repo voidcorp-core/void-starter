@@ -17,6 +17,9 @@ out/
 coverage/
 *.lcov
 .vitest-cache/
+playwright-report/
+test-results/
+playwright/.cache/
 
 # Env
 .env
