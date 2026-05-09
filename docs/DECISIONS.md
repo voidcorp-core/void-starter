@@ -325,3 +325,54 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Add `'use client'` at the top of server-side files: wrong primitive — `'use client'` is a React component boundary directive, not a build-time bundling constraint. It would mark the service as a client module, not prevent its server-only dependencies from leaking.
   - Leave the barrel as-is and rely on tree-shaking: Next.js / Turbopack does not statically tree-shake across package boundaries at the module-init level. Side-effecting imports (like `next/headers` and `postgres`) are always evaluated even if no exported symbol is used by the client.
 - **When to revisit:** If Next.js / RSC bundling gains reliable cross-package server-only tree-shaking that makes the `server-only` package redundant (unlikely in the short term). Until then, every new server-only file added to `@void/auth` or `@void/db` must carry the directive.
+
+### 26. postgres-js as the Drizzle Postgres driver
+
+- **Date:** 2026-05-09
+- **Decision:** `@void/db` ships `postgres@^3.4.0` (postgres-js by Porsager) as the underlying Postgres driver, consumed by Drizzle's `drizzle-orm/postgres-js` adapter. node-postgres (`pg`) is not installed.
+- **Why:** postgres-js is the recommended driver for Drizzle + Neon serverless setups in 2026. It is ESM-native (no CJS interop quirks under Next 16), has zero runtime deps, and exposes a tagged-template API that maps cleanly to Drizzle's prepared-statement pipeline. node-postgres (`pg`) requires `pg-types` plus a connection pool wrapper, drags two CJS packages into the bundle, and offers no advantage on the Neon pooled endpoint where pool sizing is server-side. Folpe's "fewer deps when quality is not at stake" principle (see ADR 05) tips the balance to postgres-js.
+- **Rejected alternatives:**
+  - **node-postgres (`pg`):** mature, ubiquitous, but CJS-first and pulls `pg-types` plus a separate pool wrapper. No tangible benefit over postgres-js on Neon, more dependencies, weaker ESM story under Turbopack.
+  - **`@neondatabase/serverless`:** Neon's HTTP driver. Faster cold starts on Neon Edge Functions but ties the starter to Neon's HTTP wire format; if `_modules/db-self-hosted-postgres` activates (per ADR 11), the driver swap becomes a code change rather than a connection-string change. Keep the Postgres-wire driver so the migration path stays connection-string-only.
+  - **Bun's native `Bun.sql`:** experimental in 2026, no Drizzle adapter parity yet. Revisit when stable and Drizzle ships a first-class adapter.
+- **When to revisit:** When Drizzle officially recommends a different driver as the default for Neon, or when Bun's native SQL driver matures and Drizzle ships a `drizzle-orm/bun-sql` adapter. The migration path is a one-line dep swap plus a one-line adapter import.
+
+### 27. Sentry wiring: dynamic-import client init, always-applied withSentryConfig, app-level @sentry/nextjs dep
+
+- **Date:** 2026-05-09
+- **Decision:** Sentry integrates into `apps/web` through three deliberate non-default choices, all interlocking:
+  1. **`instrumentation-client.ts` uses a dynamic `import('@void/sentry/client')` gated on `process.env['NEXT_PUBLIC_SENTRY_DSN']`** rather than a static top-of-file import. The dynamic import resolves only when the public DSN is set at build time.
+  2. **`withSentryConfig(config, ...)` is applied unconditionally in `next.config.ts`** with no env-var gate around the wrapper itself. The Sentry runtime still short-circuits at module-init when the DSN is unset; only source-map upload (gated server-side by `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT`) varies with env presence.
+  3. **`apps/web/package.json` lists `@sentry/nextjs` as a direct dependency**, not just as a transitive of `@void/sentry`. Both `next.config.ts` (`withSentryConfig` import) and `app/global-error.tsx` (`Sentry.captureException` import) bypass the wrapper.
+- **Why:**
+  1. *Dynamic import.* Turbopack does not statically tree-shake `process.env['NEXT_PUBLIC_*']` branches across module boundaries; a static `import '@void/sentry/client'` would always pull the SDK into the eager bundle, ~80KB before activation. The dynamic gate keeps the SDK chunks unreachable from the eagerly loaded entry when the DSN is unset, which is what we actually pay for. Trade-off: the chunks still ship on disk under `.next/static/chunks/` but are never fetched by the user. Documented in `_modules/observability-sentry/README.md` so the contract is explicit.
+  2. *Always-applied wrapper.* Gating `withSentryConfig` on env presence creates two divergent build outputs (with and without source-map plugin instrumentation), which is harder to reason about than a single output where the runtime chooses to short-circuit. The wrapper is itself a no-op when its bundler plugin can't find an auth token. Single code path, single mental model.
+  3. *Direct app dep.* `next.config.ts` runs in a pre-Next environment where workspace transpilation hasn't kicked in yet, so it cannot import via `@void/sentry`. Likewise `global-error.tsx` calls `Sentry.captureException` directly to keep the failure path simple. Pinning `@sentry/nextjs` at the app level reflects the actual import graph; relying on a transitive resolution would silently break on a `@void/sentry` major bump that drops the SDK.
+- **Rejected alternatives:**
+  - Static client import + runtime `if (key) Sentry.init()`: ships the entire SDK into the eager bundle every build. Defeats the opt-in promise.
+  - Conditional `withSentryConfig` (`if (DSN) withSentryConfig(...)`): two build shapes, harder to debug, wrapper is already idempotent.
+  - Rely on transitive `@sentry/nextjs` via `@void/sentry`: hides the actual import graph, breaks if the wrapper drops or major-bumps the SDK.
+- **When to revisit:** When Turbopack ships reliable cross-package DCE for `process.env['NEXT_PUBLIC_*']` branches (the dynamic-import workaround can collapse to a static import). When Next or Sentry ship a build-time DSN gate that produces a single output regardless of env (the always-applied wrapper convention can be revisited). When the failure paths in `global-error.tsx` move into `@void/sentry` (the app-level direct dep can drop).
+
+### 28. PostHog EU reverse proxy under /ingest and skipTrailingSlashRedirect
+
+- **Date:** 2026-05-09
+- **Decision:** `apps/web/next.config.ts` ships three `rewrites()` rules under `/ingest/static/*`, `/ingest/array/*`, and `/ingest/*` that reverse-proxy PostHog's EU endpoints, plus `skipTrailingSlashRedirect: true` at the config level. PostHog's `NEXT_PUBLIC_POSTHOG_HOST` defaults to `/ingest` so the SDK posts to the deploy origin.
+- **Why:** Three problems collapse into one solution: ad-blockers (uBlock, Brave, AdGuard) drop direct requests to `*.posthog.com`; CSP `connect-src` rules in tight policies must whitelist every third-party origin; and ePrivacy / RGPD positioning is cleaner when analytics traffic never leaves the deploy origin. Reverse-proxying through `/ingest` solves all three at once and matches PostHog's official 2026 recommendation. The `skipTrailingSlashRedirect: true` flag is mandatory: without it, Next.js 16 issues a 308 redirect from `/ingest/...` to `/ingest/.../` BEFORE the rewrite fires, which breaks the proxy. The flag has app-wide effect (no trailing-slash redirects on any route), which is acceptable because the starter never relies on Next.js's default trailing-slash normalization.
+- **Rejected alternatives:**
+  - Direct PostHog endpoint (`https://eu.i.posthog.com`): blocked by ad-blockers, requires CSP `connect-src` whitelist, leaks third-party traffic.
+  - Cloudflare-style external proxy: extra moving piece, doesn't solve CSP automatically, adds a hop.
+  - Rewrites without `skipTrailingSlashRedirect`: 308 hijack breaks the JS array endpoint and the capture endpoint silently. Took half a debug cycle the first time; the flag must be set, and the trade-off (no trailing-slash redirects) is documented here so future contributors don't drop it.
+  - Disable trailing-slash handling per route: not supported by Next.js — it's a global config flag.
+- **When to revisit:** If the app starts relying on Next.js's default trailing-slash redirect for SEO or canonical-URL reasons (it currently doesn't). If PostHog ships an official Next.js plugin that handles the proxy without the trailing-slash quirk. If a different analytics vendor replaces PostHog and the proxy convention no longer applies.
+
+### 29. Placeholder modules are README-only and stay out of the workspace graph
+
+- **Date:** 2026-05-09
+- **Decision:** `_modules/*` placeholders (Stripe, Resend, Payload CMS, Audit-log, Cookie-consent, Upstash rate-limit, i18n, self-hosted Postgres) ship a README.md only. No `package.json`, no `src/`, no `tsconfig.json`. They do not appear in `bun install`'s workspace resolution, in Turborepo's task graph, in knip's project map, or in the type-checker's program. Real workspace packages (`@void/sentry`, `@void/posthog`, `@void/auth-clerk`) ship the full structure and are part of the graph.
+- **Why:** A placeholder with an empty `package.json` would pollute every cross-cutting tool: knip would report unused workspace deps, Turborepo would schedule no-op `lint` / `type-check` / `test` / `build` tasks for each, Renovate would open dependency PRs against scaffolds nobody is using yet, and `bun install` would link 8+ phantom packages. The cost is real and recurring; the benefit (the package "exists" in `bun pm ls`) is illusory because the integration code lives only as a README recipe. Pattern B (per `_modules/README.md`) is "the recipe IS the artifact": when an MVP needs the capability, a developer or AI agent runs the README against the consuming app and creates whatever workspace structure is appropriate AT THAT POINT. Until then, the placeholder costs nothing.
+- **Rejected alternatives:**
+  - Empty `package.json` per placeholder (workspace graph member, no code): pollutes every cross-cutting tool, generates no-op CI tasks, opens phantom Renovate PRs.
+  - Single `_modules/_placeholders/` README aggregating all of them: loses the per-module URL anchor (`_modules/<name>/README.md`) that the catalogue cross-links to. Worse navigation for AI assistants.
+  - Promote every placeholder to a real workspace package up front: spends Phase D budget on packages that may never ship in any MVP. Premature.
+- **When to revisit:** When a placeholder is consumed by a real MVP. The promotion path (per ADR 07) is: scaffold the workspace package under `_modules/<name>/`, add `package.json` + `src/` + `tsconfig.json`, follow the Pattern A activation rules (env var presence, transpilePackages, instrumentation hook). The README stays as the activation guide.
