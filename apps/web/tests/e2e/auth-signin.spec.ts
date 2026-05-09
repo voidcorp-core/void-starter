@@ -43,7 +43,7 @@ test.describe('sign-in / sign-out flow', () => {
     await expect(page).toHaveURL('/dashboard', { timeout: 10_000 });
 
     // Open UserMenu and click sign out
-    await page.getByRole('button', { name: /avatar|menu/i }).click();
+    await page.getByRole('button', { name: 'Open user menu' }).click();
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
 
     await expect(page).toHaveURL('/', { timeout: 10_000 });

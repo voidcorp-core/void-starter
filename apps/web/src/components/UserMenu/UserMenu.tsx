@@ -56,6 +56,7 @@ export function UserMenu(_props: UserMenuProps) {
         variant="ghost"
         size="sm"
         className="rounded-full p-0"
+        aria-label="Open user menu"
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="user-menu-panel"
