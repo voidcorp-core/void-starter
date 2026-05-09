@@ -1,5 +1,12 @@
 # @void/auth
 
+`@void/auth` is the canonical service example for the void-starter. Mirror its
+file layout (`auth.repository.ts`, `auth.service.ts`, `auth.policy.ts`,
+`auth.helper.ts`, `auth.errors.ts`, `auth.types.ts`, `auth.test.ts` -- 7-file
+pattern; ADR 8) when creating new services. Apps consume the public surface
+(`@void/auth`); only the route handler at `/api/auth/[...all]` imports the
+underlying instance from `@void/auth/repository`.
+
 Default auth implementation for the void-starter. Wraps Better-Auth with Drizzle adapter, Google OAuth, magic link, and admin/role plugins.
 
 ## Required env vars
