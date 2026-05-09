@@ -1,0 +1,29 @@
+{
+  "name": "@void/auth-clerk",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./repository": "./src/auth.repository.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.39.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "@void/config": "workspace:*",
+    "next": "^16.2.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "peerDependencies": {
+    "next": "^16.0.0"
+  }
+}
