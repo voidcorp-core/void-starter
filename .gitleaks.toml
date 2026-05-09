@@ -20,3 +20,13 @@ regexes = [
   '''BETTER_AUTH_SECRET''',
   '''NEXT_PUBLIC_POSTHOG_KEY''',
 ]
+
+[[allowlists]]
+description = "Build artifacts (gitignored): Next.js auto-generates per-build preview/encryption keys under .next/. These never enter git history; the allowlist keeps `gitleaks detect --no-git` from flagging them."
+paths = [
+  '''(^|/)\.next/''',
+  '''(^|/)\.turbo/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.vercel/''',
+]
