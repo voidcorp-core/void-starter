@@ -67,10 +67,18 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bunx knip --no-progress
-      # Use the gitleaks CLI directly (same binary as local pre-commit and the
-      # D36 validation). The official gitleaks-action@v2 now requires a paid
-      # license for org repos; the CLI is free and respects .gitleaks.toml.
-      - run: bunx gitleaks git --redact --verbose
+      # gitleaks ships as a Go binary via GitHub Releases, not via npm; bunx
+      # cannot resolve it. The official gitleaks-action@v2 now requires a
+      # paid license for org repos. We download the pinned release directly.
+      # Pin matches the local version (lefthook pre-commit + Phase D run).
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - run: gitleaks git --redact --verbose
 
   e2e:
     needs: quality
