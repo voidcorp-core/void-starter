@@ -1,0 +1,23 @@
+# Starting point for a self-hosted Postgres. NOT production-grade.
+# Production needs: backups (pg_basebackup or wal-g), monitoring (pg_exporter +
+# Prometheus), replication (streaming or logical), and TLS termination.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: void
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: void_starter
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "void", "-d", "void_starter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
