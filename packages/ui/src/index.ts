@@ -7,4 +7,5 @@ export * from './Input';
 export * from './Label';
 export * from './Skeleton';
 export * from './Spinner';
+export * from './ThemeProvider';
 export * from './Toaster';

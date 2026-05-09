@@ -10,9 +10,16 @@
  * is the v3-era override pattern.
  *
  * Colors use OKLCH (v4's recommended modern color format).
+ *
+ * Dark mode uses Tailwind v4's class-based `@custom-variant` registered up
+ * front, paired with a `.dark` selector that overrides the same `--color-*`
+ * vars when next-themes toggles `class="dark"` on the root element. The
+ * cascade picks up the override automatically — no Tailwind config needed.
  */
 
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-background: oklch(0.99 0.005 270);
@@ -35,6 +42,19 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+}
+
+.dark {
+  --color-background: oklch(0.15 0.02 270);
+  --color-foreground: oklch(0.95 0.005 270);
+  --color-muted: oklch(0.25 0.02 270);
+  --color-muted-foreground: oklch(0.65 0.02 270);
+  --color-primary: oklch(0.65 0.2 250);
+  --color-primary-foreground: oklch(0.15 0.02 250);
+  --color-destructive: oklch(0.65 0.2 25);
+  --color-destructive-foreground: oklch(0.15 0.02 25);
+  --color-border: oklch(0.3 0.02 270);
+  --color-ring: oklch(0.65 0.2 250);
 }
 
 @layer base {
