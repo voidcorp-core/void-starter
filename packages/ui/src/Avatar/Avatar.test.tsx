@@ -14,7 +14,7 @@ describe('Avatar', () => {
 
   it('renders fallback text when no src is provided', () => {
     render(<Avatar fallback="FP" />);
-    expect(screen.getByText('FP')).toBeDefined();
+    expect(screen.getByText('FP')).toBeInTheDocument();
   });
 
   describe('with a successfully loaded src', () => {
@@ -45,8 +45,8 @@ describe('Avatar', () => {
       render(<Avatar src="https://example.com/avatar.png" alt="Folpe" fallback="FP" />);
       const img = await screen.findByRole('img');
       expect(img).toBeInstanceOf(HTMLImageElement);
-      expect(img.getAttribute('src')).toBe('https://example.com/avatar.png');
-      expect(img.getAttribute('alt')).toBe('Folpe');
+      expect(img).toHaveAttribute('src', 'https://example.com/avatar.png');
+      expect(img).toHaveAttribute('alt', 'Folpe');
     });
   });
 

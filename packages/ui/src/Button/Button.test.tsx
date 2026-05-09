@@ -28,7 +28,7 @@ describe('Button', () => {
       </Button>,
     );
     expect(captured).toBeInstanceOf(HTMLButtonElement);
-    expect(screen.getByRole('button').textContent).toBe('click');
+    expect(screen.getByRole('button')).toHaveTextContent('click');
   });
 
   it('renders as child element when asChild is true', () => {
@@ -39,7 +39,7 @@ describe('Button', () => {
     );
     const link = screen.getByRole('link');
     expect(link).toBeInstanceOf(HTMLAnchorElement);
-    expect(link.textContent).toBe('Go');
-    expect(link.className).toContain('bg-primary');
+    expect(link).toHaveTextContent('Go');
+    expect(link).toHaveClass('bg-primary');
   });
 });
