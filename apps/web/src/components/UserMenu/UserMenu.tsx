@@ -1,6 +1,6 @@
 'use client';
 
-import { authClient } from '@void/auth';
+import { authClient } from '@void/auth/client';
 import { Avatar, Button } from '@void/ui';
 import { useEffect, useRef, useState } from 'react';
 import { signOutAction } from '@/actions/auth.actions';

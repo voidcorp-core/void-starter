@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { authClient } from '@void/auth';
+import { authClient } from '@void/auth/client';
 import {
   Button,
   Card,
