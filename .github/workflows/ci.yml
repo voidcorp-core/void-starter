@@ -1,0 +1,102 @@
+# CI uses a postgres service container (16-alpine) instead of a Neon CI branch.
+# Rationale: CI tests verify schema migrations and queries, not connection pool
+# behavior. Drift between docker postgres and Neon is negligible for these tests.
+# Production and dev use Neon (DECISIONS entry 11).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: void
+          POSTGRES_PASSWORD: void
+          POSTGRES_DB: void_starter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U void -d void_starter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://void:void@localhost:5432/void_starter
+      BETTER_AUTH_SECRET: test-secret-this-is-long-enough-for-the-validator
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: ci-stub
+      GOOGLE_CLIENT_SECRET: ci-stub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+      - name: Cache bun + turbo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-bun-turbo-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-turbo-
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run type-check
+      - name: Apply DB migrations
+        run: cd packages/db && bunx drizzle-kit migrate
+      - run: bun run test
+      - run: bun run build
+      - run: bunx knip --no-progress
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  e2e:
+    needs: quality
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: void
+          POSTGRES_PASSWORD: void
+          POSTGRES_DB: void_starter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U void -d void_starter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://void:void@localhost:5432/void_starter
+      BETTER_AUTH_SECRET: test-secret-this-is-long-enough-for-the-validator
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: ci-stub
+      GOOGLE_CLIENT_SECRET: ci-stub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+      - run: bun install --frozen-lockfile
+      - run: cd packages/db && bunx drizzle-kit migrate
+      - run: cd apps/web && bunx playwright install --with-deps chromium
+      - run: cd apps/web && bun run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
