@@ -11,7 +11,7 @@ export function UserMenu(_props: UserMenuProps) {
   const { data: session } = authClient.useSession();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Close on outside click
   useEffect(() => {
@@ -52,7 +52,7 @@ export function UserMenu(_props: UserMenuProps) {
   return (
     <div ref={containerRef} className="relative inline-block">
       <Button
-        asChild
+        ref={triggerRef}
         variant="ghost"
         size="sm"
         className="rounded-full p-0"
@@ -62,9 +62,7 @@ export function UserMenu(_props: UserMenuProps) {
         aria-controls="user-menu-panel"
         onClick={() => setOpen((prev) => !prev)}
       >
-        <span ref={triggerRef}>
-          <Avatar src={user.image ?? null} fallback={initials} size="sm" alt={label} />
-        </span>
+        <Avatar src={user.image ?? null} fallback={initials} size="sm" alt={label} />
       </Button>
 
       <div
