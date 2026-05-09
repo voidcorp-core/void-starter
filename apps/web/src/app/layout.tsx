@@ -1,3 +1,4 @@
+import { AnalyticsProvider } from '@void/posthog/client';
 import { ThemeProvider, Toaster } from '@void/ui';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
@@ -13,8 +14,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-          <Toaster />
+          <AnalyticsProvider>
+            {children}
+            <Toaster />
+          </AnalyticsProvider>
         </ThemeProvider>
       </body>
     </html>

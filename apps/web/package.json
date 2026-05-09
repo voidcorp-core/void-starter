@@ -19,6 +19,7 @@
     "@void/auth": "workspace:*",
     "@void/core": "workspace:*",
     "@void/db": "workspace:*",
+    "@void/posthog": "workspace:*",
     "@void/sentry": "workspace:*",
     "@void/ui": "workspace:*",
     "better-auth": "^1.6.0",
