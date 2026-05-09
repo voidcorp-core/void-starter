@@ -17,4 +17,11 @@ export {
 } from './rate-limit';
 export { maskEmail, truncate } from './sanitize';
 export { defaultSecurityHeaders, type SecurityHeader } from './security-headers';
-export { type ActionAuth, type ActionContext, defineAction } from './server-action';
+export {
+  type ActionAuth,
+  type ActionContext,
+  type ActionState,
+  defineAction,
+  defineFormAction,
+  initialActionState,
+} from './server-action';
