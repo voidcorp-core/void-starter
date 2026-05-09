@@ -15,27 +15,10 @@
       "project": "src/**/*.{ts,tsx}"
     },
     "apps/*": {
-      "entry": [
-        "src/app/**/page.tsx",
-        "src/app/**/layout.tsx",
-        "src/app/**/route.ts",
-        "src/proxy.ts",
-        "src/instrumentation.ts",
-        "next.config.ts",
-        "playwright.config.ts",
-        "tests/e2e/**/*.spec.ts"
-      ],
+      "entry": ["src/app/**/page.tsx", "src/app/**/layout.tsx", "tests/e2e/**/*.spec.ts"],
       "project": "src/**/*.{ts,tsx}",
-      "ignoreDependencies": [
-        "@hookform/resolvers",
-        "@void/db",
-        "drizzle-orm",
-        "react-hook-form",
-        "zod",
-        "@testing-library/jest-dom",
-        "@testing-library/react",
-        "@testing-library/user-event"
-      ]
+      "ignore": ["src/components/_examples/**"],
+      "ignoreDependencies": ["drizzle-orm", "@testing-library/react", "@testing-library/user-event"]
     }
   }
 }
