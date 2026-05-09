@@ -291,3 +291,14 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - **OpenTelemetry directly:** complementary, not a replacement. We can layer OTel exporters on top of pino transports later (Phase D candidate); choosing pino does not foreclose adding OTel.
   - **`console.log`:** zero structure, no log levels, no fields, no transports. Useless at scale and noisy in test output.
 - **When to revisit:** When deploying to Edge runtimes that lack `worker_threads` (`pino-pretty`'s transport requires it). The fix is to drop `pino-pretty` even in dev and stay on raw JSON, or swap to consola for the dev-only path. Already mitigated because `pino-pretty` only loads when `NODE_ENV !== 'production'`, but adding an Edge-targeted route would force the issue.
+
+### 23. `ignoreDeprecations: '6.0'` in apps/web tsconfig
+
+- **Date:** 2026-05-09
+- **Decision:** `apps/web/tsconfig.json` keeps `'baseUrl': '.'` alongside `'paths': { '@/*': ['./src/*'] }` and silences the TS 6 deprecation diagnostic with `'ignoreDeprecations': '6.0'`.
+- **Why:** TypeScript 6 deprecated standalone `baseUrl` (TS6504) when `paths` already provides the resolution mechanism, and `tsc --noEmit` errors on the diagnostic. The clean fix is to drop `baseUrl` and rely on `paths` only — but Next.js 16's TypeScript plugin still reads `baseUrl` to power IDE go-to-definition and `next build`'s type-check pass for the `@/*` alias. Removing `baseUrl` silently breaks alias ergonomics in tooling even though the bundler still resolves it via `paths` at runtime. Suppressing the deprecation preserves full alias UX until the Next plugin removes its `baseUrl` dependency.
+- **Rejected alternatives:**
+  - Drop `baseUrl`, keep only `paths`: TS-spec correct, breaks `@/*` resolution in the Next.js TS plugin.
+  - Pin TypeScript to 5.x for the whole monorepo: regresses every package to dodge a one-line workaround.
+  - Switch the alias to a relative path: defeats the point of having an alias and bloats every import.
+- **When to revisit:** When the Next.js TypeScript plugin resolves the alias purely from `paths` (likely Next 17 or a next-plugin patch). Drop `baseUrl` AND `ignoreDeprecations` together at that point.
