@@ -14,7 +14,7 @@ vi.mock('./auth.service', () => ({
 }));
 
 import { getCurrentUser } from './auth.service';
-import { defineAction } from './auth-action';
+import { defineAction, defineFormAction, initialActionState } from './auth-action';
 
 const getCurrentUserMock = vi.mocked(getCurrentUser);
 
@@ -81,5 +81,47 @@ describe('defineAction (auth-aware)', () => {
     });
 
     await expect(action({})).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe('defineFormAction (auth-aware)', () => {
+  it('passes when auth=required and user is signed in', async () => {
+    getCurrentUserMock.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.co',
+      name: null,
+      image: null,
+      role: 'user',
+    });
+    const action = defineFormAction({
+      schema: z.object({ note: z.string().min(1) }),
+      auth: 'required',
+      handler: async (_input, ctx) => ({ userId: ctx.user?.id }),
+    });
+    const fd = new FormData();
+    fd.set('note', 'hi');
+
+    const result = await action(initialActionState, fd);
+
+    expect(result).toEqual({ ok: true, data: { userId: 'u1' } });
+  });
+
+  it('returns ok:false with UNAUTHORIZED formError when auth=required and user is null', async () => {
+    getCurrentUserMock.mockResolvedValueOnce(null);
+    const action = defineFormAction({
+      schema: z.object({ note: z.string().min(1) }),
+      auth: 'required',
+      handler: async () => 'unused',
+    });
+    const fd = new FormData();
+    fd.set('note', 'hi');
+
+    const result = await action(initialActionState, fd);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.formError?.code).toBe('UNAUTHORIZED');
+      expect(result.fieldErrors).toEqual({});
+    }
   });
 });

@@ -2,10 +2,15 @@ import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
 import {
   type ActionAuth,
   type ActionContext,
+  type ActionState,
   defineAction as defineActionCore,
+  defineFormAction as defineFormActionCore,
+  initialActionState,
 } from '@void/core/server-action';
 import type { ZodType } from 'zod';
 import { getCurrentUser } from './auth.service';
+
+export { type ActionState, initialActionState };
 
 /**
  * Auth-aware `defineAction` for `@void/auth`.
@@ -66,6 +71,38 @@ export function defineAction<TSchema extends ZodType, TResult>(
   // pattern the core was designed for: it stays auth-agnostic, and this
   // wrapper provides the real implementation.
   return defineActionCore({
+    schema: config.schema,
+    auth: 'public',
+    handler: async (input, _ctx) => {
+      const ctx = await resolveAuth(config.auth);
+      return config.handler(input, ctx);
+    },
+  });
+}
+
+type DefineFormActionConfig<TSchema extends ZodType, TResult> = Parameters<
+  typeof defineFormActionCore<TSchema, TResult>
+>[0];
+
+/**
+ * Auth-aware `defineFormAction` for `@void/auth`.
+ *
+ * Same substitution pattern as the RPC `defineAction` above: the core stays
+ * auth-agnostic; this wrapper resolves the real session via `getCurrentUser`
+ * and short-circuits the core's `'public'` stub. Everything downstream
+ * (FormData parsing, schema validation, error mapping, NEXT_REDIRECT
+ * handling) lives in the core — this layer only owns auth.
+ *
+ * Auth failure surface in form mode: `UnauthorizedError` / `ForbiddenError`
+ * thrown by `resolveAuth` are caught by the core wrapper and mapped to
+ * `{ ok: false, formError: { code, message } }`. Consumers render the
+ * formError without a try/catch, in line with React 19's `useActionState`
+ * idiom.
+ */
+export function defineFormAction<TSchema extends ZodType, TResult>(
+  config: DefineFormActionConfig<TSchema, TResult>,
+) {
+  return defineFormActionCore({
     schema: config.schema,
     auth: 'public',
     handler: async (input, _ctx) => {
