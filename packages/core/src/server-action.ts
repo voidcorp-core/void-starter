@@ -22,6 +22,18 @@ async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   throw new Error(`defineAction: auth mode "${auth}" requires @void/auth, available in Phase B`);
 }
 
+/**
+ * Bare typed RPC Server Action factory.
+ *
+ * Auth resolution is a STUB: any non-`'public'` auth mode throws at handler
+ * invocation time because this package has no dependency on `@void/auth` (by
+ * design — it lets the core be unit-tested in isolation).
+ *
+ * For real apps, import `defineAction` from `@void/auth` instead. That
+ * version wires the Better-Auth session into `ctx.user` and resolves
+ * `'required'` / `'role:admin'` correctly. The bare version exported here
+ * is only useful when testing the core without an auth dependency.
+ */
 export function defineAction<TSchema extends ZodType, TResult>({
   schema,
   auth,
@@ -59,6 +71,12 @@ export function defineAction<TSchema extends ZodType, TResult>({
  *   - Anything else        → re-thrown so the route's `error.tsx` boundary
  *                            renders. Form mode is for *expected* failures;
  *                            unexpected ones must remain visible.
+ *
+ * STUB AUTH WARNING: same caveat as `defineAction`. The bare version exported
+ * here resolves only `'public'`; any other auth mode throws at handler call
+ * time. Import `defineFormAction` from `@void/auth` for real apps — that
+ * version wires the Better-Auth session into `ctx.user`. The bare version
+ * is exported only so the core can be tested without an auth dependency.
  */
 
 export type ActionState<TData = unknown> =
