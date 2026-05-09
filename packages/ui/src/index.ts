@@ -3,6 +3,7 @@ export * from './Avatar';
 export * from './Button';
 export * from './Card';
 export { cn } from './cn';
+export * from './Form';
 export * from './Input';
 export * from './Label';
 export * from './Skeleton';

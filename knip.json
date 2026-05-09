@@ -11,8 +11,7 @@
       "ignoreDependencies": ["pino-pretty"]
     },
     "packages/ui": {
-      "project": "src/**/*.{ts,tsx}",
-      "ignoreDependencies": ["@types/react-dom", "react-dom"]
+      "project": "src/**/*.{ts,tsx}"
     },
     "apps/*": {
       "entry": [
