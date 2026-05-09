@@ -25,9 +25,9 @@
   "devDependencies": {
     "@void/config": "workspace:*",
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^2.1.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "drizzle-kit": "^0.31.0",
     "typescript": "^6.0.3",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.5"
   }
 }
