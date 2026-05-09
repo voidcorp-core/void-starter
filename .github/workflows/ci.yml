@@ -42,6 +42,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.13'
+      # Vitest, Drizzle Kit, Playwright et al. ship binaries with `#!/usr/bin/env node`,
+      # so cross-package `.ts` imports through them go through Node's loader. Node 24
+      # ships `--experimental-strip-types` on by default (since 23.6), so `.ts` config
+      # files imported across `package.json#exports` boundaries load natively without
+      # any flag. Pinned for reproducibility; matches `engines.node` >= 24. See
+      # DECISIONS entry 30.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Cache bun + turbo
         uses: actions/cache@v4
         with:
@@ -91,6 +100,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bunx drizzle-kit migrate
       - run: cd apps/web && bunx playwright install --with-deps chromium
