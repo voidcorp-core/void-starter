@@ -1,8 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { getAuth } from '@void/auth/repository';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
-import { eq } from 'drizzle-orm';
 
 const hasDb = Boolean(process.env['DATABASE_URL']);
 
@@ -12,13 +8,23 @@ test.describe('role guard for /admin', () => {
   const testEmail = `e2e-role-${Date.now()}@example.test`;
   const testPassword = 'TestPassword123!';
 
+  // `@void/db` and `@void/auth/repository` carry `import 'server-only'`, which
+  // throws when loaded outside Next.js (e.g. by Playwright's plain-Node test
+  // loader). Defer the imports to the hooks so the suite can be skipped on a
+  // fresh clone without DATABASE_URL.
   test.beforeAll(async () => {
+    const { getAuth } = await import('@void/auth/repository');
     await getAuth().api.signUpEmail({
       body: { email: testEmail, password: testPassword, name: 'E2E Role User' },
     });
   });
 
   test.afterAll(async () => {
+    const [{ getDb }, { users }, { eq }] = await Promise.all([
+      import('@void/db'),
+      import('@void/db/schema'),
+      import('drizzle-orm'),
+    ]);
     await getDb().delete(users).where(eq(users.email, testEmail));
   });
 
@@ -39,6 +45,11 @@ test.describe('role guard for /admin', () => {
 
   test('promoted admin can see the users table on /admin', async ({ page }) => {
     // Promote the test user to admin directly via DB
+    const [{ getDb }, { users }, { eq }] = await Promise.all([
+      import('@void/db'),
+      import('@void/db/schema'),
+      import('drizzle-orm'),
+    ]);
     await getDb().update(users).set({ role: 'admin' }).where(eq(users.email, testEmail));
 
     await page.goto('/sign-in');

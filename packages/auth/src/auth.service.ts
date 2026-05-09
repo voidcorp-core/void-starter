@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { logger } from '@void/core/logger';
 import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { getAuth } from './auth.repository';
@@ -27,6 +28,30 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
  */
 
 /**
+ * Marker that gates auth env validation. When `BETTER_AUTH_SECRET` is unset we
+ * treat the runtime as "auth not configured" and `getCurrentUser()` short-circuits
+ * to `null` instead of crashing. This preserves the starter contract: a fresh
+ * clone with no `.env.local` can still render unauthenticated marketing pages,
+ * and protected routes correctly throw `UnauthorizedError` (which the error
+ * boundary handles or which `requireAuth()` translates to a sign-in redirect).
+ *
+ * The first time auth is called without configuration we emit a single warning
+ * so a misconfigured production deploy still surfaces the issue in logs.
+ */
+let warnedAboutMissingAuthConfig = false;
+
+function isAuthConfigured(): boolean {
+  if (process.env['BETTER_AUTH_SECRET']) return true;
+  if (!warnedAboutMissingAuthConfig) {
+    warnedAboutMissingAuthConfig = true;
+    logger.warn(
+      'BETTER_AUTH_SECRET is not set; treating all requests as unauthenticated. Set it in .env.local to enable auth.',
+    );
+  }
+  return false;
+}
+
+/**
  * Read the current session user. Use in:
  *   - React Server Components (page.tsx, layout.tsx) for conditional rendering
  *   - Route handlers (route.ts) for non-action endpoints
@@ -40,11 +65,17 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
  * mapped), we treat it as anonymous rather than crashing. This trades
  * a small amount of strictness for forward compatibility with Better-Auth
  * minor releases.
+ *
+ * Resilience: when `BETTER_AUTH_SECRET` is unset we return `null` rather than
+ * throw. This keeps the starter usable in unconfigured environments (fresh
+ * clone, smoke E2E without `.env.local`) while still failing-loud at the
+ * sign-in path, where the user explicitly opts in to auth.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
   // `connection()` signals to Next.js cacheComponents / dynamicIO that this
   // render requires a real request context and must not be statically prerendered.
   await connection();
+  if (!isAuthConfigured()) return null;
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session?.user) return null;
   const parsed = sessionUserSchema.safeParse(session.user);

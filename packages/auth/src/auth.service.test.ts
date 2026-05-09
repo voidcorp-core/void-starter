@@ -8,6 +8,11 @@ vi.mock('next/server', () => ({
   connection: () => Promise.resolve(undefined),
 }));
 
+// `getCurrentUser()` short-circuits to `null` when `BETTER_AUTH_SECRET` is unset
+// (see auth.service.ts -> `isAuthConfigured`). The unit tests below simulate a
+// fully-configured auth environment, so we set the marker for the test process.
+process.env['BETTER_AUTH_SECRET'] = 'test-secret-for-unit-tests-this-is-long-enough';
+
 const mockGetSession = vi.fn();
 
 vi.mock('./auth.repository', () => ({
@@ -39,6 +44,19 @@ describe('getCurrentUser', () => {
     } as never);
     const user = await getCurrentUser();
     expect(user?.email).toBe('a@b.co');
+  });
+
+  it('returns null without calling getAuth when BETTER_AUTH_SECRET is unset', async () => {
+    const original = process.env['BETTER_AUTH_SECRET'];
+    delete process.env['BETTER_AUTH_SECRET'];
+    mockGetSession.mockClear();
+    try {
+      const user = await getCurrentUser();
+      expect(user).toBeNull();
+      expect(mockGetSession).not.toHaveBeenCalled();
+    } finally {
+      process.env['BETTER_AUTH_SECRET'] = original;
+    }
   });
 });
 

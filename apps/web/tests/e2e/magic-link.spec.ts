@@ -1,7 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
-import { eq } from 'drizzle-orm';
 
 const hasDb = Boolean(process.env['DATABASE_URL']);
 
@@ -10,7 +7,15 @@ test.describe('magic link flow', () => {
 
   const testEmail = `e2e-magic-${Date.now()}@example.test`;
 
+  // `@void/db` carries `import 'server-only'`, which throws when loaded outside
+  // Next.js (e.g. by Playwright's plain-Node test loader). Defer the imports
+  // to the hook so the suite can be skipped on a fresh clone without DATABASE_URL.
   test.afterAll(async () => {
+    const [{ getDb }, { users }, { eq }] = await Promise.all([
+      import('@void/db'),
+      import('@void/db/schema'),
+      import('drizzle-orm'),
+    ]);
     await getDb().delete(users).where(eq(users.email, testEmail));
   });
 
