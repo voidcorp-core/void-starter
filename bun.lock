@@ -144,7 +144,6 @@
       "name": "@repo/core",
       "version": "0.0.1",
       "dependencies": {
-        "@t3-oss/env-core": "^0.13.11",
         "@t3-oss/env-nextjs": "^0.13.11",
         "pino": "^10.3.1",
         "pino-pretty": "^13.1.3",
