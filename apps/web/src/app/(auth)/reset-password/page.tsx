@@ -21,7 +21,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 const resetPasswordSchema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email: z.email('Enter a valid email'),
 });
 
 type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;

@@ -48,7 +48,7 @@ describe('defineAction', () => {
 describe('defineFormAction', () => {
   it('returns ok:true with parsed data on success', async () => {
     const action = defineFormAction({
-      schema: z.object({ email: z.string().email() }),
+      schema: z.object({ email: z.email() }),
       auth: 'public',
       handler: async ({ email }) => ({ greeting: `Hi ${email}` }),
     });
@@ -62,7 +62,7 @@ describe('defineFormAction', () => {
 
   it('returns ok:false with fieldErrors when schema fails', async () => {
     const action = defineFormAction({
-      schema: z.object({ email: z.string().email() }),
+      schema: z.object({ email: z.email() }),
       auth: 'public',
       handler: async () => 'unused',
     });
@@ -86,7 +86,7 @@ describe('defineFormAction', () => {
       }
     }
     const action = defineFormAction({
-      schema: z.object({ email: z.string().email() }),
+      schema: z.object({ email: z.email() }),
       auth: 'public',
       handler: async () => {
         throw new TakenError();
@@ -109,7 +109,7 @@ describe('defineFormAction', () => {
       digest: 'NEXT_REDIRECT;replace;/dashboard;307;',
     });
     const action = defineFormAction({
-      schema: z.object({ email: z.string().email() }),
+      schema: z.object({ email: z.email() }),
       auth: 'public',
       handler: async () => {
         throw redirectErr;

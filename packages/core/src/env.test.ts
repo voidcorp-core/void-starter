@@ -6,7 +6,7 @@ describe('createAppEnv', () => {
   it('parses valid env successfully', () => {
     const env = createAppEnv({
       server: { LOG_LEVEL: z.enum(['debug', 'info']).default('info') },
-      client: { NEXT_PUBLIC_APP_URL: z.string().url() },
+      client: { NEXT_PUBLIC_APP_URL: z.url() },
       runtimeEnv: {
         LOG_LEVEL: 'debug',
         NEXT_PUBLIC_APP_URL: 'https://example.com',

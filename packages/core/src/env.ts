@@ -1,27 +1,25 @@
 import { createEnv } from '@t3-oss/env-nextjs';
-import type { ZodType } from 'zod';
 
-type EnvShape<
-  TServer extends Record<string, ZodType>,
-  TClient extends Record<`NEXT_PUBLIC_${string}`, ZodType>,
-> = {
-  server: TServer;
-  client: TClient;
-  runtimeEnv: Record<string, string | undefined>;
-};
-
-export function createAppEnv<
-  TServer extends Record<string, ZodType>,
-  TClient extends Record<`NEXT_PUBLIC_${string}`, ZodType>,
->({ server, client, runtimeEnv }: EnvShape<TServer, TClient>) {
-  return createEnv({
-    server,
-    client,
-    runtimeEnv,
+/**
+ * Thin wrapper around `@t3-oss/env-nextjs`'s `createEnv` that pins the two
+ * defaults we want for every app: `emptyStringAsUndefined: true` (so a
+ * blank `.env` value is rejected by `.min(1)` instead of slipping through
+ * as `""`) and `skipValidation` driven by `SKIP_ENV_VALIDATION` (so
+ * `next build` can run without a full env).
+ *
+ * The signature is typed as `typeof createEnv` rather than via a custom
+ * generic so that t3-oss's full inference (server/client/shared schema
+ * dictionaries, `NEXT_PUBLIC_*` prefix enforcement, runtimeEnv shape
+ * derived from the schemas) reaches the call site untouched. A custom
+ * generic constraint loses inference because the wrapper's bounded
+ * generics narrow to their constraint at the inner `createEnv` call.
+ */
+export const createAppEnv: typeof createEnv = (opts) =>
+  createEnv({
     emptyStringAsUndefined: true,
     skipValidation: process.env['SKIP_ENV_VALIDATION'] === 'true',
+    ...opts,
   });
-}
 
 /**
  * Read a required environment variable, throwing a clear error when missing.

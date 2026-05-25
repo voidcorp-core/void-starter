@@ -37,21 +37,22 @@ import { z } from 'zod';
  *     callback when that module is wired in.
  *
  * Note on `tsconfig.json`: this package overrides `declaration: false`
- * because Better-Auth 1.6.x ships its own nested `zod@4` while the
- * monorepo standardizes on `zod@3`. The inferred return type of
- * `betterAuth(...)` therefore traverses
- * `better-auth/node_modules/zod/v4/core`, which is a non-portable path
- * for `.d.ts` emit (TS2742). Workspace packages consume `@repo/auth`
- * directly from TypeScript source via `package.json#exports`, so no
- * `.d.ts` files are needed. Revisit when the project migrates to
- * `zod@4` (Phase D backlog) and the install dedupes to a single copy.
+ * because the inferred return type of `betterAuth(...)` references
+ * better-auth's internal type aliases (`InferSignUpEmailCtx`,
+ * `InferUserUpdateCtx`, ...) defined under
+ * `better-auth/dist/client/path-to-object.mjs`, a path TypeScript
+ * refuses to synthesize into a portable `.d.ts` (TS2883). Workspace
+ * packages consume `@repo/auth` directly from TypeScript source via
+ * `package.json#exports`, so no `.d.ts` files are needed. Revisit when
+ * better-auth re-exports its `Auth<TOptions>` shape without those
+ * internal references.
  */
 
 function initAuth() {
   const env = createAppEnv({
     server: {
       BETTER_AUTH_SECRET: z.string().min(32),
-      BETTER_AUTH_URL: z.string().url(),
+      BETTER_AUTH_URL: z.url(),
       GOOGLE_CLIENT_ID: z.string().min(1),
       GOOGLE_CLIENT_SECRET: z.string().min(1),
     },

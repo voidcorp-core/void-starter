@@ -17,7 +17,7 @@ import {
 } from './Form';
 
 const schema = z.object({
-  email: z.string().email('Email invalide'),
+  email: z.email('Email invalide'),
 });
 
 type Values = z.infer<typeof schema>;

@@ -19,7 +19,7 @@ let cached: Database | undefined;
 
 function initDb(): Database {
   const env = createAppEnv({
-    server: { DATABASE_URL: z.string().url() },
+    server: { DATABASE_URL: z.url() },
     client: {},
     runtimeEnv: { DATABASE_URL: process.env['DATABASE_URL'] },
   });

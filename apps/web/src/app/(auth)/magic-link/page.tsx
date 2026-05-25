@@ -22,7 +22,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 const magicLinkSchema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email: z.email('Enter a valid email'),
 });
 
 type MagicLinkValues = z.infer<typeof magicLinkSchema>;
