@@ -1,4 +1,4 @@
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { VerifyEmailClient } from './VerifyEmailClient';

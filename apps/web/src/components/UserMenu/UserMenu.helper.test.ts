@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeInitials, displayName } from './UserMenu.helper';
 
-describe('UserMenu helpers (re-exports from @void/auth)', () => {
+describe('UserMenu helpers (re-exports from @repo/auth)', () => {
   it('displayName returns a string', () => {
     expect(typeof displayName({ name: 'Alice', email: 'a@b.com' })).toBe('string');
   });

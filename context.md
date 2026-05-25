@@ -105,7 +105,7 @@ Future targets without breaking changes: `apps/mobile/` (Expo), `apps/admin/` (N
 | Always-on (core) | `core`, `auth`, `db`, `ui`, `config` | Imported directly, no toggle |
 | Opt-in (modules) | `sentry`, `posthog`, `stripe`, `email-resend`, `auth-clerk`, etc. | Build-time via env var presence |
 
-A workspace package exists if and only if (a) it has a clear domain scope, OR (b) it will be consumed by 2+ apps. Resist sub-packages like `@void/utils`, `@void/constants`, `@void/hooks`. Three similar lines is better than a premature abstraction.
+A workspace package exists if and only if (a) it has a clear domain scope, OR (b) it will be consumed by 2+ apps. Resist sub-packages like `@repo/utils`, `@repo/constants`, `@repo/hooks`. Three similar lines is better than a premature abstraction.
 
 ### Layering rules
 
@@ -155,7 +155,7 @@ Server Actions live separately in the app (never inside packages):
 
 ```
 apps/web/src/actions/
-├── auth.actions.ts               # "use server" wrappers around @void/auth services
+├── auth.actions.ts               # "use server" wrappers around @repo/auth services
 ├── user.actions.ts
 └── ...
 ```
@@ -188,7 +188,7 @@ Optional packages are toggled by env var presence at build time. There is no run
   ```ts
   export async function register() {
     if (process.env.SENTRY_DSN) {
-      const { register } = await import('@void/sentry/server')
+      const { register } = await import('@repo/sentry/server')
       await register()
     }
   }
@@ -203,7 +203,7 @@ Optional packages are toggled by env var presence at build time. There is no run
 
 ### Server Action wrapper
 
-`@void/core/server-action` exposes `defineAction()` that standardizes patterns:
+`@repo/core/server-action` exposes `defineAction()` that standardizes patterns:
 
 ```ts
 export const updateProfile = defineAction({
@@ -213,20 +213,20 @@ export const updateProfile = defineAction({
 })
 ```
 
-Handles: Zod parsing, auth via `@void/auth`, error normalization, structured logging via `@void/core/logger`. Zero external dependency.
+Handles: Zod parsing, auth via `@repo/auth`, error normalization, structured logging via `@repo/core/logger`. Zero external dependency.
 
 ## Auth strategy
 
-`@void/auth` ships Better-Auth as the default implementation, wired at J0:
+`@repo/auth` ships Better-Auth as the default implementation, wired at J0:
 
 - Email/password (sign up, sign in, password reset, email verification)
 - Google OAuth (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`)
-- Magic link (uses `@void/email` if installed, falls back to console in dev)
+- Magic link (uses `@repo/email` if installed, falls back to console in dev)
 - Roles via Better-Auth admin plugin: `user`, `admin`
 - Sessions: DB-backed, httpOnly + secure + sameSite=lax cookies, rotation on login
 - 2FA / passkey: scaffolded, opt-in per project
 
-**Public API** exposed by `@void/auth`:
+**Public API** exposed by `@repo/auth`:
 
 - `getCurrentUser()`, `requireAuth()`, `requireRole(role)`
 - `signIn.email()`, `signIn.google()`, `signIn.magicLink()`, `signOut()`
@@ -237,7 +237,7 @@ Usable in RSC, Server Actions, route handlers, middleware.
 
 ## DB schema (J0)
 
-Inside `@void/db/src/schema/`:
+Inside `@repo/db/src/schema/`:
 
 - `users` (id, email unique, emailVerified, name, image, role default 'user', createdAt, updatedAt, deletedAt)
 - `sessions` (id, userId FK cascade, expiresAt, ipAddress, userAgent, createdAt)
@@ -250,7 +250,7 @@ Inside `@void/db/src/schema/`:
 
 Modules live in `_modules/`. Workspaces config includes `_modules/*`, so most modules are real packages. Two patterns:
 
-**Pattern A - Real package** (default): module is a workspace package (`@void/sentry`), versionable, importable. Activated by adding to `apps/web/package.json` deps and setting the relevant env var. Tree-shaken or lazy-loaded otherwise.
+**Pattern A - Real package** (default): module is a workspace package (`@repo/sentry`), versionable, importable. Activated by adding to `apps/web/package.json` deps and setting the relevant env var. Tree-shaken or lazy-loaded otherwise.
 
 **Pattern B - Copy-paste**: when files must live inside the consuming app (e.g. specific page templates). README documents file paths and dependencies to add.
 
@@ -290,18 +290,18 @@ If a doc grows past 600 lines, split it.
 - **DRY**: but only when the duplication is real and stable. Three similar lines is better than a premature abstraction.
 - **SoC**: each file has one responsibility; package boundaries enforce domain isolation.
 - **Naming**: `camelCase` for files inside services, `PascalCase` for component folders, `kebab-case` for package names.
-- **Imports**: workspace deps via `@void/*`; in-app paths via `@/*` alias.
+- **Imports**: workspace deps via `@repo/*`; in-app paths via `@/*` alias.
 - **Exports**: prefer named exports; default exports only for Next.js pages, layouts, route handlers.
 - **Async**: always `async/await`, never raw `.then()` chains in business code.
-- **Errors**: typed error classes from `@void/core/errors`, never throw strings.
-- **Logger**: import from `@void/core/logger`, never `console.log` in committed code.
+- **Errors**: typed error classes from `@repo/core/errors`, never throw strings.
+- **Logger**: import from `@repo/core/logger`, never `console.log` in committed code.
 - **Env**: validated via `@t3-oss/env-nextjs`, accessed only through the typed `env` object.
 - **No em dashes** in any documentation, comments, or generated content (use hyphens or rephrase).
 - **No emojis** in code, docs, or commits unless explicitly requested.
 
 ## Security and RGPD
 
-Primitives shipped in `@void/core`:
+Primitives shipped in `@repo/core`:
 - `security-headers.ts` - CSP, HSTS, X-Frame-Options, Permissions-Policy defaults
 - `rate-limit.ts` - in-memory adapter, Upstash adapter via module
 - `sanitize.ts` - PII helpers (maskEmail, truncate)
@@ -322,7 +322,7 @@ OWASP Top 10 mapping (full detail in `docs/SECURITY.md`):
 - A07 Auth Failures - Better-Auth + sessions hardened by default
 - A08 Software/Data Integrity - CSP strict
 - A09 Logging/Monitoring - Pino + `_modules/observability-sentry`
-- A10 SSRF - URL validation primitive in `@void/core`
+- A10 SSRF - URL validation primitive in `@repo/core`
 
 RGPD checklist (full detail in `docs/SECURITY.md`):
 - Cookie consent - `_modules/cookie-consent/`
@@ -354,7 +354,7 @@ The starter ships with a `CLAUDE.md` at the root that instructs AI assistants:
 6. Never modify the layering pattern without explicit user approval
 7. Any new convention MUST be added to the relevant `docs/*.md` at the time of introduction
 8. Any non-obvious decision (where a credible alternative exists) MUST be logged in `docs/DECISIONS.md`
-9. Use `defineAction()` from `@void/core/server-action` for all Server Actions
+9. Use `defineAction()` from `@repo/core/server-action` for all Server Actions
 10. Read the official documentation of any third-party integration before implementing it (do not invent the configuration)
 
 ## What we DON'T want
@@ -367,7 +367,7 @@ The starter ships with a `CLAUDE.md` at the root that instructs AI assistants:
 - tRPC (Server Actions + `defineAction` cover the need)
 - In-starter design tooling (gstack handles it externally)
 - Runtime feature flag service (build-time activation is the pattern)
-- Micro-packages (no `@void/utils`, `@void/constants`, `@void/hooks`)
+- Micro-packages (no `@repo/utils`, `@repo/constants`, `@repo/hooks`)
 - DI container (no `tsyringe`, no `awilix`); services export functions, tests inject deps via parameters
 - Explicit CQRS pattern; soft CQRS via Cache Components is sufficient (cache reads at service layer, mutate via Server Actions with `updateTag`)
 - `packages/use-cases/` generic package (use-cases live in `apps/*/src/use-cases/` initially, promoted to domain packages on cross-app reuse)
@@ -377,7 +377,7 @@ The starter ships with a `CLAUDE.md` at the root that instructs AI assistants:
 - Monorepo Turborepo + Bun workspaces, ready for multi-target growth
 - Auth functional out of the box (email/password + Google + roles + sessions)
 - Solid layering examples in canonical components and services
-- Logger, env validation, error primitives, security headers in `@void/core`
+- Logger, env validation, error primitives, security headers in `@repo/core`
 - Test setup ready to go (Vitest + Playwright with auth E2E)
 - CI minimal but solid (lint + type-check + test + build + knip + gitleaks, with concurrency + caching)
 - Renovate config with auto-merge rules

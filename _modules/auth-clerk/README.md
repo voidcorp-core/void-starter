@@ -1,6 +1,6 @@
-# @void/auth-clerk
+# @repo/auth-clerk
 
-Opt-in scaffold that documents how to swap `@void/auth`'s Better-Auth repository for a Clerk-backed one. **This module is a scaffold, not a runtime drop-in.** Copying `src/auth.repository.ts` alone does not produce a working app — Clerk's session model, sign-in flow, and middleware all differ from Better-Auth's. The full swap procedure is below.
+Opt-in scaffold that documents how to swap `@repo/auth`'s Better-Auth repository for a Clerk-backed one. **This module is a scaffold, not a runtime drop-in.** Copying `src/auth.repository.ts` alone does not produce a working app — Clerk's session model, sign-in flow, and middleware all differ from Better-Auth's. The full swap procedure is below.
 
 For the decision rationale (why Better-Auth ships as default and Clerk is opt-in), read `docs/DECISIONS.md` entry **02. Better-Auth as default, Clerk as opt-in module**.
 
@@ -18,7 +18,7 @@ This is a per-MVP decision, not a global one. The starter's default stays Better
 
 | Dimension | Better-Auth (default) | Clerk (this module) |
 | --- | --- | --- |
-| Data location | Your Postgres (`@void/db`) | Clerk's infrastructure |
+| Data location | Your Postgres (`@repo/db`) | Clerk's infrastructure |
 | User table | `users` row owned by you | Clerk-owned; mirror via webhook if you need a local copy |
 | Session read | `getAuth().api.getSession({ headers })` | `auth()` reads `next/headers` internally; `currentUser()` returns the `User` |
 | Sign-in surface | `authClient` (browser fetch client) | `<SignIn />` / `<SignUp />` Clerk components |
@@ -35,13 +35,13 @@ Five steps. Do them all in one PR; partial swaps leave the app broken.
 
 1. **Replace the repository.** Copy `_modules/auth-clerk/src/auth.repository.ts` over `packages/auth/src/auth.repository.ts`. Drop the inline `Role` / `SessionUser` types from the copy and import them from `./auth.types` instead — the shapes match by design. Audit the role-mapping branch (`metadataRole === 'admin'`) and adapt to whatever metadata key your Clerk project commits to.
 
-2. **Update `packages/auth/package.json` deps.** Remove `better-auth`, `@better-auth/drizzle-adapter`, `@void/db`, and `drizzle-orm` (the latter two are dev deps used only by the Better-Auth Drizzle adapter). Add `@clerk/nextjs` at the same major as this module. Keep `server-only`, `zod`, `@void/core`, and the `next` peer dep.
+2. **Update `packages/auth/package.json` deps.** Remove `better-auth`, `@better-auth/drizzle-adapter`, `@repo/db`, and `drizzle-orm` (the latter two are dev deps used only by the Better-Auth Drizzle adapter). Add `@clerk/nextjs` at the same major as this module. Keep `server-only`, `zod`, `@repo/core`, and the `next` peer dep.
 
    ```diff
    "dependencies": {
    -  "@better-auth/drizzle-adapter": "^1.6.0",
-     "@void/core": "workspace:*",
-   -  "@void/db": "workspace:*",
+     "@repo/core": "workspace:*",
+   -  "@repo/db": "workspace:*",
    -  "better-auth": "^1.6.0",
    +  "@clerk/nextjs": "^6.39.0",
      "server-only": "^0.0.1",
@@ -99,7 +99,7 @@ Five steps. Do them all in one PR; partial swaps leave the app broken.
 
    Then replace the starter's `apps/web/src/app/(auth)/sign-in/` and `/sign-up/` pages with Clerk's prebuilt components or the catch-all `<SignIn path="/sign-in" />` pattern. Replace `<UserMenu>` (which uses `authClient.signOut()`) with `<UserButton afterSignOutUrl="/" />`. Drop the `auth.client.ts` file from `packages/auth/src/` (Clerk's client surface is `useUser()`, `useClerk()`, `useAuth()` from `@clerk/nextjs`).
 
-After the five steps, run `bun install` from the repo root, then `bun run lint`, `bun run type-check`, `bun run test`, `bun run build`. Fix the inevitable cascade — the `defineAction` / `defineFormAction` resolvers in `@void/auth/auth-action` still call `getCurrentUser`, which now returns the Clerk-shaped session, so existing actions keep working as long as the role mapping is honest.
+After the five steps, run `bun install` from the repo root, then `bun run lint`, `bun run type-check`, `bun run test`, `bun run build`. Fix the inevitable cascade — the `defineAction` / `defineFormAction` resolvers in `@repo/auth/auth-action` still call `getCurrentUser`, which now returns the Clerk-shaped session, so existing actions keep working as long as the role mapping is honest.
 
 ## What survives the swap
 
@@ -130,5 +130,5 @@ The fact that the starter ships Better-Auth files unchanged means rollback is al
 ## Notes
 
 - The version of `@clerk/nextjs` pinned in this module's `package.json` is the latest stable major at the time the scaffold landed. Bump it during the swap if a newer major exists; the API surface (`auth()`, `currentUser()`, `<ClerkProvider>`, `clerkMiddleware()`) has been stable since 2024.
-- This module is **not** a workspace dep of `apps/web`. The starter never consumes `@void/auth-clerk` automatically — adopting Clerk is an explicit, irreversible-without-revert per-MVP decision.
-- The single file under `src/` is the only meaningful content. The package barrel (`src/index.ts`) deliberately re-exports nothing, matching the convention of `@void/sentry` and `@void/posthog` (the other opt-in modules in `_modules/`).
+- This module is **not** a workspace dep of `apps/web`. The starter never consumes `@repo/auth-clerk` automatically — adopting Clerk is an explicit, irreversible-without-revert per-MVP decision.
+- The single file under `src/` is the only meaningful content. The package barrel (`src/index.ts`) deliberately re-exports nothing, matching the convention of `@repo/sentry` and `@repo/posthog` (the other opt-in modules in `_modules/`).

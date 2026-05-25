@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bootstrap the void-starter monorepo with shared config, tooling enforcement (Biome, Lefthook, knip, gitleaks, commitlint, Renovate), and the `@void/core` package providing logger, env validation, typed errors, security headers, rate-limit, sanitize helpers, and the `defineAction` Server Action wrapper.
+**Goal:** Bootstrap the void-starter monorepo with shared config, tooling enforcement (Biome, Lefthook, knip, gitleaks, commitlint, Renovate), and the `@repo/core` package providing logger, env validation, typed errors, security headers, rate-limit, sanitize helpers, and the `defineAction` Server Action wrapper.
 
-**Architecture:** Monorepo using Turborepo 2.x for orchestration and Bun workspaces for dependency management. The `@void/config` package exposes shared TS/Biome/Vitest base configs. The `@void/core` package provides framework-agnostic primitives consumed by all other packages and apps. Internal packages export TS source directly (no build step) since Bun and Next.js 16 handle TS natively. Tooling runs at three layers: Biome on save (IDE), Lefthook on commit/push (local), GitHub Actions on PR (remote, deferred to Phase D).
+**Architecture:** Monorepo using Turborepo 2.x for orchestration and Bun workspaces for dependency management. The `@repo/config` package exposes shared TS/Biome/Vitest base configs. The `@repo/core` package provides framework-agnostic primitives consumed by all other packages and apps. Internal packages export TS source directly (no build step) since Bun and Next.js 16 handle TS natively. Tooling runs at three layers: Biome on save (IDE), Lefthook on commit/push (local), GitHub Actions on PR (remote, deferred to Phase D).
 
 **Tech Stack:** Bun 1.3.x, Turborepo 2.x, TypeScript 5.x strict, Biome, Lefthook, commitlint + conventional commits, knip, gitleaks, Renovate, Pino + pino-pretty, Zod, @t3-oss/env-nextjs, Vitest.
 
@@ -258,7 +258,7 @@ git push
 
 ---
 
-### Task 6: Create @void/config package skeleton
+### Task 6: Create @repo/config package skeleton
 
 **Files:**
 - Create: `packages/config/package.json`
@@ -269,7 +269,7 @@ Create `/Users/folpe/Developer/void-starter/packages/config/package.json`:
 
 ```json
 {
-  "name": "@void/config",
+  "name": "@repo/config",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -293,18 +293,18 @@ Create `/Users/folpe/Developer/void-starter/packages/config/package.json`:
 - [ ] **Step 2: Run bun install to register the workspace**
 
 Run: `bun install`
-Expected: `bun install` completes; `node_modules/@void/config` symlink exists.
+Expected: `bun install` completes; `node_modules/@repo/config` symlink exists.
 
 - [ ] **Step 3: Verify the workspace is linked**
 
-Run: `ls -la node_modules/@void/`
+Run: `ls -la node_modules/@repo/`
 Expected: `config` listed as a symlink to `../../packages/config`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add packages/config/package.json bun.lockb
-git commit -m "chore(config): add @void/config workspace package skeleton"
+git commit -m "chore(config): add @repo/config workspace package skeleton"
 git push
 ```
 
@@ -931,7 +931,7 @@ This proves the hook chain works end-to-end.
 
 ---
 
-### Task 19: @void/core package skeleton
+### Task 19: @repo/core package skeleton
 
 **Files:**
 - Create: `packages/core/package.json`, `packages/core/tsconfig.json`, `packages/core/src/index.ts`, `packages/core/vitest.config.ts`
@@ -942,7 +942,7 @@ Create `/Users/folpe/Developer/void-starter/packages/core/package.json`:
 
 ```json
 {
-  "name": "@void/core",
+  "name": "@repo/core",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -981,7 +981,7 @@ Create `/Users/folpe/Developer/void-starter/packages/core/tsconfig.json`:
 
 ```json
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }
@@ -992,7 +992,7 @@ Create `/Users/folpe/Developer/void-starter/packages/core/tsconfig.json`:
 Create `/Users/folpe/Developer/void-starter/packages/core/vitest.config.ts`:
 
 ```ts
-import { baseConfig } from '@void/config/vitest.base';
+import { baseConfig } from '@repo/config/vitest.base';
 
 export default baseConfig;
 ```
@@ -1002,14 +1002,14 @@ export default baseConfig;
 Create `/Users/folpe/Developer/void-starter/packages/core/src/index.ts`:
 
 ```ts
-// @void/core public API. Sub-paths (./logger, ./env, etc.) are the canonical entrypoints.
+// @repo/core public API. Sub-paths (./logger, ./env, etc.) are the canonical entrypoints.
 export {};
 ```
 
 - [ ] **Step 5: Run install and type-check**
 
 Run: `bun install`
-Expected: workspace deps resolved, `node_modules/@void/core` symlink exists.
+Expected: workspace deps resolved, `node_modules/@repo/core` symlink exists.
 
 Run: `cd packages/core && bunx tsc --noEmit && cd ../..`
 Expected: zero errors.
@@ -1018,13 +1018,13 @@ Expected: zero errors.
 
 ```bash
 git add packages/core/ bun.lockb package.json
-git commit -m "feat(core): scaffold @void/core package skeleton"
+git commit -m "feat(core): scaffold @repo/core package skeleton"
 git push
 ```
 
 ---
 
-### Task 20: @void/core logger (TDD)
+### Task 20: @repo/core logger (TDD)
 
 **Files:**
 - Create: `packages/core/src/logger.ts`, `packages/core/src/logger.test.ts`
@@ -1102,7 +1102,7 @@ git push
 
 ---
 
-### Task 21: @void/core errors (TDD)
+### Task 21: @repo/core errors (TDD)
 
 **Files:**
 - Create: `packages/core/src/errors.ts`, `packages/core/src/errors.test.ts`
@@ -1264,7 +1264,7 @@ git push
 
 ---
 
-### Task 22: @void/core env validation with @t3-oss/env-nextjs
+### Task 22: @repo/core env validation with @t3-oss/env-nextjs
 
 **Files:**
 - Create: `packages/core/src/env.ts`, `packages/core/src/env.test.ts`
@@ -1356,7 +1356,7 @@ git push
 
 ---
 
-### Task 23: @void/core sanitize helpers (TDD)
+### Task 23: @repo/core sanitize helpers (TDD)
 
 **Files:**
 - Create: `packages/core/src/sanitize.ts`, `packages/core/src/sanitize.test.ts`
@@ -1437,7 +1437,7 @@ git push
 
 ---
 
-### Task 24: @void/core security-headers (TDD)
+### Task 24: @repo/core security-headers (TDD)
 
 **Files:**
 - Create: `packages/core/src/security-headers.ts`, `packages/core/src/security-headers.test.ts`
@@ -1519,7 +1519,7 @@ git push
 
 ---
 
-### Task 25: @void/core rate-limit in-memory adapter (TDD)
+### Task 25: @repo/core rate-limit in-memory adapter (TDD)
 
 **Files:**
 - Create: `packages/core/src/rate-limit.ts`, `packages/core/src/rate-limit.test.ts`
@@ -1647,7 +1647,7 @@ git push
 
 ---
 
-### Task 26: @void/core defineAction Server Action wrapper (TDD)
+### Task 26: @repo/core defineAction Server Action wrapper (TDD)
 
 **Files:**
 - Create: `packages/core/src/server-action.ts`, `packages/core/src/server-action.test.ts`
@@ -1702,7 +1702,7 @@ describe('defineAction', () => {
 });
 ```
 
-Note: the `auth: 'required'` and `auth: 'role:admin'` paths cannot be tested at this point because `@void/auth` does not exist yet. Phase B will extend this test file to cover them after `@void/auth` is in place.
+Note: the `auth: 'required'` and `auth: 'role:admin'` paths cannot be tested at this point because `@repo/auth` does not exist yet. Phase B will extend this test file to cover them after `@repo/auth` is in place.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1731,12 +1731,12 @@ type DefineActionConfig<TSchema extends ZodType, TResult> = {
 };
 
 // Phase A scaffolding: auth resolution stub. Phase B replaces this with a real
-// import from @void/auth. Anything other than 'public' will throw at call time
+// import from @repo/auth. Anything other than 'public' will throw at call time
 // until then.
 async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   if (auth === 'public') return { user: null };
   throw new Error(
-    `defineAction: auth mode "${auth}" requires @void/auth, available in Phase B`,
+    `defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`,
   );
 }
 
@@ -1773,7 +1773,7 @@ git push
 
 ---
 
-### Task 27: @void/core barrel exports
+### Task 27: @repo/core barrel exports
 
 **Files:**
 - Modify: `packages/core/src/index.ts`
@@ -1822,7 +1822,7 @@ Expected: all tests pass (logger 2 + errors 9 + env 2 + sanitize 5 + security-he
 - [ ] **Step 4: Run knip to verify no unused exports**
 
 Run: `bunx knip --no-progress`
-Expected: zero issues for `@void/core` (every export is either used internally or exposed via public exports).
+Expected: zero issues for `@repo/core` (every export is either used internally or exposed via public exports).
 
 - [ ] **Step 5: Commit**
 
@@ -1851,7 +1851,7 @@ Expected: zero errors. Note: at this point, `apps/*` is empty, so Turborepo only
 - [ ] **Step 3: Run all tests**
 
 Run: `bun run test`
-Expected: 28 tests pass across `@void/core`.
+Expected: 28 tests pass across `@repo/core`.
 
 - [ ] **Step 4: Run knip across the repo**
 
@@ -1902,7 +1902,7 @@ This tag is the safety net. Phase B starts from here.
 
 ## Phase A done. Next steps:
 
-- Plan Phase B (`@void/db`, `@void/auth`, `@void/ui`) using the same writing-plans skill, informed by what we learned during Phase A execution
+- Plan Phase B (`@repo/db`, `@repo/auth`, `@repo/ui`) using the same writing-plans skill, informed by what we learned during Phase A execution
 - Update `docs/DECISIONS.md` if any new non-obvious decision was taken during Phase A (none expected, but verify before moving on)
 - If any tooling step revealed a config that needs adjustment, fix it in Phase B's first task and document the fix in the commit message
 
@@ -1911,4 +1911,4 @@ This tag is the safety net. Phase B starts from here.
 - Spec coverage: Steps 0, 1, 2, 3 of `starter-plan.md` are fully covered. Step 0 (bootstrap) = Tasks 1-5; Step 1 (config) = Tasks 6-11; Step 2 (tooling) = Tasks 12-18; Step 3 (core) = Tasks 19-27. Task 28 is the validation gate.
 - No CSP in default headers because CSP is application-specific. Documented inline in Task 24 and deferred to `docs/SECURITY.md` (Phase D).
 - gitleaks installation may require Homebrew on macOS if no compatible npm wrapper exists. Task 16 includes the fallback path.
-- The `defineAction` `auth: 'required'` and `role:*` paths intentionally throw in Phase A; full coverage lands in Phase B once `@void/auth` is in.
+- The `defineAction` `auth: 'required'` and `role:*` paths intentionally throw in Phase A; full coverage lands in Phase B once `@repo/auth` is in.

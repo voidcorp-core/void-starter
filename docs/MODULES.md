@@ -10,13 +10,13 @@ Every rule here reflects what already ships in the repo. If your code disagrees,
 
 `_modules/*` is the per-MVP opt-in surface. Every module is either:
 
-- **Pattern A: a real workspace package** (`@void/<name>`) with `src/`, type-checked and tested, activated at build time when its env vars are present.
+- **Pattern A: a real workspace package** (`@repo/<name>`) with `src/`, type-checked and tested, activated at build time when its env vars are present.
 - **Pattern B: a copy-paste scaffold** (README plus `package.json`, no real `src/`) that documents the integration recipe a developer or AI agent executes against the consuming app.
 
 Three rules govern every module:
 
 - **No tier-2 module in `packages/`.** `packages/*` is the always-on substrate. `_modules/*` is the per-MVP opt-in. The split is load-bearing for the dependency graph (see `docs/ARCHITECTURE.md` section 2).
-- **Tier-2 modules depend on `@void/core` at most.** They do not depend on `@void/auth`, `@void/db`, or `@void/ui`. Cross-module dependencies are forbidden.
+- **Tier-2 modules depend on `@repo/core` at most.** They do not depend on `@repo/auth`, `@repo/db`, or `@repo/ui`. Cross-module dependencies are forbidden.
 - **Build-time activation only.** No runtime feature flags, no plugin loaders, no DI containers. Env var presence at build time is the activation signal.
 
 For the catalogue, see `_modules/README.md`.
@@ -29,17 +29,17 @@ The full catalogue (with env vars, install steps, removal, upstream docs) lives 
 
 | Module | Pattern | State | Activation trigger |
 |---|---|---|---|
-| `@void/sentry` | A | wired into `apps/web` | `SENTRY_DSN` plus `NEXT_PUBLIC_SENTRY_DSN` |
-| `@void/posthog` | A | wired into `apps/web` | `NEXT_PUBLIC_POSTHOG_KEY` |
-| `@void/auth-clerk` | A | scaffold (alternative repository) | manual swap, see `docs/AUTH.md` section 6 |
-| `@void/payment-stripe` | A or B | placeholder | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
-| `@void/email-resend` | A or B | placeholder | `RESEND_API_KEY` plus `EMAIL_FROM` |
-| `@void/cms-payload` | B | placeholder | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI` |
-| `@void/audit-log` | B | placeholder | always-on once mounted |
-| `@void/cookie-consent` | B | placeholder | always-on once mounted (cookie-driven state) |
-| `@void/rate-limit-upstash` | A or B | placeholder | `UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN` |
-| `@void/i18n-next-intl` | B | placeholder | `NEXT_PUBLIC_DEFAULT_LOCALE` plus `NEXT_PUBLIC_SUPPORTED_LOCALES` |
-| `@void/db-self-hosted-postgres` | B | placeholder | `DATABASE_URL` repointed |
+| `@repo/sentry` | A | wired into `apps/web` | `SENTRY_DSN` plus `NEXT_PUBLIC_SENTRY_DSN` |
+| `@repo/posthog` | A | wired into `apps/web` | `NEXT_PUBLIC_POSTHOG_KEY` |
+| `@repo/auth-clerk` | A | scaffold (alternative repository) | manual swap, see `docs/AUTH.md` section 6 |
+| `@repo/payment-stripe` | A or B | placeholder | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
+| `@repo/email-resend` | A or B | placeholder | `RESEND_API_KEY` plus `EMAIL_FROM` |
+| `@repo/cms-payload` | B | placeholder | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI` |
+| `@repo/audit-log` | B | placeholder | always-on once mounted |
+| `@repo/cookie-consent` | B | placeholder | always-on once mounted (cookie-driven state) |
+| `@repo/rate-limit-upstash` | A or B | placeholder | `UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN` |
+| `@repo/i18n-next-intl` | B | placeholder | `NEXT_PUBLIC_DEFAULT_LOCALE` plus `NEXT_PUBLIC_SUPPORTED_LOCALES` |
+| `@repo/db-self-hosted-postgres` | B | placeholder | `DATABASE_URL` repointed |
 
 For the canonical activation example, read `_modules/observability-sentry/README.md` (Pattern A) and `_modules/payment-stripe/README.md` (Pattern B).
 
@@ -47,7 +47,7 @@ For the canonical activation example, read `_modules/observability-sentry/README
 
 ## 3. Activation Pattern A -- real workspace package
 
-The module ships as `_modules/<name>/` with `package.json`, `src/`, `tsconfig.json`, `vitest.config.ts`. It is type-checked and tested by Turborepo and consumed via `"@void/<name>": "workspace:*"`.
+The module ships as `_modules/<name>/` with `package.json`, `src/`, `tsconfig.json`, `vitest.config.ts`. It is type-checked and tested by Turborepo and consumed via `"@repo/<name>": "workspace:*"`.
 
 Steps to activate in any consuming app inside the monorepo:
 
@@ -55,7 +55,7 @@ Steps to activate in any consuming app inside the monorepo:
 
    ```json
    "dependencies": {
-     "@void/<name>": "workspace:*"
+     "@repo/<name>": "workspace:*"
    }
    ```
 
@@ -66,7 +66,7 @@ Steps to activate in any consuming app inside the monorepo:
 4. **Add the package to `transpilePackages`.** Edit `apps/<app>/next.config.ts`:
 
    ```ts
-   transpilePackages: ['@void/auth', '@void/core', '@void/db', '@void/<name>', '@void/posthog', '@void/sentry', '@void/ui'],
+   transpilePackages: ['@repo/auth', '@repo/core', '@repo/db', '@repo/<name>', '@repo/posthog', '@repo/sentry', '@repo/ui'],
    ```
 
    Keep the list alphabetical so reviewers can spot drift.
@@ -120,13 +120,13 @@ _modules/<name>/
     <entry>.ts                # server-only entries carry `import 'server-only'`
     <entry>.test.ts           # smoke test that locks env-var gating
     index.ts                  # public barrel
-  package.json                # name: @void/<scope>, exports per subpath
-  tsconfig.json               # extends @void/config/tsconfig.lib.json
-  vitest.config.ts            # extends @void/config/vitest.base.ts
+  package.json                # name: @repo/<scope>, exports per subpath
+  tsconfig.json               # extends @repo/config/tsconfig.lib.json
+  vitest.config.ts            # extends @repo/config/vitest.base.ts
   README.md                   # required: status, scope, env vars, install, removal
 ```
 
-The package name is `@void/<scope>` where `<scope>` is the capability (e.g. `@void/sentry`, `@void/posthog`). The directory name under `_modules/` may be different and more descriptive (e.g. `observability-sentry`, `analytics-posthog`).
+The package name is `@repo/<scope>` where `<scope>` is the capability (e.g. `@repo/sentry`, `@repo/posthog`). The directory name under `_modules/` may be different and more descriptive (e.g. `observability-sentry`, `analytics-posthog`).
 
 For Pattern B, mirror `_modules/payment-stripe/`:
 
@@ -155,9 +155,9 @@ Removal is symmetric to activation. The principle: leave no dead env vars, no de
 ### Pattern A removal
 
 1. **Revert all wiring.** Remove the module's calls from `apps/<app>/src/instrumentation.ts`, `instrumentation-client.ts`, `app/layout.tsx`, `next.config.ts` rewrites, and any other integration points. Each Pattern A README documents its own integration sites; remove them in the same order.
-2. **Drop the workspace dep.** Remove `"@void/<name>": "workspace:*"` from the consuming app's `package.json`. Remove from `transpilePackages` in `next.config.ts`.
+2. **Drop the workspace dep.** Remove `"@repo/<name>": "workspace:*"` from the consuming app's `package.json`. Remove from `transpilePackages` in `next.config.ts`.
 3. **Optionally delete the module directory.** If the module is removed permanently across every app in the monorepo, delete `_modules/<name>/` and update `_modules/README.md` to drop the entry. If you might reuse it in another app, leave it in place as opt-in.
-4. **Clean env vars.** Remove the module's env vars from Vercel (Production, Preview, Development environments), from `.env.local`, and from the consuming package's env validator (`@void/core/env` schema entries or `auth.repository.ts` `createAppEnv` block).
+4. **Clean env vars.** Remove the module's env vars from Vercel (Production, Preview, Development environments), from `.env.local`, and from the consuming package's env validator (`@repo/core/env` schema entries or `auth.repository.ts` `createAppEnv` block).
 
 ### Pattern B removal
 
@@ -178,7 +178,7 @@ Two tiers, scoped to what each pattern actually ships.
 
 Real packages ship one or more smoke tests under `_modules/<name>/src/<entry>.test.ts` that lock the gating contract:
 
-- The module is a no-op when the env var is unset (the SDK never initializes; calling the module's exported helpers either short-circuits or throws a documented "missing env" error from `@void/core/env`'s `required()`).
+- The module is a no-op when the env var is unset (the SDK never initializes; calling the module's exported helpers either short-circuits or throws a documented "missing env" error from `@repo/core/env`'s `required()`).
 - The module initializes correctly when the env var is set (the SDK call fires; the public helpers return expected types).
 
 The smoke test is the contract that prevents accidental always-on activation. It is the minimum every Pattern A module ships. Full integration tests (Sentry actually capturing an error, PostHog actually tracking an event) are MVP-specific and live in the consuming app's E2E suite, not in the module.

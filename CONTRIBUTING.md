@@ -21,7 +21,7 @@ Thanks for considering a contribution. This is a starter repo: the goal is a sma
 This repo enforces a few non-negotiables:
 
 - **Commit format:** Conventional Commits (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `build`). Subject in the imperative mood. Lefthook validates each commit; do not bypass with `--no-verify`.
-- **Code style:** No em dashes, no emojis, no `console.log` in committed code (use `@void/core/logger`).
+- **Code style:** No em dashes, no emojis, no `console.log` in committed code (use `@repo/core/logger`).
 - **Architecture:** Follow `docs/PATTERNS.md` and `docs/ARCHITECTURE.md`. Service layer never touches the DB directly. Components never touch the DB.
 - **Decisions:** Any non-obvious choice (where a credible alternative exists) MUST be appended to `docs/DECISIONS.md` in the same PR.
 

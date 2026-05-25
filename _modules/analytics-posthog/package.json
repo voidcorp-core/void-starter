@@ -1,5 +1,5 @@
 {
-  "name": "@void/posthog",
+  "name": "@repo/posthog",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^4.1.5",
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "jsdom": "^25.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -1,7 +1,7 @@
 'use client';
 
-import type { ActionState } from '@void/auth';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@void/ui';
+import type { ActionState } from '@repo/auth';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@repo/ui';
 import type React from 'react';
 import { useActionState, useOptimistic } from 'react';
 import { updateProfileAction } from './UserProfileCard.actions';

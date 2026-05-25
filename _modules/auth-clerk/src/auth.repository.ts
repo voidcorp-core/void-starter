@@ -3,7 +3,7 @@ import 'server-only';
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 /**
- * Clerk-backed scaffold for the `@void/auth` repository surface.
+ * Clerk-backed scaffold for the `@repo/auth` repository surface.
  *
  * This file is a SCAFFOLD, not a runtime drop-in. The starter ships
  * Better-Auth in `packages/auth/src/auth.repository.ts` (per
@@ -47,7 +47,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
  *      removed in the swap.
  *
  * The exported `getCurrentUser()` mimics the shape of
- * `@void/auth/service`'s `getCurrentUser()` — same return type
+ * `@repo/auth/service`'s `getCurrentUser()` — same return type
  * (`SessionUser | null`), same defensive posture — so the service layer
  * keeps working unchanged after the swap. `requireAuth()` and
  * `requireRole()` from `auth.service.ts` continue to work because they
@@ -72,7 +72,7 @@ const DEFAULT_ROLE: Role = 'user';
  *   - the request is unauthenticated (`auth().userId` is null), OR
  *   - Clerk returns a `User` without a primary email address — we treat
  *     the malformed shape as anonymous rather than throwing, mirroring
- *     `@void/auth`'s defensive parse with `sessionUserSchema.safeParse`.
+ *     `@repo/auth`'s defensive parse with `sessionUserSchema.safeParse`.
  *
  * Role resolution: this scaffold reads `publicMetadata.role` and falls
  * back to `'user'`. Adapt the predicate if your project commits to

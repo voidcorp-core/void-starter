@@ -1,5 +1,5 @@
 {
-  "name": "@void/core",
+  "name": "@repo/core",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -27,7 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.1.5",
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }

@@ -1,5 +1,5 @@
-import { requireAuth } from '@void/auth';
-import { Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { requireAuth } from '@repo/auth';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import { UserMenu } from '@/components/UserMenu';
 
 export default async function DashboardPage() {

@@ -1,4 +1,4 @@
-# @void/audit-log
+# @repo/audit-log
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
@@ -6,7 +6,7 @@ Opt-in scaffold for an audit trail of all writes (insert, update, delete) across
 
 ## Why this module
 
-`@void/core/logger` (pino) captures structured logs but it is the wrong substrate for an audit trail: logs rotate, logs are not transactional with the write, and querying them requires a log pipeline. An audit trail belongs in Postgres next to the data it audits. The starter does not ship this by default because most early-stage MVPs over-index on it (premature governance) and an `audit_logs` table without a viewer is just write-only ballast. Activate when:
+`@repo/core/logger` (pino) captures structured logs but it is the wrong substrate for an audit trail: logs rotate, logs are not transactional with the write, and querying them requires a log pipeline. An audit trail belongs in Postgres next to the data it audits. The starter does not ship this by default because most early-stage MVPs over-index on it (premature governance) and an `audit_logs` table without a viewer is just write-only ballast. Activate when:
 
 - a regulated industry asks "who changed this customer's email";
 - a B2B contract requires SOC 2 audit evidence;
@@ -59,7 +59,7 @@ The module mirrors ADR 08's `events.ts` pattern: services emit typed events afte
    - Synchronous in-process call inside the service after the write commits (simplest, in the same Server Action transaction)
    - Asynchronous via a job queue (Inngest, BullMQ) when audit insert latency must not couple to the user request
 
-5. Add the admin viewer page at `apps/web/src/app/admin/audit-log/page.tsx`. Use `requireRole('admin')` from `@void/auth` to gate it. Render a paginated table reading `audit_logs` via Drizzle, filterable by `userId`, `targetTable`, and date range.
+5. Add the admin viewer page at `apps/web/src/app/admin/audit-log/page.tsx`. Use `requireRole('admin')` from `@repo/auth` to gate it. Render a paginated table reading `audit_logs` via Drizzle, filterable by `userId`, `targetTable`, and date range.
 
 6. Document the retention policy. Audit logs grow forever by default. Decide on an explicit cutoff (typical: 13 months for GDPR overlap, 7 years for SOX-like contexts) and ship a Vercel cron job that deletes rows older than the cutoff.
 

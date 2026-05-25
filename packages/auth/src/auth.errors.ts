@@ -1,10 +1,10 @@
-import { AppError } from '@void/core/errors';
+import { AppError } from '@repo/core/errors';
 
 /**
- * Domain errors for `@void/auth`.
+ * Domain errors for `@repo/auth`.
  *
- * Each error extends `@void/core`'s `AppError` so the `defineAction`
- * middleware in `@void/core/server-action` maps it to the correct HTTP
+ * Each error extends `@repo/core`'s `AppError` so the `defineAction`
+ * middleware in `@repo/core/server-action` maps it to the correct HTTP
  * status with a stable string `code` clients can match on. Status codes
  * follow standard HTTP semantics:
  *

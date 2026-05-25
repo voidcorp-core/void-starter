@@ -5,7 +5,7 @@ export const baseConfig = defineConfig({
     globals: false,
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    // Skeleton packages (e.g. @void/db before its schemas land) ship without
+    // Skeleton packages (e.g. @repo/db before its schemas land) ship without
     // tests yet; opt in here once at the source so individual packages do not
     // need a per-package `--passWithNoTests` plaster.
     passWithNoTests: true,

@@ -1,14 +1,14 @@
 import 'server-only';
 
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
-import { logger } from '@void/core/logger';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
+import { logger } from '@repo/core/logger';
 import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { getAuth } from './auth.repository';
 import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
 
 /**
- * Public server-side auth API for `@void/auth`.
+ * Public server-side auth API for `@repo/auth`.
  *
  * Consumed by React Server Components, route handlers, and middleware
  * inside `apps/web`. Browser code uses `auth.client.ts` (the Better-Auth
@@ -17,7 +17,7 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
  * `next/headers`, so they only work inside a Next.js request scope.
  *
  * Errors are thrown, never returned. The `defineAction` middleware in
- * `@void/core/server-action` maps `AppError` subclasses to API responses
+ * `@repo/core/server-action` maps `AppError` subclasses to API responses
  * with the appropriate HTTP status; let exceptions propagate.
  *
  * Sign-in is intentionally not exposed here. Server-side sign-in requires
@@ -57,7 +57,7 @@ function isAuthConfigured(): boolean {
  *   - Route handlers (route.ts) for non-action endpoints
  *
  * For Server Actions, prefer `defineAction({ auth: 'required', ... })` from
- * `@void/auth` — it wires auth into the action's typed context so the handler
+ * `@repo/auth` — it wires auth into the action's typed context so the handler
  * receives `ctx.user` directly, without re-reading headers.
  *
  * Defensive parsing: if Better-Auth returns a session shape that does not
@@ -86,7 +86,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
  * Require an authenticated user; throw `UnauthorizedError` (401) if not.
  *
  * Use in Server Components and route handlers. For Server Actions prefer
- * `defineAction({ auth: 'required', ... })` from `@void/auth`, which raises
+ * `defineAction({ auth: 'required', ... })` from `@repo/auth`, which raises
  * the same error class but wires `ctx.user` into the handler.
  */
 export async function requireAuth(): Promise<SessionUser> {
@@ -101,7 +101,7 @@ export async function requireAuth(): Promise<SessionUser> {
  * any role check (standard role-hierarchy pattern).
  *
  * Use in Server Components and route handlers. For Server Actions prefer
- * `defineAction({ auth: 'role:admin', ... })` from `@void/auth`.
+ * `defineAction({ auth: 'role:admin', ... })` from `@repo/auth`.
  */
 export async function requireRole(role: Role): Promise<SessionUser> {
   const user = await requireAuth();

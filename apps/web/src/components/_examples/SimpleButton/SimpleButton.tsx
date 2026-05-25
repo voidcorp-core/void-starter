@@ -1,4 +1,4 @@
-import { Button } from '@void/ui';
+import { Button } from '@repo/ui';
 import Link from 'next/link';
 import { formatLabel } from './SimpleButton.helper';
 import type { SimpleButtonProps } from './SimpleButton.types';
@@ -6,7 +6,7 @@ import type { SimpleButtonProps } from './SimpleButton.types';
 /**
  * SimpleButton — canonical 5-file presentational component example.
  *
- * A thin server-friendly wrapper around @void/ui's Button. Demonstrates:
+ * A thin server-friendly wrapper around @repo/ui's Button. Demonstrates:
  * - Pure helper extraction (formatLabel)
  * - Type isolation in .types.ts
  * - asChild pattern for link rendering

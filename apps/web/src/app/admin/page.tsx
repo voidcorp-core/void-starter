@@ -1,7 +1,7 @@
-import { requireRole } from '@void/auth';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
-import { Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { requireRole } from '@repo/auth';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import { isNull } from 'drizzle-orm';
 
 export default async function AdminPage() {

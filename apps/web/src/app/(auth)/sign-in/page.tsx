@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { authClient } from '@void/auth/client';
+import { authClient } from '@repo/auth/client';
 import {
   Button,
   Card,
@@ -16,7 +16,7 @@ import {
   FormMessage,
   Input,
   toast,
-} from '@void/ui';
+} from '@repo/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';

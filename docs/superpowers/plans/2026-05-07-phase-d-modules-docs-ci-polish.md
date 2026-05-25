@@ -19,7 +19,7 @@
 
 Read the prior phase plans' "learnings inherited" sections. Critical reminders unchanged. New learnings from Phase C:
 - `experimental.cacheComponents: true` enabled in `next.config.ts`; verify the flag is still under experimental in current Next 16.x.
-- `transpilePackages` must list every consumed `@void/*` package.
+- `transpilePackages` must list every consumed `@repo/*` package.
 - E2E auth tests rely on a live DB and the dev server; CI must replicate this via service container + parallel `bun run dev`.
 
 ---
@@ -46,7 +46,7 @@ NOTE (verified 2026-05-07): `@sentry/nextjs` is at 10.x on npm. The modern setup
 
 ```json
 {
-  "name": "@void/sentry",
+  "name": "@repo/sentry",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -61,10 +61,10 @@ NOTE (verified 2026-05-07): `@sentry/nextjs` is at 10.x on npm. The modern setup
   },
   "dependencies": {
     "@sentry/nextjs": "^10.0.0",
-    "@void/core": "workspace:*"
+    "@repo/core": "workspace:*"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "next": "^16.2.0",
     "typescript": "^5.6.0"
   },
@@ -140,13 +140,13 @@ export function initSentryClient() {
 - [ ] **Create `_modules/observability-sentry/README.md`** documenting:
   - Required env vars: `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, optional `SENTRY_TRACES_SAMPLE_RATE`
   - Install steps (modern Sentry 10.x pattern):
-    1. Add to `apps/web/package.json` deps: `"@void/sentry": "workspace:*"`
+    1. Add to `apps/web/package.json` deps: `"@repo/sentry": "workspace:*"`
     2. Run `bun install`
     3. In `apps/web/instrumentation.ts`, dispatch on `process.env.NEXT_RUNTIME`:
-       - if `'nodejs'`, dynamically import and call `registerServer()` from `@void/sentry/server`
-       - if `'edge'`, dynamically import and call `registerEdge()` from `@void/sentry/edge`
-       - re-export `onRequestError` from `@void/sentry/server`
-    4. Create `apps/web/instrumentation-client.ts` that imports and calls `initSentryClient()` from `@void/sentry/client`
+       - if `'nodejs'`, dynamically import and call `registerServer()` from `@repo/sentry/server`
+       - if `'edge'`, dynamically import and call `registerEdge()` from `@repo/sentry/edge`
+       - re-export `onRequestError` from `@repo/sentry/server`
+    4. Create `apps/web/instrumentation-client.ts` that imports and calls `initSentryClient()` from `@repo/sentry/client`
     5. Wrap `next.config.ts` with `withSentryConfig(config, { org, project, authToken, tunnelRoute: '/sentry-tunnel', silent: !process.env.CI })`
     6. Add `apps/web/src/app/global-error.tsx` per the Sentry docs to capture React render errors
   - Removal steps to undo
@@ -171,9 +171,9 @@ This task DEMONSTRATES the install procedure end-to-end so future MVPs can mirro
 
 NOTE (verified 2026-05-07): Modern Sentry on Next.js requires both `instrumentation.ts` (server/edge dispatch) AND `instrumentation-client.ts` (client init). Both files live at the apps/web/ root (or `apps/web/src/` if `srcDir` is configured). The `withSentryConfig` wrapper in `next.config.ts` handles tunnel-route generation and source-map upload automatically.
 
-- [ ] Add `@void/sentry: workspace:*` to apps/web/package.json deps.
-- [ ] Update `apps/web/instrumentation.ts` to dispatch on NEXT_RUNTIME and dynamically import `@void/sentry/server` or `@void/sentry/edge`. Re-export `onRequestError`.
-- [ ] Create `apps/web/instrumentation-client.ts` calling `initSentryClient()` from `@void/sentry/client`.
+- [ ] Add `@repo/sentry: workspace:*` to apps/web/package.json deps.
+- [ ] Update `apps/web/instrumentation.ts` to dispatch on NEXT_RUNTIME and dynamically import `@repo/sentry/server` or `@repo/sentry/edge`. Re-export `onRequestError`.
+- [ ] Create `apps/web/instrumentation-client.ts` calling `initSentryClient()` from `@repo/sentry/client`.
 - [ ] Wrap apps/web/next.config.ts with `withSentryConfig(config, { tunnelRoute: '/sentry-tunnel', silent: !process.env.CI })`.
 - [ ] Run `bun run build` and verify Sentry is NOT in the bundle when SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN are unset.
 - [ ] Commit: `feat(web): wire Sentry module via instrumentation.ts (build-time activation)`
@@ -197,7 +197,7 @@ NOTE (verified 2026-05-07 against the URLs above): `posthog-js` is at 1.372.x on
 
 ```json
 {
-  "name": "@void/posthog",
+  "name": "@repo/posthog",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -212,7 +212,7 @@ NOTE (verified 2026-05-07 against the URLs above): `posthog-js` is at 1.372.x on
     "posthog-js": "^1.370.0"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "@types/react": "^19.0.0",
     "react": "^19.0.0",
     "typescript": "^5.6.0"
@@ -255,7 +255,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
 - [ ] **Create README** documenting:
   - Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` (default `/ingest`)
-  - Install: add `@void/posthog: workspace:*` to apps/web; wrap `RootLayout` children with `<AnalyticsProvider>`; add `next.config.ts` rewrites for the EU proxy and `skipTrailingSlashRedirect`:
+  - Install: add `@repo/posthog: workspace:*` to apps/web; wrap `RootLayout` children with `<AnalyticsProvider>`; add `next.config.ts` rewrites for the EU proxy and `skipTrailingSlashRedirect`:
 
     // Updated 2026-05-07 from initial draft: rewrite rules now match the canonical PostHog Next.js proxy pattern (static + array + catch-all) and rely on skipTrailingSlashRedirect at the config level. The previous /decide one-off rule is no longer needed - it's covered by the catch-all.
 
@@ -287,7 +287,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
 ### Task D5: Wire PostHog into apps/web
 
-- [ ] Add `@void/posthog: workspace:*` to apps/web deps.
+- [ ] Add `@repo/posthog: workspace:*` to apps/web deps.
 - [ ] Wrap `RootLayout` with `<AnalyticsProvider>`.
 - [ ] Add the rewrites in `next.config.ts` AND set `skipTrailingSlashRedirect: true` (verified 2026-05-07: rewrite chain breaks without it).
 - [ ] Verify `bun run build` produces a bundle WITHOUT PostHog when `NEXT_PUBLIC_POSTHOG_KEY` is unset at build time.
@@ -301,7 +301,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
 - [ ] **Read Clerk Next.js docs**: `https://clerk.com/docs/quickstarts/nextjs`. Confirm `@clerk/nextjs` API for server-side session reading.
 
-- [ ] **Create the package** with an alternative `auth.repository.ts` that wraps Clerk and exposes the same surface as `@void/auth`'s repository (so the swap is one-file).
+- [ ] **Create the package** with an alternative `auth.repository.ts` that wraps Clerk and exposes the same surface as `@repo/auth`'s repository (so the swap is one-file).
 
 The README documents the swap procedure:
 1. Replace `packages/auth/src/auth.repository.ts` with the Clerk version (copy from `_modules/auth-clerk/src/auth.repository.ts`)
@@ -316,13 +316,13 @@ The README documents the swap procedure:
 
 ### Task D7: _modules/payment-stripe stub
 
-**Files:** `_modules/payment-stripe/README.md` placeholder explaining scope, env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), expected install steps, and the integration points (checkout flow, webhook handler at `apps/web/src/app/api/webhooks/stripe/route.ts`, customer mirror table in `@void/db`).
+**Files:** `_modules/payment-stripe/README.md` placeholder explaining scope, env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), expected install steps, and the integration points (checkout flow, webhook handler at `apps/web/src/app/api/webhooks/stripe/route.ts`, customer mirror table in `@repo/db`).
 
 - [ ] Commit: `feat(modules): scaffold payment-stripe placeholder`
 
 ### Task D8: _modules/email-resend stub
 
-**Files:** `_modules/email-resend/README.md` documenting env vars (`RESEND_API_KEY`, `EMAIL_FROM`), the expected `sendMagicLink` adapter swap in `@void/auth`, and the integration with `@void/email/server` for transactional emails.
+**Files:** `_modules/email-resend/README.md` documenting env vars (`RESEND_API_KEY`, `EMAIL_FROM`), the expected `sendMagicLink` adapter swap in `@repo/auth`, and the integration with `@repo/email/server` for transactional emails.
 
 - [ ] Commit: `feat(modules): scaffold email-resend placeholder`
 
@@ -346,7 +346,7 @@ The README documents the swap procedure:
 
 ### Task D12: _modules/rate-limit-upstash stub
 
-Real Upstash Redis adapter for `RateLimiter` interface from `@void/core/rate-limit`. README documents env vars (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`).
+Real Upstash Redis adapter for `RateLimiter` interface from `@repo/core/rate-limit`. README documents env vars (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`).
 
 - [ ] Commit: `feat(modules): scaffold rate-limit-upstash placeholder`
 
@@ -413,7 +413,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 - When to extract a policy
 - When to add integration tests
 - Promotion rule from app-level use-cases to domain packages
-- Examples: pointer to `@void/auth` as the canonical service example, and `apps/web/src/components/_examples/*` as canonical component examples
+- Examples: pointer to `@repo/auth` as the canonical service example, and `apps/web/src/components/_examples/*` as canonical component examples
 
 - [ ] Commit: `docs: write PATTERNS.md`
 
@@ -447,7 +447,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D19: docs/AUTH.md
 
 **Sections:**
-- Public API of `@void/auth`
+- Public API of `@repo/auth`
 - Sign-in flow diagram (email/password, Google OAuth, magic link)
 - Session lifecycle
 - Role-based access with `requireRole`
@@ -464,7 +464,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 - Convention: cache lives at service layer for reads
 - Convention: `updateTag()` lives in actions for writes
 - Repository never caches
-- Examples from `@void/auth` and from canonical UserProfileCard
+- Examples from `@repo/auth` and from canonical UserProfileCard
 - Pitfalls: do NOT cache mutations, do NOT cache user-specific data without user-scoped tags
 
 - [ ] Commit: `docs: write CACHING.md`
@@ -514,10 +514,10 @@ For specific tasks:
 - Service layer NEVER touches DB directly - always through repository
 - Component layer NEVER touches DB - always through service
 - Helpers are PURE: no I/O, no side effects
-- Use `@void/core/logger`, never `console.log` in committed code
-- Use `@void/core/env`, never `process.env` directly in business code
-- Use typed errors from `@void/core/errors`, never throw strings
-- Use `defineAction` from `@void/auth` for all Server Actions
+- Use `@repo/core/logger`, never `console.log` in committed code
+- Use `@repo/core/env`, never `process.env` directly in business code
+- Use typed errors from `@repo/core/errors`, never throw strings
+- Use `defineAction` from `@repo/auth` for all Server Actions
 - Server Actions live in `apps/*/src/actions/`, NEVER in packages
 - No em dashes anywhere; no emojis in code/docs/commits
 - Read official documentation of any third-party tool BEFORE writing its config
@@ -854,7 +854,7 @@ All Playwright tests pass.
 
 Pretend a fresh user instantiates the template and adds Sentry:
 
-1. Add `@void/sentry: workspace:*` to apps/web/package.json
+1. Add `@repo/sentry: workspace:*` to apps/web/package.json
 2. Set `SENTRY_DSN` in `.env.local`
 3. Run `bun install && bun run build`
 4. Verify Sentry chunks are produced

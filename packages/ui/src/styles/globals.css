@@ -1,5 +1,5 @@
 /*
- * @void/ui — design tokens via Tailwind v4 @theme.
+ * @repo/ui — design tokens via Tailwind v4 @theme.
  *
  * Defining `--color-NAME`, `--font-NAME`, `--radius-NAME` auto-generates the
  * matching utilities (bg-NAME, text-NAME, font-NAME, rounded-NAME, etc.).

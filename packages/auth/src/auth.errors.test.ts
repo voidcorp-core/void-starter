@@ -1,4 +1,4 @@
-import { isAppError } from '@void/core/errors';
+import { isAppError } from '@repo/core/errors';
 import { describe, expect, it } from 'vitest';
 import {
   EmailAlreadyTakenError,

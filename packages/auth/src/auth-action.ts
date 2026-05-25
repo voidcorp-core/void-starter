@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import {
   type ActionAuth,
   type ActionContext,
@@ -8,17 +8,17 @@ import {
   defineAction as defineActionCore,
   defineFormAction as defineFormActionCore,
   initialActionState,
-} from '@void/core/server-action';
+} from '@repo/core/server-action';
 import type { ZodType } from 'zod';
 import { getCurrentUser } from './auth.service';
 
 export { type ActionState, initialActionState };
 
 /**
- * Auth-aware `defineAction` for `@void/auth`.
+ * Auth-aware `defineAction` for `@repo/auth`.
  *
- * Bridges `@void/core/server-action` (the auth-agnostic core) with
- * `@void/auth/auth.service` (the Better-Auth backed session reader).
+ * Bridges `@repo/core/server-action` (the auth-agnostic core) with
+ * `@repo/auth/auth.service` (the Better-Auth backed session reader).
  * The core stays free of any auth import, which keeps it testable in
  * isolation; this wrapper is the single point of contact between the
  * two layers.
@@ -67,7 +67,7 @@ export function defineAction<TSchema extends ZodType, TResult>(
   config: DefineActionConfig<TSchema, TResult>,
 ) {
   // Pass `auth: 'public'` to the core so its built-in auth stub no-ops
-  // (it throws for any non-public mode until @void/auth is wired in —
+  // (it throws for any non-public mode until @repo/auth is wired in —
   // which is precisely here). We then resolve the real auth context in
   // our handler and ignore the core's `_ctx`. This is the substitution
   // pattern the core was designed for: it stays auth-agnostic, and this
@@ -87,7 +87,7 @@ type DefineFormActionConfig<TSchema extends ZodType, TResult> = Parameters<
 >[0];
 
 /**
- * Auth-aware `defineFormAction` for `@void/auth`.
+ * Auth-aware `defineFormAction` for `@repo/auth`.
  *
  * Same substitution pattern as the RPC `defineAction` above: the core stays
  * auth-agnostic; this wrapper resolves the real session via `getCurrentUser`

@@ -1,16 +1,16 @@
 import 'server-only';
 
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
-import { createAppEnv } from '@void/core/env';
-import { logger } from '@void/core/logger';
-import { getDb } from '@void/db';
-import * as schema from '@void/db/schema';
+import { createAppEnv } from '@repo/core/env';
+import { logger } from '@repo/core/logger';
+import { getDb } from '@repo/db';
+import * as schema from '@repo/db/schema';
 import { betterAuth } from 'better-auth';
 import { admin, magicLink } from 'better-auth/plugins';
 import { z } from 'zod';
 
 /**
- * Better-Auth wiring for `@void/auth`.
+ * Better-Auth wiring for `@repo/auth`.
  *
  * This module is server-only. The `getAuth()` factory constructs the
  * canonical Better-Auth instance on first call, then caches it for the
@@ -41,7 +41,7 @@ import { z } from 'zod';
  * monorepo standardizes on `zod@3`. The inferred return type of
  * `betterAuth(...)` therefore traverses
  * `better-auth/node_modules/zod/v4/core`, which is a non-portable path
- * for `.d.ts` emit (TS2742). Workspace packages consume `@void/auth`
+ * for `.d.ts` emit (TS2742). Workspace packages consume `@repo/auth`
  * directly from TypeScript source via `package.json#exports`, so no
  * `.d.ts` files are needed. Revisit when the project migrates to
  * `zod@4` (Phase D backlog) and the install dedupes to a single copy.
@@ -95,7 +95,7 @@ function initAuth() {
         sendMagicLink: async ({ email, token, url }) => {
           logger.warn(
             { email, url, token },
-            'magic link (dev only - install @void/email module for prod)',
+            'magic link (dev only - install @repo/email module for prod)',
           );
         },
       }),

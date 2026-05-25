@@ -2,7 +2,7 @@ import { adminClient, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
 /**
- * Browser-side Better-Auth client for `@void/auth`.
+ * Browser-side Better-Auth client for `@repo/auth`.
  *
  * Counterpart to `auth.repository.ts`. This module is consumed by client
  * components, hooks, and any browser-only code path. It MUST NOT import

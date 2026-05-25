@@ -1,7 +1,7 @@
 /**
- * `@void/posthog` is consumed exclusively through its `/client` subpath:
+ * `@repo/posthog` is consumed exclusively through its `/client` subpath:
  *
- *   import { AnalyticsProvider } from '@void/posthog/client';
+ *   import { AnalyticsProvider } from '@repo/posthog/client';
  *
  * The barrel intentionally re-exports nothing: `AnalyticsProvider` is a
  * `'use client'` boundary, and re-exporting it from the package root would

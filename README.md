@@ -12,7 +12,7 @@ The starter follows a Wing Chun engineering philosophy: maximum efficiency, econ
 | Framework | Next.js 16.2 / React 19.2 | Cache Components stable, App Router |
 | Language | TypeScript 6.0 strict | Workspace standard, no implicit any |
 | Styling | Tailwind CSS v4 with `@theme` | Token-based design system, zero-runtime |
-| UI | Radix-backed primitives via `@void/ui` | Accessibility for free (ADR 16, 18, 19) |
+| UI | Radix-backed primitives via `@repo/ui` | Accessibility for free (ADR 16, 18, 19) |
 | Auth | Better-Auth (default), Clerk (opt-in) | Data sovereignty (ADR 02) |
 | DB | Drizzle + Neon Postgres | Branch-per-environment (ADR 11, 12) |
 | Logger | pino | Structured logs, dev-pretty (ADR 22) |
@@ -30,16 +30,16 @@ void-starter/
 |   `-- web/                       # Next.js 16 App Router (Cache Components, RSC)
 |
 |-- packages/                      # Tier 1: always-on workspace packages
-|   |-- core/                      # @void/core   -- logger, env, errors, server-action, ...
-|   |-- auth/                      # @void/auth   -- Better-Auth wrapper, RBAC, action factories
-|   |-- db/                        # @void/db     -- Drizzle schema + getDb()
-|   |-- ui/                        # @void/ui     -- Radix-backed primitives, ThemeProvider
-|   `-- config/                    # @void/config -- shared tsconfig, biome, vitest base
+|   |-- core/                      # @repo/core   -- logger, env, errors, server-action, ...
+|   |-- auth/                      # @repo/auth   -- Better-Auth wrapper, RBAC, action factories
+|   |-- db/                        # @repo/db     -- Drizzle schema + getDb()
+|   |-- ui/                        # @repo/ui     -- Radix-backed primitives, ThemeProvider
+|   `-- config/                    # @repo/config -- shared tsconfig, biome, vitest base
 |
 |-- _modules/                      # Tier 2: opt-in, build-time activation via env vars
-|   |-- observability-sentry/      # @void/sentry        -- ready, wired into apps/web
-|   |-- analytics-posthog/         # @void/posthog       -- ready, wired into apps/web
-|   |-- auth-clerk/                # @void/auth-clerk    -- alternative repository (not env-driven)
+|   |-- observability-sentry/      # @repo/sentry        -- ready, wired into apps/web
+|   |-- analytics-posthog/         # @repo/posthog       -- ready, wired into apps/web
+|   |-- auth-clerk/                # @repo/auth-clerk    -- alternative repository (not env-driven)
 |   |-- payment-stripe/            # placeholder (README only)
 |   |-- email-resend/              # placeholder
 |   |-- cms-payload/               # placeholder
@@ -112,7 +112,7 @@ The split between `packages/` and `_modules/` is the load-bearing boundary: tier
 
 ## Module activation
 
-Modules in `_modules/` are opt-in. To activate a real workspace package (Pattern A, e.g. `@void/sentry`), add `"@void/<name>": "workspace:*"` to the consuming app's `package.json`, set the matching env vars, add the package to `transpilePackages` in `apps/web/next.config.ts`, then follow the module's README for the wiring (instrumentation hook, layout wrap, or `next.config.ts` rewrites). Activation is build-time per ADR 04: an absent env var produces zero runtime cost, no SDK fetch, no bundle weight. For copy-paste scaffolds (Pattern B, e.g. `@void/payment-stripe`), the module's README is the integration recipe. Read `docs/MODULES.md` for the full activation procedure and `_modules/README.md` for the catalogue.
+Modules in `_modules/` are opt-in. To activate a real workspace package (Pattern A, e.g. `@repo/sentry`), add `"@repo/<name>": "workspace:*"` to the consuming app's `package.json`, set the matching env vars, add the package to `transpilePackages` in `apps/web/next.config.ts`, then follow the module's README for the wiring (instrumentation hook, layout wrap, or `next.config.ts` rewrites). Activation is build-time per ADR 04: an absent env var produces zero runtime cost, no SDK fetch, no bundle weight. For copy-paste scaffolds (Pattern B, e.g. `@repo/payment-stripe`), the module's README is the integration recipe. Read `docs/MODULES.md` for the full activation procedure and `_modules/README.md` for the catalogue.
 
 ## Documentation
 

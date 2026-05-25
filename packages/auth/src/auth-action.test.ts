@@ -1,4 +1,4 @@
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 

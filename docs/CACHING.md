@@ -54,7 +54,7 @@ The layering is enforced by convention, not by the runtime. The runtime accepts 
 
 ## 4. Convention examples
 
-Pseudocode aligned with the patterns in this repo. `@void/auth` does not yet use Cache Components (see section 7); the canonical example below applies the moment a domain service ships read paths.
+Pseudocode aligned with the patterns in this repo. `@repo/auth` does not yet use Cache Components (see section 7); the canonical example below applies the moment a domain service ships read paths.
 
 ### Service: read with cache
 
@@ -86,8 +86,8 @@ export async function listActiveUsersForAdmin() {
 // apps/web/src/actions/user.actions.ts
 'use server';
 
-import { defineFormAction } from '@void/auth';
-import { updateUserById } from '@void/users';
+import { defineFormAction } from '@repo/auth';
+import { updateUserById } from '@repo/users';
 import { updateTag } from 'next/cache';
 import { z } from 'zod';
 
@@ -114,7 +114,7 @@ export const updateUserNameAction = defineFormAction({
 
 ```tsx
 // apps/web/src/app/users/[id]/page.tsx
-import { getUserById } from '@void/users';
+import { getUserById } from '@repo/users';
 
 export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -161,7 +161,7 @@ Things that look correct but fail in subtle ways.
 
 - **ADR 10** -- no DI, no explicit CQRS. Cache Components plus `updateTag()` delivers soft CQRS for free: read paths cache aggressively, write paths invalidate. Explicit Command and Query buses would prepay a cost the venture-builder cadence does not justify.
 - **ADR 23** -- TypeScript 6 plus Next 16's `paths` config quirk. The `ignoreDeprecations: '6.0'` workaround in `apps/web/tsconfig.json` does not affect cache semantics; it only suppresses the TS6504 diagnostic.
-- **`@void/auth` and Cache Components.** The auth package is currently a thin wrapper around Better-Auth and does NOT use Cache Components. Better-Auth's session reads are themselves optimized (cookie token plus a single DB lookup keyed on the session id); adding `'use cache'` on top would tag the wrong layer (the session read should not be tagged the same way a user record is). Future domain services in the starter (posts, projects, billing) will use Cache Components from day 1.
+- **`@repo/auth` and Cache Components.** The auth package is currently a thin wrapper around Better-Auth and does NOT use Cache Components. Better-Auth's session reads are themselves optimized (cookie token plus a single DB lookup keyed on the session id); adding `'use cache'` on top would tag the wrong layer (the session read should not be tagged the same way a user record is). Future domain services in the starter (posts, projects, billing) will use Cache Components from day 1.
 - **`docs/PATTERNS.md`** -- file naming conventions for service, repository, action.
 - **`docs/ARCHITECTURE.md`** -- topology, layering rules, where each cache point lives.
 - **`docs/SECURITY.md`** -- the user-scoped tag rule prevents the cross-tenant leak class of bug.

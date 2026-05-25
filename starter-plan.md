@@ -26,7 +26,7 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 ## Step 1: Shared config package
 
 - Create `packages/config/`:
-  - `package.json` (`@void/config`, exposes JSON files only)
+  - `package.json` (`@repo/config`, exposes JSON files only)
   - `tsconfig.base.json` - strict TS, ESNext, paths alias support
   - `tsconfig.next.json` - extends base for Next.js apps
   - `tsconfig.lib.json` - extends base for library packages (declaration: true)
@@ -38,7 +38,7 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 
 ### 2.1 Biome
 - Install at root: `bun add -D @biomejs/biome`
-- Create root `biome.json` extending `@void/config/biome.base.json`
+- Create root `biome.json` extending `@repo/config/biome.base.json`
 - Configure: 2 spaces, single quotes, trailing comma, semicolons, organize imports, VCS git ignore enabled
 - Add scripts: `lint`, `lint:fix`, `format`
 - Commit: `chore: configure Biome linting and formatting`
@@ -77,7 +77,7 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
   - workspace-aware grouping (Next/React group, Tailwind group, dev deps group)
 - Commit: `chore: configure Renovate for monorepo`
 
-## Step 3: @void/core package
+## Step 3: @repo/core package
 
 Path: `packages/core/`
 
@@ -107,25 +107,25 @@ Path: `packages/core/`
 
 Commit: `feat(core): add logger, env, errors, security primitives, server-action wrapper`
 
-## Step 4: @void/db package
+## Step 4: @repo/db package
 
 Path: `packages/db/`
 
 - Install: `bun add drizzle-orm postgres && bun add -D drizzle-kit`
 - Create `src/schema/users.ts`, `sessions.ts`, `accounts.ts`, `verifications.ts` per `context.md`
-- Create `src/client.ts` with Drizzle client init from `@void/core/env`
+- Create `src/client.ts` with Drizzle client init from `@repo/core/env`
 - Create `drizzle.config.ts` for migrations
 - Add scripts: `db:generate`, `db:migrate`, `db:studio`
 - Generate initial migration
 - Commit: `feat(db): add Drizzle schema with users, sessions, accounts, verifications`
 
-## Step 5: @void/auth package
+## Step 5: @repo/auth package
 
 Path: `packages/auth/`
 
 - Install: `bun add better-auth`
 - Read Better-Auth official docs for current API and Drizzle adapter setup
-- Create `src/auth.repository.ts` wrapping Better-Auth init with the Drizzle adapter from `@void/db`
+- Create `src/auth.repository.ts` wrapping Better-Auth init with the Drizzle adapter from `@repo/db`
 - Configure providers: email/password + Google OAuth + magic link
 - Configure plugins: admin (for `user` / `admin` roles), 2FA (scaffolded, opt-in)
 - Create `src/auth.service.ts` with public API: `getCurrentUser`, `requireAuth`, `requireRole`, `signIn.email`, `signIn.google`, `signIn.magicLink`, `signOut`
@@ -135,7 +135,7 @@ Path: `packages/auth/`
 - Tests: `auth.service.test.ts` with mocked repository, `auth.policy.test.ts` pure
 - Commit: `feat(auth): wire Better-Auth with email/password, Google OAuth, magic link, roles`
 
-## Step 6: @void/ui package
+## Step 6: @repo/ui package
 
 Path: `packages/ui/`
 
@@ -153,10 +153,10 @@ Path: `packages/ui/`
 
 ### 7.1 Next.js bootstrap
 - Manually scaffold Next.js 16 in `apps/web/` (avoid create-next-app, which does not understand the workspace layout)
-- `package.json` with `"next": "^16.2.x"`, `"react": "^19.2.x"`, deps on `@void/core`, `@void/auth`, `@void/db`, `@void/ui`
-- `next.config.ts`: import security headers from `@void/core/security-headers`, set `experimental.cacheComponents: true`
-- `tsconfig.json` extending `@void/config/tsconfig.next.json`
-- Wire `app/layout.tsx`, `app/globals.css` (importing `@void/ui` styles)
+- `package.json` with `"next": "^16.2.x"`, `"react": "^19.2.x"`, deps on `@repo/core`, `@repo/auth`, `@repo/db`, `@repo/ui`
+- `next.config.ts`: import security headers from `@repo/core/security-headers`, set `experimental.cacheComponents: true`
+- `tsconfig.json` extending `@repo/config/tsconfig.next.json`
+- Wire `app/layout.tsx`, `app/globals.css` (importing `@repo/ui` styles)
 - Commit: `feat(web): bootstrap Next.js 16 app with security headers`
 
 ### 7.2 instrumentation.ts
@@ -186,14 +186,14 @@ Path: `packages/ui/`
 
 ### 7.6 Home page
 - Create `src/app/page.tsx` with hero + CTA + feature highlights
-- Showcase design tokens from `@void/ui`
+- Showcase design tokens from `@repo/ui`
 - Commit: `feat(web): add home page`
 
 ## Step 8: Test setup
 
 ### 8.1 Vitest
 - Install at packages level: `bun add -D vitest @vitest/ui @testing-library/react @testing-library/dom jsdom`
-- Each package has a `vitest.config.ts` extending `@void/config/vitest.base.ts`
+- Each package has a `vitest.config.ts` extending `@repo/config/vitest.base.ts`
 - Add scripts via Turborepo: `test`, `test:ui`, `test:watch`, `test:coverage`
 - Commit: `chore: configure Vitest across workspaces`
 
@@ -224,7 +224,7 @@ Demonstrates: pure helper extracted from JSX, helper tested without rendering, t
 Path: `apps/web/src/components/_examples/UserProfileCard/`
 
 ```
-UserProfileCard.tsx           # consumes @void/auth getCurrentUser, includes inline edit form
+UserProfileCard.tsx           # consumes @repo/auth getCurrentUser, includes inline edit form
 UserProfileCard.helper.ts     # formatJoinDate, computeStatus
 UserProfileCard.helper.test.ts
 UserProfileCard.types.ts      # Zod schema for received data
@@ -235,14 +235,14 @@ Demonstrates: `useActionState` + `useOptimistic`, Zod validation of server data,
 
 ### 9.3 Full service example
 
-`@void/auth` itself serves as the canonical service. Document the rationale and reading order in `docs/PATTERNS.md`.
+`@repo/auth` itself serves as the canonical service. Document the rationale and reading order in `docs/PATTERNS.md`.
 
 Commit: `feat(examples): add canonical component examples`
 
 ## Step 10: Optional modules
 
 ### 10.1 _modules/observability-sentry
-- Workspace package `@void/sentry`
+- Workspace package `@repo/sentry`
 - Read Sentry official docs for Next.js 16 integration
 - Implement: server init via `instrumentation.ts` register, client SDK init via lazy provider
 - Tunnel proxy: route handler `apps/web/src/app/monitoring/route.ts` documented in module README
@@ -251,7 +251,7 @@ Commit: `feat(examples): add canonical component examples`
 - Commit: `feat(modules): add observability-sentry module`
 
 ### 10.2 _modules/analytics-posthog
-- Workspace package `@void/posthog`
+- Workspace package `@repo/posthog`
 - Read PostHog official docs for Next.js + reverse proxy patterns
 - Implement: client SDK with `api_host: '/ingest'`, AnalyticsProvider with build-time DCE on `NEXT_PUBLIC_POSTHOG_KEY`
 - Rewrites proxy in `next.config.ts`: `/ingest/:path*` to `https://eu.i.posthog.com/:path*`
@@ -280,7 +280,7 @@ Write per the meta-rule: every convention or primitive introduced in earlier ste
 - `docs/PATTERNS.md` - KISS / DRY / SoC + naming + service file layout + when to split a package
 - `docs/ARCHITECTURE.md` - package boundaries + dependency direction + service vs action vs repository placement + tier 1 (always-on) vs tier 2 (opt-in)
 - `docs/SECURITY.md` - OWASP Top 10 mapping + RGPD checklist + primitive references with code pointers
-- `docs/AUTH.md` - public API of `@void/auth` + sign-in flow diagram + switching to `_modules/auth-clerk`
+- `docs/AUTH.md` - public API of `@repo/auth` + sign-in flow diagram + switching to `_modules/auth-clerk`
 - `docs/CACHING.md` - `"use cache"` placement + `cacheTag` conventions + `updateTag` in actions
 - `docs/MODULES.md` - catalogue + activation patterns (real package vs copy-paste) + how to write a new module
 
@@ -330,8 +330,8 @@ Run from repo root unless noted:
 - Verify all canonical examples render in dev (`bun run dev`)
 - Verify CLAUDE.md correctly references all `docs/*.md` paths
 - Verify `apps/web` end-to-end: home > sign-up > email verify (dev console) > sign-in > dashboard > admin (with role flip in DB studio)
-- Verify a sample MVP can install Sentry: add `@void/sentry` to `apps/web/package.json`, set `SENTRY_DSN`, rebuild, trigger error, verify report
-- Verify a sample MVP can install PostHog: add `@void/posthog`, set `NEXT_PUBLIC_POSTHOG_KEY`, rebuild, navigate, verify event captured via proxy
+- Verify a sample MVP can install Sentry: add `@repo/sentry` to `apps/web/package.json`, set `SENTRY_DSN`, rebuild, trigger error, verify report
+- Verify a sample MVP can install PostHog: add `@repo/posthog`, set `NEXT_PUBLIC_POSTHOG_KEY`, rebuild, navigate, verify event captured via proxy
 
 Commit: `chore: final starter validation`
 

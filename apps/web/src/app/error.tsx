@@ -1,11 +1,11 @@
 'use client';
 
-import { Button } from '@void/ui';
+import { Button } from '@repo/ui';
 import { useEffect } from 'react';
 
 export default function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
-    // Future: forward to @void/sentry when installed (Phase D module).
+    // Future: forward to @repo/sentry when installed (Phase D module).
     // pino is server-only (ADR 22), so the browser-side error path stays on
     // console.error until the Sentry module is wired.
     // biome-ignore lint/suspicious/noConsole: documented Sentry placeholder; see comment above

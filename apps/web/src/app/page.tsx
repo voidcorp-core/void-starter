@@ -1,5 +1,5 @@
-import { getCurrentUser } from '@void/auth';
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { getCurrentUser } from '@repo/auth';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import Link from 'next/link';
 
 export default async function HomePage() {

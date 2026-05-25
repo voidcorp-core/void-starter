@@ -4,15 +4,15 @@
 
 **Goal:** Build `apps/web` as a fully functional Next.js 16 application that consumes the Phase A + B packages and demonstrates the canonical patterns (sign-in/sign-up/reset-password/verify-email pages, protected dashboard, admin-only page, home page, canonical component examples). Add Vitest at app level and Playwright with end-to-end auth tests.
 
-**Architecture:** `apps/web` is the only app at J0. It demonstrates how a Void Factory MVP consumes `@void/core`, `@void/auth`, `@void/db`, `@void/ui`. Server Actions live in `apps/web/src/actions/` and use `defineAction` (RPC) or `defineFormAction` (FormData + `useActionState`) from `@void/auth`. The `instrumentation.ts` is wired with stubs ready to receive opt-in modules in Phase D. Security headers from `@void/core` are wired in `next.config.ts`. Auth pages use Better-Auth's React client (`useSession`, `signIn`, `signOut`, `signUp` from `@void/auth` via `authClient`); the server-side `signIn` namespace was intentionally REMOVED in the post-audit (ADR not — see commit `2dca9b3`).
+**Architecture:** `apps/web` is the only app at J0. It demonstrates how a Void Factory MVP consumes `@repo/core`, `@repo/auth`, `@repo/db`, `@repo/ui`. Server Actions live in `apps/web/src/actions/` and use `defineAction` (RPC) or `defineFormAction` (FormData + `useActionState`) from `@repo/auth`. The `instrumentation.ts` is wired with stubs ready to receive opt-in modules in Phase D. Security headers from `@repo/core` are wired in `next.config.ts`. Auth pages use Better-Auth's React client (`useSession`, `signIn`, `signOut`, `signUp` from `@repo/auth` via `authClient`); the server-side `signIn` namespace was intentionally REMOVED in the post-audit (ADR not — see commit `2dca9b3`).
 
 **Tech Stack added in this phase:** Next.js 16.2, React 19.2, @playwright/test, jsdom, @testing-library/react.
 
-**Reference:** `context.md` Architecture principles + Topology, `starter-plan.md` Steps 7-9, `docs/DECISIONS.md` entries 03 (.actions placement), 04 (build-time module activation), 08 (service layout), 12 (lazy `getDb()`), 15 (`@void/auth` declaration:false), 16 (RSC boundary), 17 (CVA), 18 (Radix substrate), 19 (dark mode), 20 (Form composition), 21 (`defineFormAction`), 22 (pino).
+**Reference:** `context.md` Architecture principles + Topology, `starter-plan.md` Steps 7-9, `docs/DECISIONS.md` entries 03 (.actions placement), 04 (build-time module activation), 08 (service layout), 12 (lazy `getDb()`), 15 (`@repo/auth` declaration:false), 16 (RSC boundary), 17 (CVA), 18 (Radix substrate), 19 (dark mode), 20 (Form composition), 21 (`defineFormAction`), 22 (pino).
 
 **Pre-conditions:**
 - `git tag phase-b-complete` exists at `44823e9` on origin (post-audit polish landed AFTER the tag; do NOT move the tag)
-- `bun run test` passes all unit tests across `@void/core`, `@void/db`, `@void/auth`, `@void/ui`
+- `bun run test` passes all unit tests across `@repo/core`, `@repo/db`, `@repo/auth`, `@repo/ui`
 - Neon dev branch URL pulled into `.env.local` (`vercel env pull .env.local`) and migration applied (ADR 11)
 
 ---
@@ -21,36 +21,36 @@
 
 Phase B shipped, then a 6-lot post-audit polish landed (24 commits after `phase-b-complete`). The Phase C plan was drafted BEFORE that audit, so the snippets below already account for these changes. Re-read this section before touching any task; the surface differences from a "fresh post-Phase-B" mental model are non-trivial:
 
-1. **`@void/db` exposes `getDb()`, not a `db` const.** Lazy memoized singleton via `globalThis` (ADR 12). Imports: `import { getDb } from '@void/db'`. Schema barrel still at `@void/db/schema`. Drizzle tables are PLURAL (`users`, `sessions`, `accounts`, `verifications`); Better-Auth maps to canonical singular models via `modelName`. All `id` columns are `text` (Better-Auth assigns ids itself). The `users` table has extension columns `role` (text default 'user') and `deletedAt` (timestamptz nullable, soft-delete; service-layer must filter `WHERE deleted_at IS NULL`).
+1. **`@repo/db` exposes `getDb()`, not a `db` const.** Lazy memoized singleton via `globalThis` (ADR 12). Imports: `import { getDb } from '@repo/db'`. Schema barrel still at `@repo/db/schema`. Drizzle tables are PLURAL (`users`, `sessions`, `accounts`, `verifications`); Better-Auth maps to canonical singular models via `modelName`. All `id` columns are `text` (Better-Auth assigns ids itself). The `users` table has extension columns `role` (text default 'user') and `deletedAt` (timestamptz nullable, soft-delete; service-layer must filter `WHERE deleted_at IS NULL`).
 
-2. **`@void/auth` server surface dropped `signIn`.** The `signIn` server-side namespace was REMOVED in commit `2dca9b3` — cookie passthrough was broken. `auth.service` now exports only `getCurrentUser`, `requireAuth`, `requireRole`, `signOut`. All sign-in / sign-up / magic-link flows go through the BROWSER client (`authClient.signIn.email`, `authClient.signUp.email`, `authClient.signIn.magicLink`, `authClient.signIn.social`) which is exposed at `@void/auth` (re-exports `authClient`, `signIn`, `signOut`, `signUp`, `useSession`).
+2. **`@repo/auth` server surface dropped `signIn`.** The `signIn` server-side namespace was REMOVED in commit `2dca9b3` — cookie passthrough was broken. `auth.service` now exports only `getCurrentUser`, `requireAuth`, `requireRole`, `signOut`. All sign-in / sign-up / magic-link flows go through the BROWSER client (`authClient.signIn.email`, `authClient.signUp.email`, `authClient.signIn.magicLink`, `authClient.signIn.social`) which is exposed at `@repo/auth` (re-exports `authClient`, `signIn`, `signOut`, `signUp`, `useSession`).
 
-3. **`@void/auth` exposes `defineAction` AND `defineFormAction`** (ADR 21). RPC version throws on validation/auth failures (use with RHF `handleSubmit`). Form version returns `ActionState` (`{ ok: true, data } | { ok: false, fieldErrors, formError? }`) — wire it to React 19 `useActionState`. Both re-export `ActionState` and `initialActionState`. ALWAYS import from `@void/auth`, never from `@void/core/server-action` directly (the bare core has stub auth resolution; ADR 5).
+3. **`@repo/auth` exposes `defineAction` AND `defineFormAction`** (ADR 21). RPC version throws on validation/auth failures (use with RHF `handleSubmit`). Form version returns `ActionState` (`{ ok: true, data } | { ok: false, fieldErrors, formError? }`) — wire it to React 19 `useActionState`. Both re-export `ActionState` and `initialActionState`. ALWAYS import from `@repo/auth`, never from `@repo/core/server-action` directly (the bare core has stub auth resolution; ADR 5).
 
-4. **`@void/auth` opts out of `.d.ts` declaration emit (ADR 15).** Type resolution flows through the package's TS source via `package.json#exports`. `apps/web` resolves it correctly out of the box. No action required, but do NOT add `declaration: true` to `packages/auth/tsconfig.json`.
+4. **`@repo/auth` opts out of `.d.ts` declaration emit (ADR 15).** Type resolution flows through the package's TS source via `package.json#exports`. `apps/web` resolves it correctly out of the box. No action required, but do NOT add `declaration: true` to `packages/auth/tsconfig.json`.
 
-5. **`RateLimitError` exists at `@void/core/errors`** (extends `AppError`, code `RATE_LIMITED`, status 429, readonly `retryAfterSeconds`). `defineFormAction` maps it to `formError` automatically. The in-memory limiter helper is `createMemoryRateLimit` (renamed from `createInMemoryRateLimit`), with a heavy footgun warning in JSDoc: per-process map, useless on serverless. Production must use the Phase D `_modules/rate-limit-upstash`.
+5. **`RateLimitError` exists at `@repo/core/errors`** (extends `AppError`, code `RATE_LIMITED`, status 429, readonly `retryAfterSeconds`). `defineFormAction` maps it to `formError` automatically. The in-memory limiter helper is `createMemoryRateLimit` (renamed from `createInMemoryRateLimit`), with a heavy footgun warning in JSDoc: per-process map, useless on serverless. Production must use the Phase D `_modules/rate-limit-upstash`.
 
-6. **`@void/core/env` exports `required(name)`** (ADR 13). Throws `Missing required env var: NAME`. Use it for cheap presence checks (e.g., in config files, route handlers). For Zod-validated app envs, keep `createAppEnv`.
+6. **`@repo/core/env` exports `required(name)`** (ADR 13). Throws `Missing required env var: NAME`. Use it for cheap presence checks (e.g., in config files, route handlers). For Zod-validated app envs, keep `createAppEnv`.
 
-7. **`@void/ui` is now Radix-backed and CVA-driven** (ADRs 17, 18). DO NOT use `forwardRef` in any consumer code — React 19 ref-as-prop is the idiom. DO NOT hand-roll variant maps — wrap CVA. Public components shipped:
+7. **`@repo/ui` is now Radix-backed and CVA-driven** (ADRs 17, 18). DO NOT use `forwardRef` in any consumer code — React 19 ref-as-prop is the idiom. DO NOT hand-roll variant maps — wrap CVA. Public components shipped:
    - **Card** has 6 slots: `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. `CardBody` does NOT exist; use `CardContent`.
    - **Avatar** is on `@radix-ui/react-avatar`. Public API: `<Avatar src? alt? fallback size? className? />`.
    - **Button** has `asChild?: boolean` via `@radix-ui/react-slot`. Use `<Button asChild><Link href="/x">Go</Link></Button>` for button-as-link instead of wrapping a `<Button>` inside a `<Link>`.
    - **Label** is on `@radix-ui/react-label`.
    - **Skeleton** is `<Skeleton radius="sm|md|lg|full|none" />` (server component, no `'use client'`).
    - **Spinner** is `<Spinner size="sm|md|lg|xl" label? />` on `lucide-react` Loader2.
-   - **Toaster** + `toast`: import from `@void/ui` (not `sonner` directly). Mount `<Toaster />` once in the root layout. Call `toast.success(...)`, `toast.error(...)`, etc.
-   - **ThemeProvider** + `useTheme`: import from `@void/ui` (wraps `next-themes`). Mount `<ThemeProvider attribute="class" defaultTheme="system" enableSystem>` in the root layout (ADR 19). Tailwind v4 `dark:` variant + `.dark` palette in `globals.css`.
+   - **Toaster** + `toast`: import from `@repo/ui` (not `sonner` directly). Mount `<Toaster />` once in the root layout. Call `toast.success(...)`, `toast.error(...)`, etc.
+   - **ThemeProvider** + `useTheme`: import from `@repo/ui` (wraps `next-themes`). Mount `<ThemeProvider attribute="class" defaultTheme="system" enableSystem>` in the root layout (ADR 19). Tailwind v4 `dark:` variant + `.dark` palette in `globals.css`.
    - **Form composition**: `Form`, `FormField`, `FormItem`, `FormLabel`, `FormControl` (Radix Slot, auto-wires aria), `FormDescription`, `FormMessage`, `useFormField` (ADR 20). Pattern: `useForm({ resolver: zodResolver(schema), defaultValues })`. ALL Form composition components are `'use client'`.
    - **`tokens.ts` was deleted.** Tailwind v4 `@theme` in `packages/ui/src/styles/globals.css` is the source of truth. Do not reference a `tokens` accessor anywhere.
-   - **`cn`** from `@void/ui` (clsx + tailwind-merge).
+   - **`cn`** from `@repo/ui` (clsx + tailwind-merge).
 
 8. **Versions installed (post-Lot F).** TypeScript ^6.0.3, Vitest ^4.1.5, @vitest/coverage-v8 ^4.1.5, @t3-oss/env-nextjs ^0.13.11, drizzle-orm ^0.45.0, drizzle-kit ^0.31.0, postgres ^3.4.0, better-auth ^1.6.0, @better-auth/drizzle-adapter ^1.6.0, react-hook-form ^7.75.0, @hookform/resolvers ^5.2.2, class-variance-authority ^0.7.1, clsx ^2.1.1, tailwind-merge ^3.5.0, lucide-react ^1.14.0, @radix-ui/react-avatar ^1.1.11, @radix-ui/react-slot ^1.2.4, @radix-ui/react-label ^2.1.8, next-themes ^0.4.6, sonner ^2.0.7, @testing-library/react ^16.0.0, @testing-library/user-event ^14.6.1, @testing-library/jest-dom ^6.9.1, jsdom ^25.0.0, pino ^9.5.0, pino-pretty ^11.3.0, zod ^3.23.0. Reference these when writing `apps/web/package.json` so the lockfile stays consistent.
 
-9. **`packages/<name>/vitest.config.ts` shape.** Mirror `packages/auth/vitest.config.ts` (single `import { baseConfig } from '@void/config/vitest.base'; export default baseConfig`) UNLESS the package needs jsdom (`apps/web`). The base already sets `passWithNoTests: true` (ADR 14), so do NOT add `--passWithNoTests` per-package.
+9. **`packages/<name>/vitest.config.ts` shape.** Mirror `packages/auth/vitest.config.ts` (single `import { baseConfig } from '@repo/config/vitest.base'; export default baseConfig`) UNLESS the package needs jsdom (`apps/web`). The base already sets `passWithNoTests: true` (ADR 14), so do NOT add `--passWithNoTests` per-package.
 
-10. **`pino` is the logger** (ADR 22). For Phase C, no manual logger plumbing required; the dev-mode magic link handler in `@void/auth` already logs through pino. Just be aware that the dev console output is JSON-pretty rather than raw text when grepping E2E logs.
+10. **`pino` is the logger** (ADR 22). For Phase C, no manual logger plumbing required; the dev-mode magic link handler in `@repo/auth` already logs through pino. Just be aware that the dev console output is JSON-pretty rather than raw text when grepping E2E logs.
 
 ---
 
@@ -81,7 +81,7 @@ Read `docs/superpowers/plans/2026-05-07-phase-a-foundation.md` "Phase A learning
 
 ```json
 {
-  "name": "@void/web",
+  "name": "@repo/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -97,10 +97,10 @@ Read `docs/superpowers/plans/2026-05-07-phase-a-foundation.md` "Phase A learning
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@void/auth": "workspace:*",
-    "@void/core": "workspace:*",
-    "@void/db": "workspace:*",
-    "@void/ui": "workspace:*",
+    "@repo/auth": "workspace:*",
+    "@repo/core": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@repo/ui": "workspace:*",
     "next": "^16.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -114,7 +114,7 @@ Read `docs/superpowers/plans/2026-05-07-phase-a-foundation.md` "Phase A learning
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "jsdom": "^25.0.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
@@ -127,7 +127,7 @@ NOTE: Versions above match the post-Phase-B-audit lockfile (Lot F). Verify Next 
 
 - [ ] Install: `bun install`
 - [ ] Add to knip.json with appropriate apps/web entry (default in current knip.json already covers apps/*).
-- [ ] Verify `node_modules/@void/web` symlink exists.
+- [ ] Verify `node_modules/@repo/web` symlink exists.
 - [ ] Commit: `chore(web): scaffold apps/web Next.js app skeleton`
 
 ### Task C2: Next.js config + tsconfig
@@ -141,7 +141,7 @@ NOTE: Versions above match the post-Phase-B-audit lockfile (Lot F). Verify Next 
 
 ```json
 {
-  "extends": "@void/config/tsconfig.next.json",
+  "extends": "@repo/config/tsconfig.next.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
@@ -157,7 +157,7 @@ NOTE: Versions above match the post-Phase-B-audit lockfile (Lot F). Verify Next 
 
 ```ts
 import type { NextConfig } from 'next';
-import { defaultSecurityHeaders } from '@void/core/security-headers';
+import { defaultSecurityHeaders } from '@repo/core/security-headers';
 
 const config: NextConfig = {
   experimental: {
@@ -171,7 +171,7 @@ const config: NextConfig = {
       },
     ];
   },
-  transpilePackages: ['@void/auth', '@void/core', '@void/db', '@void/ui'],
+  transpilePackages: ['@repo/auth', '@repo/core', '@repo/db', '@repo/ui'],
 };
 
 export default config;
@@ -210,10 +210,10 @@ cd apps/web && bun add -D @tailwindcss/postcss && cd ../..
 - [ ] **Create `apps/web/src/app/globals.css`**
 
 ```css
-@import "@void/ui/styles/globals.css";
+@import "@repo/ui/styles/globals.css";
 ```
 
-- [ ] Commit: `feat(web): wire Tailwind v4 via @void/ui design tokens`
+- [ ] Commit: `feat(web): wire Tailwind v4 via @repo/ui design tokens`
 
 ### Task C4: instrumentation.ts (opt-in modules entry point)
 
@@ -226,13 +226,13 @@ export async function register() {
   // env var is not set at build time.
 
   if (process.env['SENTRY_DSN']) {
-    // Phase D installs @void/sentry and uncomments this:
-    // const { register: registerSentry } = await import('@void/sentry/server');
+    // Phase D installs @repo/sentry and uncomments this:
+    // const { register: registerSentry } = await import('@repo/sentry/server');
     // await registerSentry();
   }
 
   // PostHog client-side init lives in a Client Component, not here.
-  // See @void/posthog README in Phase D.
+  // See @repo/posthog README in Phase D.
 }
 ```
 
@@ -250,24 +250,24 @@ Reference: `https://www.better-auth.com/docs/integrations/next`. Confirm the hel
 
 ```ts
 import { toNextJsHandler } from 'better-auth/next-js';
-import { auth } from '@void/auth/repository';
+import { auth } from '@repo/auth/repository';
 
 export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-- [ ] Verify build does not error on this file. Note: `@void/auth/repository` is the subpath export of `packages/auth`; the route handler is the only place that should import `auth` directly. Everything else uses the public surface (`@void/auth`) for `getCurrentUser` / `requireAuth` / `defineAction`. ADR 15 — `@void/auth` opts out of `.d.ts` declaration emit, so type resolution flows through TS source automatically.
+- [ ] Verify build does not error on this file. Note: `@repo/auth/repository` is the subpath export of `packages/auth`; the route handler is the only place that should import `auth` directly. Everything else uses the public surface (`@repo/auth`) for `getCurrentUser` / `requireAuth` / `defineAction`. ADR 15 — `@repo/auth` opts out of `.d.ts` declaration emit, so type resolution flows through TS source automatically.
 - [ ] Commit: `feat(web): wire Better-Auth route handler at /api/auth/[...all]`
 
 ### Task C6: Root layout
 
 **Files:** Create `apps/web/src/app/layout.tsx`
 
-The root layout mounts `<ThemeProvider>` (next-themes wrapper, ADR 19) and `<Toaster>` (sonner, ADR not — see commit `5fd22c7`) ONCE for the whole app. Both are imported from `@void/ui`. Adding `suppressHydrationWarning` on `<html>` is required by next-themes to avoid the class-based theme attribute mismatching the SSR output on first paint.
+The root layout mounts `<ThemeProvider>` (next-themes wrapper, ADR 19) and `<Toaster>` (sonner, ADR not — see commit `5fd22c7`) ONCE for the whole app. Both are imported from `@repo/ui`. Adding `suppressHydrationWarning` on `<html>` is required by next-themes to avoid the class-based theme attribute mismatching the SSR output on first paint.
 
 ```tsx
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { ThemeProvider, Toaster } from '@void/ui';
+import { ThemeProvider, Toaster } from '@repo/ui';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -329,8 +329,8 @@ This is a pure server component (no `'use client'`): `Card`, `CardHeader`, `Card
 
 ```tsx
 import Link from 'next/link';
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@void/ui';
-import { getCurrentUser } from '@void/auth';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
+import { getCurrentUser } from '@repo/auth';
 
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -379,7 +379,7 @@ export default async function HomePage() {
 
 **Files:** Create `apps/web/src/actions/auth.actions.ts`
 
-CRITICAL: the server-side `signIn` namespace was REMOVED from `@void/auth` in the post-audit (cookie passthrough was broken; commit `2dca9b3`). All sign-in / sign-up / magic-link flows MUST go through the BROWSER client (`authClient.signIn.email`, `authClient.signUp.email`, `authClient.signIn.magicLink`, `authClient.signIn.social`) directly from a `'use client'` component — see Tasks C10-C14.
+CRITICAL: the server-side `signIn` namespace was REMOVED from `@repo/auth` in the post-audit (cookie passthrough was broken; commit `2dca9b3`). All sign-in / sign-up / magic-link flows MUST go through the BROWSER client (`authClient.signIn.email`, `authClient.signUp.email`, `authClient.signIn.magicLink`, `authClient.signIn.social`) directly from a `'use client'` component — see Tasks C10-C14.
 
 The only Server Action this app needs at `apps/web/src/actions/auth.actions.ts` is `signOutAction`. (If a future flow needs server-side credential redemption, add a single typed helper deliberately rather than re-exposing `auth.api.signIn*`.)
 
@@ -387,7 +387,7 @@ The only Server Action this app needs at `apps/web/src/actions/auth.actions.ts` 
 'use server';
 
 import { redirect } from 'next/navigation';
-import { signOut } from '@void/auth';
+import { signOut } from '@repo/auth';
 
 export async function signOutAction() {
   await signOut();
@@ -395,13 +395,13 @@ export async function signOutAction() {
 }
 ```
 
-The `defineAction` and `defineFormAction` factories from `@void/auth` (ADR 21) ARE used elsewhere in `apps/web/src/actions/` — for example, in Tasks C24 (`UserProfileCard.actions.ts` for `updateProfileAction`) and any future domain action. Their canonical shape:
+The `defineAction` and `defineFormAction` factories from `@repo/auth` (ADR 21) ARE used elsewhere in `apps/web/src/actions/` — for example, in Tasks C24 (`UserProfileCard.actions.ts` for `updateProfileAction`) and any future domain action. Their canonical shape:
 
 ```ts
 'use server';
 
 import { z } from 'zod';
-import { defineFormAction } from '@void/auth';
+import { defineFormAction } from '@repo/auth';
 
 export const exampleAction = defineFormAction({
   schema: z.object({ name: z.string().min(1) }),
@@ -425,7 +425,7 @@ Pair with React 19 `useActionState` on the client. Returns `{ ok: true, data }` 
 
 - [ ] **Create the sign-in page**
 
-The page is `'use client'` because it uses `useForm` (RHF) and the Form composition. Sign-in goes through `authClient.signIn.email` (browser flow); the server-side `signIn` namespace was removed in the post-audit. Errors from the client return `{ data, error }` (Better-Auth convention) — render the error via `toast.error` from `@void/ui`. Redirect on success via `router.push('/dashboard')` (NOT `window.location.href` — `router.push` keeps client navigation cache warm).
+The page is `'use client'` because it uses `useForm` (RHF) and the Form composition. Sign-in goes through `authClient.signIn.email` (browser flow); the server-side `signIn` namespace was removed in the post-audit. Errors from the client return `{ data, error }` (Better-Auth convention) — render the error via `toast.error` from `@repo/ui`. Redirect on success via `router.push('/dashboard')` (NOT `window.location.href` — `router.push` keeps client navigation cache warm).
 
 ```tsx
 'use client';
@@ -435,7 +435,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { authClient } from '@void/auth';
+import { authClient } from '@repo/auth';
 import {
   Button,
   Card,
@@ -450,7 +450,7 @@ import {
   FormMessage,
   Input,
   toast,
-} from '@void/ui';
+} from '@repo/ui';
 
 const signInSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -573,7 +573,7 @@ Server component. Reads the `token` query param via `searchParams`, calls Better
 
 **Files:** Create `apps/web/src/app/(auth)/magic-link/page.tsx`
 
-Client component, RHF + Form composition. Single email field. Submit calls `authClient.signIn.magicLink({ email, callbackURL: '/dashboard' })`. Toast success ("Check your email") on `{ error: null }`, toast error otherwise. In dev, the magic link is logged via `pino` from `@void/auth`'s `sendMagicLink` stub (ADR 22) — the E2E test in Task C32 reads the dev server stdout for the URL.
+Client component, RHF + Form composition. Single email field. Submit calls `authClient.signIn.magicLink({ email, callbackURL: '/dashboard' })`. Toast success ("Check your email") on `{ error: null }`, toast error otherwise. In dev, the magic link is logged via `pino` from `@repo/auth`'s `sendMagicLink` stub (ADR 22) — the E2E test in Task C32 reads the dev server stdout for the URL.
 
 - [ ] Commit: `feat(web): add magic-link request page`
 
@@ -585,13 +585,13 @@ Components canonical layout (mirrors the 5-file service convention from ADR 8 ad
 ```
 UserMenu/
 ├── UserMenu.tsx           # client component, dropdown with Sign out button
-├── UserMenu.helper.ts     # extracts label / initials (re-uses computeInitials from @void/auth)
+├── UserMenu.helper.ts     # extracts label / initials (re-uses computeInitials from @repo/auth)
 ├── UserMenu.helper.test.ts
 ├── UserMenu.types.ts
 └── index.ts
 ```
 
-The Sign out button calls `signOutAction()` from `@/actions/auth.actions`. Uses `useSession` from `@void/auth` (re-exported from `authClient`) to read current state in the browser. Render the user's avatar via `<Avatar src={user.image} fallback={computeInitials(user)} />` from `@void/ui` — `computeInitials` is already exported from `@void/auth` (no need to re-implement). Wrap the trigger in `<Button asChild variant="ghost">` to render an accessible trigger element.
+The Sign out button calls `signOutAction()` from `@/actions/auth.actions`. Uses `useSession` from `@repo/auth` (re-exported from `authClient`) to read current state in the browser. Render the user's avatar via `<Avatar src={user.image} fallback={computeInitials(user)} />` from `@repo/ui` — `computeInitials` is already exported from `@repo/auth` (no need to re-implement). Wrap the trigger in `<Button asChild variant="ghost">` to render an accessible trigger element.
 
 - [ ] Commit: `feat(web): add UserMenu component with sign-out button`
 
@@ -604,8 +604,8 @@ The Sign out button calls `signOutAction()` from `@/actions/auth.actions`. Uses 
 **Files:** Create `apps/web/src/app/dashboard/page.tsx`
 
 ```tsx
-import { requireAuth } from '@void/auth';
-import { Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { requireAuth } from '@repo/auth';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 
 export default async function DashboardPage() {
   const user = await requireAuth();
@@ -649,14 +649,14 @@ Either pattern is acceptable for the starter; document the choice in `docs/DECIS
 
 **Files:** Create `apps/web/src/app/admin/page.tsx`
 
-`@void/db` exposes `getDb()` (lazy memoized singleton, ADR 12), NOT a `db` const. Call it once per request handler. The `users` table has a `deletedAt` soft-delete column; filter `WHERE deleted_at IS NULL` so this admin listing never surfaces tombstoned rows.
+`@repo/db` exposes `getDb()` (lazy memoized singleton, ADR 12), NOT a `db` const. Call it once per request handler. The `users` table has a `deletedAt` soft-delete column; filter `WHERE deleted_at IS NULL` so this admin listing never surfaces tombstoned rows.
 
 ```tsx
 import { isNull } from 'drizzle-orm';
-import { requireRole } from '@void/auth';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
-import { Card, CardContent, CardHeader, CardTitle } from '@void/ui';
+import { requireRole } from '@repo/auth';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 
 export default async function AdminPage() {
   await requireRole('admin');
@@ -705,7 +705,7 @@ export default async function AdminPage() {
 **Files:**
 - Create: `apps/web/src/app/not-found.tsx`
 
-- [ ] Standard Next 16 not-found component using @void/ui.
+- [ ] Standard Next 16 not-found component using @repo/ui.
 - [ ] Commit: `feat(web): add not-found page`
 
 ### Task C19: Error boundary
@@ -717,11 +717,11 @@ export default async function AdminPage() {
 'use client';
 
 import { useEffect } from 'react';
-import { Button } from '@void/ui';
+import { Button } from '@repo/ui';
 
 export default function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
-    // Future: forward to @void/sentry when installed (Phase D module).
+    // Future: forward to @repo/sentry when installed (Phase D module).
     // pino is server-only (ADR 22), so the browser-side error path stays on
     // console.error until the Sentry module is wired.
     console.error(error);
@@ -749,11 +749,11 @@ NOTE: this `console.error` is acceptable in a `'use client'` error boundary (Bio
 
 **Files:** Create `apps/web/vitest.config.ts`
 
-The `baseConfig` from `@void/config/vitest.base` already sets `passWithNoTests: true` (ADR 14); do not add `--passWithNoTests` to scripts. `apps/web` needs jsdom + Testing Library setup, so we override `environment` and `setupFiles`.
+The `baseConfig` from `@repo/config/vitest.base` already sets `passWithNoTests: true` (ADR 14); do not add `--passWithNoTests` to scripts. `apps/web` needs jsdom + Testing Library setup, so we override `environment` and `setupFiles`.
 
 ```ts
 import { defineConfig, mergeConfig } from 'vitest/config';
-import { baseConfig } from '@void/config/vitest.base';
+import { baseConfig } from '@repo/config/vitest.base';
 
 export default mergeConfig(
   baseConfig,
@@ -787,11 +787,11 @@ Already covered in Task C15. Verify tests run from app via `cd apps/web && bunx 
 
 **Files:** Create `apps/web/src/actions/auth.actions.test.ts`
 
-Since `signInWithEmailAction` was removed (Task C9), test `signOutAction` instead, OR test the canonical `defineFormAction`-based action introduced by Task C24 (`UserProfileCard.actions.ts`). Mock `@void/auth` (`vi.mock('@void/auth', ...)`) to stub `signOut` / `getCurrentUser`, and verify:
+Since `signInWithEmailAction` was removed (Task C9), test `signOutAction` instead, OR test the canonical `defineFormAction`-based action introduced by Task C24 (`UserProfileCard.actions.ts`). Mock `@repo/auth` (`vi.mock('@repo/auth', ...)`) to stub `signOut` / `getCurrentUser`, and verify:
 1. `signOutAction` calls the mocked `signOut` once and triggers a `redirect('/')` (catch the `NEXT_REDIRECT` digest).
 2. The example `defineFormAction`-wrapped action returns `{ ok: false, fieldErrors }` on schema failure and `{ ok: true, data }` on success.
 
-- [ ] Commit: `test(web): cover signOutAction and a defineFormAction with mocked @void/auth`
+- [ ] Commit: `test(web): cover signOutAction and a defineFormAction with mocked @repo/auth`
 
 ---
 
@@ -809,7 +809,7 @@ Demonstrates the canonical layout for a presentational component: pure helper ex
 
 **Files:** `apps/web/src/components/_examples/UserProfileCard/{UserProfileCard.tsx,UserProfileCard.helper.ts,UserProfileCard.helper.test.ts,UserProfileCard.types.ts,UserProfileCard.actions.ts,index.ts}`
 
-Component consumes `getCurrentUser` from `@void/auth`. Includes an inline edit form using `useActionState` + `useOptimistic`. The Server Action `updateProfileAction` lives next to it via the `apps/web` pattern (ADR 3) and uses `defineFormAction` from `@void/auth` (ADR 21):
+Component consumes `getCurrentUser` from `@repo/auth`. Includes an inline edit form using `useActionState` + `useOptimistic`. The Server Action `updateProfileAction` lives next to it via the `apps/web` pattern (ADR 3) and uses `defineFormAction` from `@repo/auth` (ADR 21):
 
 ```ts
 // UserProfileCard.actions.ts
@@ -817,9 +817,9 @@ Component consumes `getCurrentUser` from `@void/auth`. Includes an inline edit f
 
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { defineFormAction } from '@void/auth';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
+import { defineFormAction } from '@repo/auth';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
 
 export const updateProfileAction = defineFormAction({
   schema: z.object({ name: z.string().min(1, 'Name is required').max(100) }),
@@ -848,12 +848,12 @@ Brief readme explaining the two examples, what each demonstrates, and why a fres
 
 - [ ] Commit: `docs(web): add canonical examples README`
 
-### Task C26: Confirm @void/auth services as canonical service example
+### Task C26: Confirm @repo/auth services as canonical service example
 
-The plan in `context.md` says `@void/auth` itself serves as the canonical service. Add a one-paragraph note to `docs/PATTERNS.md` (which will be authored in Phase D Section "Documentation"). For now, ensure `packages/auth/README.md` says "this package is the canonical service example for the starter; mirror its file layout when creating new services."
+The plan in `context.md` says `@repo/auth` itself serves as the canonical service. Add a one-paragraph note to `docs/PATTERNS.md` (which will be authored in Phase D Section "Documentation"). For now, ensure `packages/auth/README.md` says "this package is the canonical service example for the starter; mirror its file layout when creating new services."
 
 - [ ] Modify `packages/auth/README.md` to add the canonical-example note.
-- [ ] Commit: `docs(auth): mark @void/auth as the canonical service example`
+- [ ] Commit: `docs(auth): mark @repo/auth as the canonical service example`
 
 ---
 
@@ -931,12 +931,12 @@ Test:
 4. Expect verification message OR auto-login (depends on `requireEmailVerification` config)
 5. Clean up: delete the test user from DB after
 
-NOTE: requires DATABASE_URL and a live Better-Auth setup. The teardown uses `getDb()` from `@void/db`:
+NOTE: requires DATABASE_URL and a live Better-Auth setup. The teardown uses `getDb()` from `@repo/db`:
 
 ```ts
 import { eq } from 'drizzle-orm';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
 
 const db = getDb();
 await db.delete(users).where(eq(users.email, testEmail));
@@ -950,7 +950,7 @@ await db.delete(users).where(eq(users.email, testEmail));
 
 **Files:** `apps/web/tests/e2e/auth-signin.spec.ts`
 
-1. Programmatically create a user via `auth.api.signUpEmail` in `beforeAll` (import `auth` from `@void/auth/repository`).
+1. Programmatically create a user via `auth.api.signUpEmail` in `beforeAll` (import `auth` from `@repo/auth/repository`).
 2. Test: navigate /sign-in, fill credentials, submit, verify redirect to /dashboard.
 3. Test: from dashboard, click sign-out, verify back at home with no session.
 4. Teardown: `getDb().delete(users).where(eq(users.email, testEmail))`.
@@ -971,7 +971,7 @@ await db.delete(users).where(eq(users.email, testEmail));
 
 ### Task C32: Auth E2E - magic link (dev console capture)
 
-In dev, the magic link is logged via the `@void/core` `pino` logger (ADR 22). pino emits JSON lines (or pretty lines via `pino-pretty` when `NODE_ENV !== 'production'`); the test reads the dev server stdout for the magic link URL and navigates to it. This is acceptable for the starter; production will replace the sender via `_modules/email-resend`.
+In dev, the magic link is logged via the `@repo/core` `pino` logger (ADR 22). pino emits JSON lines (or pretty lines via `pino-pretty` when `NODE_ENV !== 'production'`); the test reads the dev server stdout for the magic link URL and navigates to it. This is acceptable for the starter; production will replace the sender via `_modules/email-resend`.
 
 - [ ] Commit: `test(web): E2E magic link via dev console capture`
 

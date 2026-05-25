@@ -14,7 +14,7 @@ data or actions:
 
 | File | Role |
 |---|---|
-| `SimpleButton.tsx` | Presentational component. No `'use client'` unless the component itself needs browser APIs. Importing a client-marked `@void/ui` primitive is fine from a Server Component. |
+| `SimpleButton.tsx` | Presentational component. No `'use client'` unless the component itself needs browser APIs. Importing a client-marked `@repo/ui` primitive is fine from a Server Component. |
 | `SimpleButton.helper.ts` | Pure functions only. `formatLabel` transforms the label string: capitalizes, truncates at 40 chars, and upper-cases for primary tone. |
 | `SimpleButton.helper.test.ts` | Unit tests for the helper -- no React rendering, no jsdom requirements. Fast and isolated. |
 | `SimpleButton.types.ts` | All prop and variant types live here. Imported with `import type` at every call site. |
@@ -38,10 +38,10 @@ React 19 progressive-enhancement form pattern:
 |---|---|
 | `UserProfileCard.tsx` | Server Component default export. Calls `getCurrentUser()` server-side and passes the result as a prop to the client component. Imports and re-exports `UserProfileCardClient` as a named export (implementation detail, not on the barrel). |
 | `UserProfileCard.client.tsx` | `'use client'` boundary. Uses `useActionState` + `useOptimistic` to bind the Server Action to a `<form>` with instant optimistic feedback. |
-| `UserProfileCard.actions.ts` | `'use server'`. `updateProfileAction` is built with `defineFormAction` from `@void/auth` and `auth: 'required'`, which enforces an authenticated session before the Drizzle UPDATE runs. |
+| `UserProfileCard.actions.ts` | `'use server'`. `updateProfileAction` is built with `defineFormAction` from `@repo/auth` and `auth: 'required'`, which enforces an authenticated session before the Drizzle UPDATE runs. |
 | `UserProfileCard.helper.ts` | Three pure helpers: `formatJoinDate` (Intl formatting), `computeStatus` (soft-delete-aware role mapping), `validateNameInput` (pre-flight client UX check, separate from the Zod server schema). |
 | `UserProfileCard.helper.test.ts` | Full happy + edge-case coverage for all three helpers. No mocks, no jsdom, no rendering. |
-| `UserProfileCard.types.ts` | `UserProfileCardProps` typed against `SessionUser` from `@void/auth`. |
+| `UserProfileCard.types.ts` | `UserProfileCardProps` typed against `SessionUser` from `@repo/auth`. |
 | `index.ts` | Barrel: default-exports the Server Component wrapper and the prop types. Does NOT expose the client component or the action. |
 
 Key patterns illustrated:

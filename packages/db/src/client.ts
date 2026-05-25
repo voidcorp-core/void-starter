@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createAppEnv } from '@void/core/env';
+import { createAppEnv } from '@repo/core/env';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { z } from 'zod';

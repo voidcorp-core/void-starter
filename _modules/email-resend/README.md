@@ -1,12 +1,12 @@
-# @void/email-resend
+# @repo/email-resend
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
-Opt-in scaffold for transactional email via Resend (magic link delivery, password reset, account notifications, billing receipts) with React Email templates colocated. Replaces the dev-only `sendMagicLink` logger stub in `@void/auth` with a real sender.
+Opt-in scaffold for transactional email via Resend (magic link delivery, password reset, account notifications, billing receipts) with React Email templates colocated. Replaces the dev-only `sendMagicLink` logger stub in `@repo/auth` with a real sender.
 
 ## Why this module
 
-`@void/auth/auth.repository.ts` ships a development stub for the Better-Auth `magicLink.sendMagicLink` callback that logs the URL via the project logger. This is intentional per ADR 02 -- the starter does not bake a vendor email contract. Activate this module on the first MVP that needs real email delivery (typical trigger: production deploy where users actually click magic links). Resend is the 2026 default because of first-class React Email support, simple DX, and EU data residency option.
+`@repo/auth/auth.repository.ts` ships a development stub for the Better-Auth `magicLink.sendMagicLink` callback that logs the URL via the project logger. This is intentional per ADR 02 -- the starter does not bake a vendor email contract. Activate this module on the first MVP that needs real email delivery (typical trigger: production deploy where users actually click magic links). Resend is the 2026 default because of first-class React Email support, simple DX, and EU data residency option.
 
 ## Required env vars
 

@@ -15,21 +15,21 @@ type DefineActionConfig<TSchema extends ZodType, TResult> = {
 };
 
 // Phase A scaffolding: auth resolution stub. Phase B replaces this with a real
-// import from @void/auth. Anything other than 'public' will throw at call time
+// import from @repo/auth. Anything other than 'public' will throw at call time
 // until then.
 async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   if (auth === 'public') return { user: null };
-  throw new Error(`defineAction: auth mode "${auth}" requires @void/auth, available in Phase B`);
+  throw new Error(`defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`);
 }
 
 /**
  * Bare typed RPC Server Action factory.
  *
  * Auth resolution is a STUB: any non-`'public'` auth mode throws at handler
- * invocation time because this package has no dependency on `@void/auth` (by
+ * invocation time because this package has no dependency on `@repo/auth` (by
  * design — it lets the core be unit-tested in isolation).
  *
- * For real apps, import `defineAction` from `@void/auth` instead. That
+ * For real apps, import `defineAction` from `@repo/auth` instead. That
  * version wires the Better-Auth session into `ctx.user` and resolves
  * `'required'` / `'role:admin'` correctly. The bare version exported here
  * is only useful when testing the core without an auth dependency.
@@ -74,7 +74,7 @@ export function defineAction<TSchema extends ZodType, TResult>({
  *
  * STUB AUTH WARNING: same caveat as `defineAction`. The bare version exported
  * here resolves only `'public'`; any other auth mode throws at handler call
- * time. Import `defineFormAction` from `@void/auth` for real apps — that
+ * time. Import `defineFormAction` from `@repo/auth` for real apps — that
  * version wires the Better-Auth session into `ctx.user`. The bare version
  * is exported only so the core can be tested without an auth dependency.
  */

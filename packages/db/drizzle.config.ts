@@ -1,4 +1,4 @@
-import { required } from '@void/core/env';
+import { required } from '@repo/core/env';
 import { defineConfig } from 'drizzle-kit';
 
 // `dbCredentials.url` is exposed via a getter so the env read fires at

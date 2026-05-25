@@ -1,8 +1,8 @@
-# @void/rate-limit-upstash
+# @repo/rate-limit-upstash
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
-Opt-in scaffold for an Upstash Redis adapter implementing the `RateLimiter` interface from `@void/core/rate-limit`. The starter ships an in-memory limiter (correct for tests and single-process dev, but worthless on Vercel serverless where each invocation gets its own `Map`). Activate this module the moment an MVP needs real rate limiting in production.
+Opt-in scaffold for an Upstash Redis adapter implementing the `RateLimiter` interface from `@repo/core/rate-limit`. The starter ships an in-memory limiter (correct for tests and single-process dev, but worthless on Vercel serverless where each invocation gets its own `Map`). Activate this module the moment an MVP needs real rate limiting in production.
 
 ## Why this module
 
@@ -40,7 +40,7 @@ The module wraps `@upstash/ratelimit` to satisfy the `RateLimiter` interface dec
    import 'server-only';
    import { Ratelimit } from '@upstash/ratelimit';
    import { Redis } from '@upstash/redis';
-   import type { RateLimiter, RateLimitConfig } from '@void/core/rate-limit';
+   import type { RateLimiter, RateLimitConfig } from '@repo/core/rate-limit';
 
    export function createUpstashRateLimit(config: RateLimitConfig): RateLimiter {
      const limiter = new Ratelimit({

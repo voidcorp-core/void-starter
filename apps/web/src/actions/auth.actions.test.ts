@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@void/auth', () => ({
+vi.mock('@repo/auth', () => ({
   signOut: vi.fn(async () => {}),
 }));
 
 describe('signOutAction', () => {
   it('calls signOut once then triggers a NEXT_REDIRECT to /', async () => {
     const { signOutAction } = await import('./auth.actions');
-    const { signOut } = await import('@void/auth');
+    const { signOut } = await import('@repo/auth');
 
     await expect(signOutAction()).rejects.toThrow();
 
@@ -31,4 +31,4 @@ describe('signOutAction', () => {
 
 // TODO(C24): once UserProfileCard.actions.ts ships updateProfileAction, add a
 // describe block here covering the defineFormAction success / schema-failure
-// paths with a mocked @void/auth (defineFormAction + getCurrentUser).
+// paths with a mocked @repo/auth (defineFormAction + getCurrentUser).

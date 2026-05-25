@@ -1,7 +1,7 @@
 'use client';
 
-import { authClient } from '@void/auth/client';
-import { Button, Card, CardContent, CardHeader, CardTitle, toast } from '@void/ui';
+import { authClient } from '@repo/auth/client';
+import { Button, Card, CardContent, CardHeader, CardTitle, toast } from '@repo/ui';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 

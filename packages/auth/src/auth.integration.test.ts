@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
 import { eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // `server-only` throws in non-Next.js environments (including vitest). Mock it
-// globally here so imports of `@void/db` and `@void/auth` work in tests.
+// globally here so imports of `@repo/db` and `@repo/auth` work in tests.
 vi.mock('server-only', () => ({}));
 
 /**
@@ -21,7 +21,7 @@ vi.mock('server-only', () => ({}));
  * To run locally:
  *   vercel env pull .env.local
  *   source <(grep -v '^#' .env.local | sed -e 's/^/export /')
- *   bun run --filter @void/auth test
+ *   bun run --filter @repo/auth test
  *
  * The repository sets `requireEmailVerification: true` (a real production
  * safeguard - do not change it). The test bypasses verification by writing

@@ -1,4 +1,4 @@
-# @void/i18n-next-intl
+# @repo/i18n-next-intl
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
@@ -53,7 +53,7 @@ The module mirrors next-intl's App Router pattern with a route segment group `[l
 
 5. Add message files at `apps/web/messages/<locale>.json`. Start with `en.json` and `fr.json`. Use a flat-keys-with-dots convention (`auth.signIn.title`, `auth.signIn.submit`) -- it scales further than nested objects when feature counts grow. ICU MessageFormat is supported out of the box for plurals and dates.
 
-6. Add a `<LocaleSwitcher>` component to `@void/ui` (per ADR 18, build it on Radix DropdownMenu). It calls `next-intl`'s `useRouter` to navigate between locales while preserving the current pathname and search params.
+6. Add a `<LocaleSwitcher>` component to `@repo/ui` (per ADR 18, build it on Radix DropdownMenu). It calls `next-intl`'s `useRouter` to navigate between locales while preserving the current pathname and search params.
 
 7. Update the layout. Add `apps/web/src/app/[locale]/layout.tsx` calling `setRequestLocale(locale)` before rendering, so Server Components downstream can call `useTranslations` synchronously without a Suspense boundary.
 
@@ -62,7 +62,7 @@ The module mirrors next-intl's App Router pattern with a route segment group `[l
 - next-intl proxy with locale matching and prefix strategy
 - `apps/web/src/app/[locale]/...` route tree
 - `apps/web/messages/{en,fr}.json` message files (one per locale)
-- `<LocaleSwitcher>` component in `@void/ui`
+- `<LocaleSwitcher>` component in `@repo/ui`
 - `apps/web/src/i18n/request.ts` next-intl config file declaring locale loading
 
 ## Integration points

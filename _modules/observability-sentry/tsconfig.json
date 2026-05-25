@@ -1,5 +1,5 @@
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }

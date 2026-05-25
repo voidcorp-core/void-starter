@@ -14,7 +14,7 @@ Steps, in order:
 
 1. Checkout the repository.
 2. Set up Bun at the version pinned in `package.json#packageManager` (currently `1.3.13`).
-3. Set up Node.js 24 LTS via `actions/setup-node@v4`. Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright) ship binaries with a `#!/usr/bin/env node` shebang; pinning Node 24 explicitly gives us reproducible CI, parity with the local dev runtime, and native `.ts` loading across `package.json#exports` boundaries (the case for `@void/config/vitest.base.ts`) because Node 23.6+ ships `--experimental-strip-types` on by default. No `NODE_OPTIONS` flag needed. See `docs/DECISIONS.md` entry 30.
+3. Set up Node.js 24 LTS via `actions/setup-node@v4`. Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright) ship binaries with a `#!/usr/bin/env node` shebang; pinning Node 24 explicitly gives us reproducible CI, parity with the local dev runtime, and native `.ts` loading across `package.json#exports` boundaries (the case for `@repo/config/vitest.base.ts`) because Node 23.6+ ships `--experimental-strip-types` on by default. No `NODE_OPTIONS` flag needed. See `docs/DECISIONS.md` entry 30.
 4. Restore the Bun install cache and the Turborepo cache, keyed by the hash of `bun.lock`.
 5. `bun install --frozen-lockfile` to materialize workspace links and module graph.
 6. `bun run lint` (Biome).

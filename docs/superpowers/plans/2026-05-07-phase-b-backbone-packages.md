@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the three backbone workspace packages that `apps/web` consumes - `@void/db` (Drizzle schemas + migrations), `@void/auth` (Better-Auth wired with email/password + Google OAuth + magic link + roles + sessions), and `@void/ui` (Tailwind v4 design tokens + base components).
+**Goal:** Build the three backbone workspace packages that `apps/web` consumes - `@repo/db` (Drizzle schemas + migrations), `@repo/auth` (Better-Auth wired with email/password + Google OAuth + magic link + roles + sessions), and `@repo/ui` (Tailwind v4 design tokens + base components).
 
-**Architecture:** Each package follows the validated service file layout from `context.md` (5 standard files + 5 optional layers). Better-Auth is the default auth implementation (decision 02 in `docs/DECISIONS.md`); Clerk lives as opt-in module. The auth schema (users, sessions, accounts, verifications with cascade rules) lives in `@void/db` and is imported by `@void/auth`. Design tokens use Tailwind v4's `@theme` block in `@void/ui/styles/globals.css`.
+**Architecture:** Each package follows the validated service file layout from `context.md` (5 standard files + 5 optional layers). Better-Auth is the default auth implementation (decision 02 in `docs/DECISIONS.md`); Clerk lives as opt-in module. The auth schema (users, sessions, accounts, verifications with cascade rules) lives in `@repo/db` and is imported by `@repo/auth`. Design tokens use Tailwind v4's `@theme` block in `@repo/ui/styles/globals.css`.
 
 **Tech Stack added in this phase:** Drizzle ORM, drizzle-kit, postgres (node-postgres or pg), Better-Auth (with Drizzle adapter and admin plugin), Tailwind CSS v4, lucide-react (icons), clsx, tailwind-merge.
 
@@ -12,7 +12,7 @@
 
 **Pre-conditions (verify before starting):**
 - `git tag phase-a-complete` exists on origin
-- `bun run test` passes 28 tests in `@void/core`
+- `bun run test` passes 28 tests in `@repo/core`
 - `bun run lint` clean
 - `bun run type-check` clean
 
@@ -39,7 +39,7 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
    - `assist.actions.source.organizeImports` (not top-level `organizeImports`)
    - If you write a new Biome config, run `bunx biome migrate --write` immediately to align.
 
-4. **TypeScript strict flags enabled in `@void/config/tsconfig.base.json`:**
+4. **TypeScript strict flags enabled in `@repo/config/tsconfig.base.json`:**
    - `strict: true`
    - `noUncheckedIndexedAccess: true` (array/object index access yields `T | undefined`)
    - `noPropertyAccessFromIndexSignature: true` (use `process.env['X']`, not `process.env.X`)
@@ -81,11 +81,11 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
 
 ---
 
-# Section 1: @void/db package (Tasks 1-10)
+# Section 1: @repo/db package (Tasks 1-10)
 
-`@void/db` is the data layer. It exposes the Drizzle client, all schema definitions for tables required by the starter (users, sessions, accounts, verifications), and migration tooling. Other packages (notably `@void/auth`) import its schemas and types.
+`@repo/db` is the data layer. It exposes the Drizzle client, all schema definitions for tables required by the starter (users, sessions, accounts, verifications), and migration tooling. Other packages (notably `@repo/auth`) import its schemas and types.
 
-### Task B1: @void/db package skeleton
+### Task B1: @repo/db package skeleton
 
 **Files:**
 - Create: `packages/db/package.json`
@@ -96,7 +96,7 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
 
 ```json
 {
-  "name": "@void/db",
+  "name": "@repo/db",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -114,12 +114,12 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@void/core": "workspace:*",
+    "@repo/core": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "postgres": "^3.4.0"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.0",
     "typescript": "^5.6.0",
@@ -134,7 +134,7 @@ NOTE: Versions verified against npm registry on 2026-05-07. drizzle-orm latest i
 
 ```json
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }
@@ -143,7 +143,7 @@ NOTE: Versions verified against npm registry on 2026-05-07. drizzle-orm latest i
 - [ ] **Step 3: Create `packages/db/src/index.ts` placeholder**
 
 ```ts
-// @void/db public API. Sub-paths ./client and ./schema are the canonical entrypoints.
+// @repo/db public API. Sub-paths ./client and ./schema are the canonical entrypoints.
 export {};
 ```
 
@@ -151,7 +151,7 @@ export {};
 
 ```
 bun install
-ls -la node_modules/@void/db
+ls -la node_modules/@repo/db
 ```
 
 - [ ] **Step 5: Type-check**
@@ -183,7 +183,7 @@ bunx knip --no-progress
 
 ```
 git add packages/db/ knip.json bun.lock package.json
-git commit -m "chore(db): scaffold @void/db workspace package skeleton"
+git commit -m "chore(db): scaffold @repo/db workspace package skeleton"
 git push
 ```
 
@@ -214,7 +214,7 @@ NOTE (verified 2026-05-07): The current Drizzle 0.45.x docs default the "Postgre
 - [ ] **Step 2: Create `packages/db/src/client.ts`**
 
 ```ts
-import { createAppEnv } from '@void/core/env';
+import { createAppEnv } from '@repo/core/env';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { z } from 'zod';
@@ -448,7 +448,7 @@ git commit -m "feat(db): add verifications table for magic links and email verif
 git push
 ```
 
-### Task B7: @void/db barrel export
+### Task B7: @repo/db barrel export
 
 **Files:**
 - Modify: `packages/db/src/index.ts`
@@ -559,7 +559,7 @@ git commit -m "feat(db): add initial migration for users, sessions, accounts, ve
 git push
 ```
 
-### Task B10: @void/db integration test
+### Task B10: @repo/db integration test
 
 **Files:**
 - Create: `packages/db/src/schema/users.integration.test.ts`
@@ -645,19 +645,19 @@ git push
 
 ---
 
-# Section 2: @void/auth package (Tasks 11-25)
+# Section 2: @repo/auth package (Tasks 11-25)
 
-`@void/auth` ships Better-Auth as the default implementation per decision 02. It exposes a stable public API (`getCurrentUser`, `requireAuth`, `requireRole`, `signIn.*`, `signOut`) so that switching to Clerk via `_modules/auth-clerk/` requires only swapping the repository file.
+`@repo/auth` ships Better-Auth as the default implementation per decision 02. It exposes a stable public API (`getCurrentUser`, `requireAuth`, `requireRole`, `signIn.*`, `signOut`) so that switching to Clerk via `_modules/auth-clerk/` requires only swapping the repository file.
 
 This is the most architecturally dense section. **Read Better-Auth docs (https://www.better-auth.com/docs) before starting**, confirm the current adapter API for Drizzle, plugins available (admin, magic-link, two-factor), and the recommended Next.js integration.
 
-### Task B11: @void/auth package skeleton
+### Task B11: @repo/auth package skeleton
 
 - [ ] **Step 1: Create `packages/auth/package.json`**
 
 ```json
 {
-  "name": "@void/auth",
+  "name": "@repo/auth",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -674,13 +674,13 @@ This is the most architecturally dense section. **Read Better-Auth docs (https:/
     "test": "vitest run"
   },
   "dependencies": {
-    "@void/core": "workspace:*",
-    "@void/db": "workspace:*",
+    "@repo/core": "workspace:*",
+    "@repo/db": "workspace:*",
     "better-auth": "^1.6.0",
     "@better-auth/drizzle-adapter": "^1.6.0"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
@@ -693,7 +693,7 @@ NOTE (verified 2026-05-07 against npm registry): Better-Auth is at 1.6.x and the
 
 ```json
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }
@@ -721,7 +721,7 @@ export {};
 bun install
 cd packages/auth && bunx tsc --noEmit && cd ../..
 git add packages/auth/ knip.json bun.lock package.json
-git commit -m "chore(auth): scaffold @void/auth workspace package skeleton"
+git commit -m "chore(auth): scaffold @repo/auth workspace package skeleton"
 git push
 ```
 
@@ -788,9 +788,9 @@ NOTE (API verified 2026-05-07 against the URLs above):
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { admin, magicLink } from 'better-auth/plugins';
-import { createAppEnv } from '@void/core/env';
-import { db } from '@void/db/client';
-import * as schema from '@void/db/schema';
+import { createAppEnv } from '@repo/core/env';
+import { db } from '@repo/db/client';
+import * as schema from '@repo/db/schema';
 import { z } from 'zod';
 
 const env = createAppEnv({
@@ -835,10 +835,10 @@ export const auth = betterAuth({
       sendMagicLink: async ({ email, url, token }, _ctx) => {
         // In Phase A/B we only console.warn the link in dev. The Resend module
         // (in _modules/email-resend) will replace this in Phase D when installed.
-        const { logger } = await import('@void/core/logger');
+        const { logger } = await import('@repo/core/logger');
         logger.warn(
           { email, url, token },
-          'magic link (dev only - install @void/email module for prod)',
+          'magic link (dev only - install @repo/email module for prod)',
         );
       },
     }),
@@ -876,7 +876,7 @@ NOTE (API verified 2026-05-07 against https://www.better-auth.com/docs/integrati
 
 ```ts
 import { headers } from 'next/headers';
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import { auth } from './auth.repository';
 import { type SessionUser, sessionUserSchema, type Role } from './auth.types';
 
@@ -916,7 +916,7 @@ export async function signOut() {
 }
 ```
 
-NOTE: `next/headers` is a peer-dependency from Next.js. Since `@void/auth` is consumed by `apps/web` which has Next, this import will resolve at runtime. Add `"peerDependencies": { "next": "^16.0.0" }` to packages/auth/package.json. Also adjust if Better-Auth's actual API differs - if `auth.api.signInMagicLink` is not exported in the installed version, fall back to `auth.api.sendMagicLink` and document the deviation.
+NOTE: `next/headers` is a peer-dependency from Next.js. Since `@repo/auth` is consumed by `apps/web` which has Next, this import will resolve at runtime. Add `"peerDependencies": { "next": "^16.0.0" }` to packages/auth/package.json. Also adjust if Better-Auth's actual API differs - if `auth.api.signInMagicLink` is not exported in the installed version, fall back to `auth.api.sendMagicLink` and document the deviation.
 
 - [ ] **Step 3: Type-check + commit**
 
@@ -992,7 +992,7 @@ git push
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { isAppError } from '@void/core/errors';
+import { isAppError } from '@repo/core/errors';
 import { EmailAlreadyTakenError, InvalidCredentialsError, MagicLinkExpiredError } from './auth.errors';
 
 describe('auth errors', () => {
@@ -1020,7 +1020,7 @@ describe('auth errors', () => {
 - [ ] **Step 2: Implement**
 
 ```ts
-import { AppError } from '@void/core/errors';
+import { AppError } from '@repo/core/errors';
 
 export class InvalidCredentialsError extends AppError {
   constructor(cause?: unknown) {
@@ -1089,18 +1089,18 @@ git commit -m "feat(auth): add Better-Auth browser client with React hooks"
 git push
 ```
 
-### Task B18: defineAction integration with @void/auth
+### Task B18: defineAction integration with @repo/auth
 
 **Files:**
 - Modify: `packages/core/src/server-action.ts`
 
-This task replaces the Phase A scaffolding stub in `defineAction` with real auth resolution via `@void/auth`. Note this creates a circular-looking dep at the package level (core does NOT import auth), so we use a runtime dynamic import inside `resolveAuth` to avoid the build-time cycle.
+This task replaces the Phase A scaffolding stub in `defineAction` with real auth resolution via `@repo/auth`. Note this creates a circular-looking dep at the package level (core does NOT import auth), so we use a runtime dynamic import inside `resolveAuth` to avoid the build-time cycle.
 
 Actually a cleaner approach: parameterize the auth resolver. Let `defineAction` accept an optional `resolveAuth` function in its config, and let the app pass it in once. But this complicates the API.
 
 The simplest correct path:
-- `@void/core` stays auth-agnostic. The auth resolution stays as a stub that throws.
-- The app (`apps/web`) provides its own thin wrapper around `defineAction` that injects auth via `@void/auth`.
+- `@repo/core` stays auth-agnostic. The auth resolution stays as a stub that throws.
+- The app (`apps/web`) provides its own thin wrapper around `defineAction` that injects auth via `@repo/auth`.
 
 **Decision for this task:** create a thin wrapper module in `packages/auth/src/auth-action.ts` that re-exports `defineAction` with auth resolution wired in.
 
@@ -1109,12 +1109,12 @@ The simplest correct path:
 - [ ] **Step 2: Create `packages/auth/src/auth-action.ts`**
 
 ```ts
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import {
   defineAction as defineActionCore,
   type ActionAuth,
   type ActionContext,
-} from '@void/core/server-action';
+} from '@repo/core/server-action';
 import type { ZodType } from 'zod';
 import { getCurrentUser } from './auth.service';
 
@@ -1154,7 +1154,7 @@ export function defineAction<TSchema extends ZodType, TResult>(
 }
 ```
 
-The wrapper short-circuits the core stub by injecting its own ctx before the core handler runs. `@void/core/server-action` continues to work as a standalone primitive for testing without auth.
+The wrapper short-circuits the core stub by injecting its own ctx before the core handler runs. `@repo/core/server-action` continues to work as a standalone primitive for testing without auth.
 
 - [ ] **Step 3: Add `defineAction` to packages/auth/src/index.ts public exports** (Task B22 below).
 
@@ -1163,7 +1163,7 @@ The wrapper short-circuits the core stub by injecting its own ctx before the cor
 ```
 cd packages/auth && bunx tsc --noEmit && cd ../..
 git add packages/auth/src/auth-action.ts
-git commit -m "feat(auth): add auth-aware defineAction wrapper around @void/core"
+git commit -m "feat(auth): add auth-aware defineAction wrapper around @repo/core"
 git push
 ```
 
@@ -1181,7 +1181,7 @@ Actually, the cleaner placement is to test the auth wrapper in `packages/auth/sr
 ```ts
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 
 vi.mock('./auth.service', () => ({
   getCurrentUser: vi.fn(),
@@ -1287,7 +1287,7 @@ vi.mock('./auth.repository', () => ({
   },
 }));
 
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import { auth } from './auth.repository';
 import { getCurrentUser, requireAuth, requireRole } from './auth.service';
 
@@ -1430,7 +1430,7 @@ git commit -m "feat(auth): add displayName and computeInitials helpers with test
 git push
 ```
 
-### Task B22: @void/auth barrel export
+### Task B22: @repo/auth barrel export
 
 **Files:**
 - Modify: `packages/auth/src/index.ts`
@@ -1480,7 +1480,7 @@ git push
 - [ ] **Create `packages/auth/README.md`**
 
 ```markdown
-# @void/auth
+# @repo/auth
 
 Default auth implementation for the void-starter. Wraps Better-Auth with Drizzle adapter, Google OAuth, magic link, and admin/role plugins.
 
@@ -1490,7 +1490,7 @@ Default auth implementation for the void-starter. Wraps Better-Auth with Drizzle
 - `BETTER_AUTH_URL` - Base URL of the app (e.g. `http://localhost:3000` in dev, prod URL in prod)
 - `GOOGLE_CLIENT_ID` - From Google Cloud Console > APIs & Services > Credentials
 - `GOOGLE_CLIENT_SECRET` - paired with the above
-- `DATABASE_URL` - inherited from `@void/db`
+- `DATABASE_URL` - inherited from `@repo/db`
 
 ## Public API
 
@@ -1574,19 +1574,19 @@ git push
 
 ---
 
-# Section 3: @void/ui package (Tasks 26-35)
+# Section 3: @repo/ui package (Tasks 26-35)
 
-`@void/ui` exposes Tailwind v4 design tokens via `@theme` and a small set of base components used across apps (Button, Input, Card, Label, Avatar). Components follow the canonical layout from `context.md`.
+`@repo/ui` exposes Tailwind v4 design tokens via `@theme` and a small set of base components used across apps (Button, Input, Card, Label, Avatar). Components follow the canonical layout from `context.md`.
 
 > NOTE (2026-05-07 Tailwind v4 verification pass): The verification subagent's network access (curl, WebFetch, WebSearch, defuddle, `bun pm view`) was sandboxed and could not reach `registry.npmjs.org` or `tailwindcss.com`. Patches below are based on the documented Tailwind v4 architecture (stable since Jan 2025) and the contract shape the v4 engine has maintained through 4.x. The executor MUST re-verify the items flagged `// TO RE-VERIFY at exec time:` in each task before pinning versions.
 
-### Task B26: @void/ui package skeleton
+### Task B26: @repo/ui package skeleton
 
 - [ ] **Step 1: Create `packages/ui/package.json`**
 
 ```json
 {
-  "name": "@void/ui",
+  "name": "@repo/ui",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -1606,7 +1606,7 @@ git push
     "tailwind-merge": "^3.0.0"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@testing-library/react": "^16.0.0",
@@ -1627,13 +1627,13 @@ git push
 
 NOTE (versions): A prior subagent claimed to verify against the npm registry that lucide-react is at 1.14.x and tailwindcss at 4.2.x. The 2026-05-07 follow-up verifier was sandboxed off the network and could NOT confirm. The executor MUST run `bun pm view tailwindcss version`, `bun pm view @tailwindcss/postcss version`, `bun pm view lucide-react version`, `bun pm view tailwind-merge version`, and `bun pm view clsx version` at exec time and update the `^X.Y.0` floors before `bun install`.
 
-`@tailwindcss/postcss` itself is NOT a dep of `@void/ui` — it lives in `apps/web` (Phase C Task C3) where PostCSS is configured. `@void/ui` ships pre-author CSS via the `@theme` block; the postcss plugin runs at the consumer's build step.
+`@tailwindcss/postcss` itself is NOT a dep of `@repo/ui` — it lives in `apps/web` (Phase C Task C3) where PostCSS is configured. `@repo/ui` ships pre-author CSS via the `@theme` block; the postcss plugin runs at the consumer's build step.
 
 - [ ] **Step 2: Create `packages/ui/tsconfig.json`**
 
 ```json
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"
@@ -1665,7 +1665,7 @@ export {};
 bun install
 cd packages/ui && bunx tsc --noEmit && cd ../..
 git add packages/ui/ knip.json bun.lock package.json
-git commit -m "chore(ui): scaffold @void/ui workspace package skeleton"
+git commit -m "chore(ui): scaffold @repo/ui workspace package skeleton"
 git push
 ```
 
@@ -2128,7 +2128,7 @@ git commit -m "feat(ui): add Avatar component with image + fallback initials"
 git push
 ```
 
-### Task B34: @void/ui barrel export
+### Task B34: @repo/ui barrel export
 
 ```ts
 // packages/ui/src/index.ts

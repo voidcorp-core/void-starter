@@ -1,4 +1,4 @@
-# @void/cms-payload
+# @repo/cms-payload
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 

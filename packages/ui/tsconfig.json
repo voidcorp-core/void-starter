@@ -1,5 +1,5 @@
 {
-  "extends": "@void/config/tsconfig.lib.json",
+  "extends": "@repo/config/tsconfig.lib.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"

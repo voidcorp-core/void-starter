@@ -1,5 +1,5 @@
-import { AnalyticsProvider } from '@void/posthog/client';
-import { ThemeProvider, Toaster } from '@void/ui';
+import { AnalyticsProvider } from '@repo/posthog/client';
+import { ThemeProvider, Toaster } from '@repo/ui';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';

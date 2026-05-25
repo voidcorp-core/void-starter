@@ -17,7 +17,7 @@
  * exception capture and tracing on requests still work via `Sentry.init`.
  */
 if (process.env['NEXT_PUBLIC_SENTRY_DSN']) {
-  import('@void/sentry/client')
+  import('@repo/sentry/client')
     .then(({ initSentryClient }) => {
       initSentryClient();
     })

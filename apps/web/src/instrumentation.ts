@@ -7,18 +7,18 @@
 export async function register() {
   if (process.env['SENTRY_DSN']) {
     if (process.env['NEXT_RUNTIME'] === 'nodejs') {
-      const { registerServer } = await import('@void/sentry/server');
+      const { registerServer } = await import('@repo/sentry/server');
       registerServer();
     }
 
     if (process.env['NEXT_RUNTIME'] === 'edge') {
-      const { registerEdge } = await import('@void/sentry/edge');
+      const { registerEdge } = await import('@repo/sentry/edge');
       registerEdge();
     }
   }
 
   // PostHog client-side init lives in a Client Component, not here.
-  // See @void/posthog README in Phase D.
+  // See @repo/posthog README in Phase D.
 }
 
-export { onRequestError } from '@void/sentry/server';
+export { onRequestError } from '@repo/sentry/server';

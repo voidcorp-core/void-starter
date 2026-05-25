@@ -1,4 +1,4 @@
-import type { SessionUser } from '@void/auth';
+import type { SessionUser } from '@repo/auth';
 
 /**
  * Types for the UserProfileCard component.

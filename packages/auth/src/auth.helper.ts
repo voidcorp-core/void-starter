@@ -1,5 +1,5 @@
 /**
- * Pure presentation helpers for `@void/auth`.
+ * Pure presentation helpers for `@repo/auth`.
  *
  * Stateless, synchronous functions used by UI surfaces (avatars, headers,
  * mention chips, etc.) to derive display strings from a `SessionUser` or

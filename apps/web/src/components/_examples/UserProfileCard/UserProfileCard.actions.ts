@@ -1,8 +1,8 @@
 'use server';
 
-import { defineFormAction } from '@void/auth';
-import { getDb } from '@void/db';
-import { users } from '@void/db/schema';
+import { defineFormAction } from '@repo/auth';
+import { getDb } from '@repo/db';
+import { users } from '@repo/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 

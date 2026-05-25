@@ -1,4 +1,4 @@
-# @void/db-self-hosted-postgres
+# @repo/db-self-hosted-postgres
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Activate only when leaving the default Neon-via-Vercel path is the right call (see ADR 11 in `docs/DECISIONS.md`).
 

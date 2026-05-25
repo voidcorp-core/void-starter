@@ -23,7 +23,7 @@ vi.mock('./auth.repository', () => ({
   }),
 }));
 
-import { ForbiddenError, UnauthorizedError } from '@void/core/errors';
+import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import { getCurrentUser, requireAuth, requireRole } from './auth.service';
 
 describe('getCurrentUser', () => {

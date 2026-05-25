@@ -1,4 +1,4 @@
-# @void/payment-stripe
+# @repo/payment-stripe
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
@@ -24,7 +24,7 @@ Optional:
 
 ## Install (when implementing)
 
-The module mirrors pattern A (real workspace package) used by `@void/sentry` and `@void/posthog`. Pattern B (copy-paste alternative) applies if the MVP only needs a single Checkout call site.
+The module mirrors pattern A (real workspace package) used by `@repo/sentry` and `@repo/posthog`. Pattern B (copy-paste alternative) applies if the MVP only needs a single Checkout call site.
 
 1. Add the dependency to the consuming app's `package.json`:
 
@@ -36,11 +36,11 @@ The module mirrors pattern A (real workspace package) used by `@void/sentry` and
 
 2. Run `bun install` from the repo root.
 
-3. Add the Server Action that creates a Checkout session in `apps/web/src/actions/checkout.actions.ts`. Use `defineAction` from `@void/auth/auth-action` so auth, schema validation, and error mapping stay consistent with the rest of the actions surface.
+3. Add the Server Action that creates a Checkout session in `apps/web/src/actions/checkout.actions.ts`. Use `defineAction` from `@repo/auth/auth-action` so auth, schema validation, and error mapping stay consistent with the rest of the actions surface.
 
 4. Add the webhook handler at `apps/web/src/app/api/webhooks/stripe/route.ts`. The handler reads the raw body via `request.text()`, validates the signature against `STRIPE_WEBHOOK_SECRET`, and dispatches to a service-layer consumer (`apps/web/src/use-cases/billing/handle-stripe-event.ts`).
 
-5. Mirror Stripe customers locally so domain code can join on `users.id`. Add a `stripe_customers` Drizzle table in `@void/db` schema with columns `user_id` (FK to `users.id`), `stripe_customer_id` (unique text), and timestamps. Generate the migration with `bun run --cwd packages/db db:generate`.
+5. Mirror Stripe customers locally so domain code can join on `users.id`. Add a `stripe_customers` Drizzle table in `@repo/db` schema with columns `user_id` (FK to `users.id`), `stripe_customer_id` (unique text), and timestamps. Generate the migration with `bun run --cwd packages/db db:generate`.
 
 6. Decide whether to keep the Stripe SDK inline in `apps/web/` or promote it to `packages/payments/` once a second app needs it. Per ADR 07 (no micro-packages), only promote when cross-app reuse is real.
 
@@ -49,7 +49,7 @@ The module mirrors pattern A (real workspace package) used by `@void/sentry` and
 - `apps/web/src/actions/checkout.actions.ts` -- Server Action wrapping `stripe.checkout.sessions.create`
 - `apps/web/src/app/api/webhooks/stripe/route.ts` -- raw-body webhook handler with signature verification
 - `apps/web/src/app/api/billing/portal/route.ts` -- Customer Portal session redirect
-- `@void/db` schema addition: `stripe_customers` table linking `users.id` to `stripe_customer_id`
+- `@repo/db` schema addition: `stripe_customers` table linking `users.id` to `stripe_customer_id`
 - `apps/web/src/use-cases/billing/handle-stripe-event.ts` -- typed webhook event consumer per ADR 08 (events pattern)
 - `packages/payments/` -- only if the SDK is consumed by 2+ apps (per ADR 07)
 

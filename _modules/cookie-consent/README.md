@@ -1,4 +1,4 @@
-# @void/cookie-consent
+# @repo/cookie-consent
 
 > **Status: PLACEHOLDER** -- no implementation shipped yet. This is a wire scaffold documenting scope, env vars, and integration points. Implement when a real MVP needs it.
 
@@ -6,7 +6,7 @@ Opt-in scaffold for an RGPD/ePrivacy-compliant cookie consent banner with per-ca
 
 ## Why this module
 
-Shipping `@void/posthog` to EU traffic without a consent gate violates the ePrivacy Directive and the GDPR. The starter does not bake consent in by default for two reasons: (a) consent UX is product-specific (banner copy, brand voice, layout) and ADR 02's brand integrity stance forbids vendor-branded banners; (b) plenty of MVPs are B2B internal tools or non-EU products that need no banner at all. Activate this module only when the project's actual deployment scope demands it.
+Shipping `@repo/posthog` to EU traffic without a consent gate violates the ePrivacy Directive and the GDPR. The starter does not bake consent in by default for two reasons: (a) consent UX is product-specific (banner copy, brand voice, layout) and ADR 02's brand integrity stance forbids vendor-branded banners; (b) plenty of MVPs are B2B internal tools or non-EU products that need no banner at all. Activate this module only when the project's actual deployment scope demands it.
 
 ## Required env vars
 
@@ -36,7 +36,7 @@ The module is a thin React component plus a server-side reader helper. It should
 
 3. Implement the client banner at `_modules/cookie-consent/src/banner.client.tsx` (`'use client'`). It renders a fixed-position banner with three buttons (Accept all / Reject non-essential / Customize) and writes the resulting consent to the `void_consent` cookie via `document.cookie`. Set `HttpOnly=false` (so client can read on next page load), `Secure=true`, `SameSite=Lax`, and a 13-month max-age (matching the CNIL recommendation).
 
-4. Gate analytics on consent. In `apps/web/src/app/layout.tsx`, wrap `<AnalyticsProvider>` (the `@void/posthog` provider) with a consent-aware wrapper that only mounts when `consent.analytics === true`. The server reader feeds the initial state; client toggles update it through a context.
+4. Gate analytics on consent. In `apps/web/src/app/layout.tsx`, wrap `<AnalyticsProvider>` (the `@repo/posthog` provider) with a consent-aware wrapper that only mounts when `consent.analytics === true`. The server reader feeds the initial state; client toggles update it through a context.
 
 5. Add the per-category toggle UI to the user settings page (`apps/web/src/app/dashboard/settings/cookies/page.tsx`). It re-uses the same `Consent` schema and writes back to the same cookie.
 
@@ -46,7 +46,7 @@ The module is a thin React component plus a server-side reader helper. It should
 
 - `<CookieConsentBanner>` client component, fixed-position, 3 actions plus per-category modal
 - Server-side `readConsent()` helper for App Router pages and Route Handlers
-- Conditional gating wrapper around `@void/posthog` `<AnalyticsProvider>` (and any future analytics module)
+- Conditional gating wrapper around `@repo/posthog` `<AnalyticsProvider>` (and any future analytics module)
 - Per-category toggle UI in the user settings page
 - Cookie scheme: `void_consent`, first-party, `HttpOnly=false`, `Secure=true`, `SameSite=Lax`, 13-month TTL
 

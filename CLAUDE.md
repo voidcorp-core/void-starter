@@ -21,10 +21,10 @@ For specific tasks:
 - Service layer NEVER touches DB directly -- always through repository
 - Component layer NEVER touches DB -- always through service
 - Helpers are PURE: no I/O, no side effects
-- Use `@void/core/logger`, never `console.log` in committed code
-- Use `@void/core/env`, never `process.env` directly in business code
-- Use typed errors from `@void/core/errors`, never throw strings
-- Use `defineAction` or `defineFormAction` from `@void/auth` for all Server Actions
+- Use `@repo/core/logger`, never `console.log` in committed code
+- Use `@repo/core/env`, never `process.env` directly in business code
+- Use typed errors from `@repo/core/errors`, never throw strings
+- Use `defineAction` or `defineFormAction` from `@repo/auth` for all Server Actions
 - Server Actions live in `apps/<app>/src/actions/`, NEVER in packages
 - No em dashes anywhere; no emojis in code/docs/commits
 - Read official documentation of any third-party tool BEFORE writing its config

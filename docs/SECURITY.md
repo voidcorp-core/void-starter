@@ -24,12 +24,12 @@ The starter ships secure-by-default substrates and documents which primitive add
 | A02 | Cryptographic Failures | Better-Auth password hashing (Argon2id); Vercel TLS termination at the edge; httpOnly Secure SameSite=Lax cookies (Better-Auth defaults, `packages/auth/src/auth.repository.ts`); no plaintext storage anywhere in `packages/db/src/schema/*` |
 | A03 | Injection | Drizzle parameterized queries (`packages/db/src/schema/*`, every repository); Zod validation at every boundary via `defineAction` and `defineFormAction` (`packages/core/src/server-action.ts`); no string interpolation into SQL or shell |
 | A04 | Insecure Design | ADR-driven architecture (`docs/DECISIONS.md`, 25 entries); service-layer authorization separated via `policy.ts` (ADR 08); component to action to service to repository import direction enforced (ADR 03 and `docs/ARCHITECTURE.md` section 3) |
-| A05 | Security Misconfiguration | `defaultSecurityHeaders()` from `@void/core/security-headers` wired in `apps/web/next.config.ts`; no debug routes; no public source maps unless `_modules/observability-sentry` uploads them privately to Sentry |
+| A05 | Security Misconfiguration | `defaultSecurityHeaders()` from `@repo/core/security-headers` wired in `apps/web/next.config.ts`; no debug routes; no public source maps unless `_modules/observability-sentry` uploads them privately to Sentry |
 | A06 | Vulnerable and Outdated Components | Renovate auto-PRs (CI doc to land in Phase D); `gitleaks` pre-commit job (`lefthook.yml`); `bunx knip` flags unused deps so the dependency surface stays minimal |
 | A07 | Identification and Authentication Failures | Better-Auth session rotation on auth-state change; httpOnly Secure cookies; magic-link expiry (`verifications.expiresAt`); role-based admin (`admin` plugin in `auth.repository.ts`); `requireEmailVerification: true` (Better-Auth config) |
 | A08 | Software and Data Integrity Failures | Conventional commits enforced by review; signed merges recommended at the GitHub branch-protection layer; pre-commit hooks (`lefthook.yml`); no `eval`, no dynamic `require`, no untrusted code paths in core |
 | A09 | Security Logging and Monitoring Failures | `pino` structured logger (ADR 22, `packages/core/src/logger.ts`); captured by Vercel function logs and Sentry when enabled (`_modules/observability-sentry`) |
-| A10 | Server-Side Request Forgery (SSRF) | No user-controlled outbound URLs in core; modules that perform outbound calls (`_modules/payment-stripe`, `_modules/email-resend`) use vendor SDKs with allow-listed endpoints; rate-limited via `@void/core/rate-limit` once a path goes live |
+| A10 | Server-Side Request Forgery (SSRF) | No user-controlled outbound URLs in core; modules that perform outbound calls (`_modules/payment-stripe`, `_modules/email-resend`) use vendor SDKs with allow-listed endpoints; rate-limited via `@repo/core/rate-limit` once a path goes live |
 
 Each row points to the file the reader can open today. Where a primitive is opt-in, the row points at the `_modules/*` path that activates it.
 
@@ -51,7 +51,7 @@ The starter does not "make you compliant" -- compliance is a per-MVP exercise --
 
 ## 4. Secret management
 
-- **Schema-validated env via `@void/core/env`.** `createAppEnv` wraps `@t3-oss/env-nextjs` and Zod, validates on first read, and skips validation in CI when `SKIP_ENV_VALIDATION=true` is set deliberately. See `packages/core/src/env.ts`.
+- **Schema-validated env via `@repo/core/env`.** `createAppEnv` wraps `@t3-oss/env-nextjs` and Zod, validates on first read, and skips validation in CI when `SKIP_ENV_VALIDATION=true` is set deliberately. See `packages/core/src/env.ts`.
 - **Command-time presence check via `required()`.** For CLI configs (drizzle-kit) where the full schema is overkill, `required(name)` throws `Missing required env var: <NAME>` on absent or empty values. See ADR 13 and the `dbCredentials.url` getter in `packages/db/drizzle.config.ts`.
 - **Never commit secrets.** `gitleaks` runs in `lefthook.yml` as a pre-commit job. `.gitignore` excludes `.env`, `.env.local`, and `.env.*.local`. Allow-listed Next.js build artifacts live in `.gitleaks.toml`.
 - **Vercel "Sensitive" type for production secrets.** Set `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `SENTRY_AUTH_TOKEN`, `STRIPE_SECRET_KEY`, etc. as the Sensitive var type in the Vercel dashboard so they never appear in deploy logs or the Vercel UI after creation.
@@ -168,8 +168,8 @@ export type SessionUser = {
 
 Three logging conventions follow from the tags:
 
-- **Email fields.** Mask before logging. Use `maskEmail` from `@void/core/sanitize` (`packages/core/src/sanitize.ts`).
-- **Free-text fields.** Truncate to bound the log line size. Use `truncate` from `@void/core/sanitize`.
+- **Email fields.** Mask before logging. Use `maskEmail` from `@repo/core/sanitize` (`packages/core/src/sanitize.ts`).
+- **Free-text fields.** Truncate to bound the log line size. Use `truncate` from `@repo/core/sanitize`.
 - **IP address fields.** Treated as PII under RGPD; never log unredacted in production. Mask the last octet (`192.168.1.x`) when logging.
 
 The `@pii` tag also signals to a future export-or-delete tool which columns to traverse when implementing user data export and deletion endpoints (section 3). The convention pays interest immediately and compound interest later.

@@ -23,7 +23,7 @@ test.describe('magic link flow', () => {
    *
    * Neither approach is available in the starter without additional infrastructure.
    * The implementation should be revisited once Playwright adds native stdout capture
-   * for webServer processes, or when the email module (Phase D / @void/email) provides
+   * for webServer processes, or when the email module (Phase D / @repo/email) provides
    * a real inbox-inspection mechanism (e.g. Mailpit in dev).
    *
    * Stub outline (for the implementer):

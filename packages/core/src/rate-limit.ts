@@ -24,7 +24,7 @@ type Bucket = { count: number; resetAt: number };
  * works locally and fails silently in production. Use only when you
  * control the process model OR in unit tests.
  *
- * For production deployments use the `@void/rate-limit-upstash` module
+ * For production deployments use the `@repo/rate-limit-upstash` module
  * (Phase D Task D12), which backs the limiter with Upstash Redis and
  * preserves the same `RateLimiter` interface for drop-in substitution.
  */

@@ -1,4 +1,4 @@
-# @void/posthog
+# @repo/posthog
 
 Opt-in PostHog analytics module for void-starter MVPs. Wraps `posthog-js` 1.372.x with the modern `<PostHogProvider>` integration pattern from `posthog-js/react`, gated behind a build-time env var so PostHog never ships in the bundle when the key is unset.
 
@@ -26,17 +26,17 @@ The module is already wired into `apps/web` so a fresh starter clone activates P
 
    ```json
    "dependencies": {
-     "@void/posthog": "workspace:*"
+     "@repo/posthog": "workspace:*"
    }
    ```
 
 2. Run `bun install` from the repo root.
 
-3. Wrap the app's `RootLayout` body with `<AnalyticsProvider>` from `@void/posthog/client`. The provider should sit inside `<ThemeProvider>` so PostHog UI surveys (which respect dark mode) inherit the theme:
+3. Wrap the app's `RootLayout` body with `<AnalyticsProvider>` from `@repo/posthog/client`. The provider should sit inside `<ThemeProvider>` so PostHog UI surveys (which respect dark mode) inherit the theme:
 
    ```tsx
-   import { AnalyticsProvider } from '@void/posthog/client';
-   import { ThemeProvider, Toaster } from '@void/ui';
+   import { AnalyticsProvider } from '@repo/posthog/client';
+   import { ThemeProvider, Toaster } from '@repo/ui';
 
    export default function RootLayout({ children }: { children: ReactNode }) {
      return (
@@ -72,10 +72,10 @@ The module is already wired into `apps/web` so a fresh starter clone activates P
 
    `skipTrailingSlashRedirect: true` is mandatory: without it, Next.js issues a 308 redirect from `/ingest/...` to `/ingest/.../` before the rewrite runs, which breaks the proxy. The three rewrite rules cover the static asset CDN, the JS array snippet, and the catch-all capture endpoint that PostHog exercises in that order.
 
-5. Add `'@void/posthog'` to `transpilePackages` in `next.config.ts` (alphabetical):
+5. Add `'@repo/posthog'` to `transpilePackages` in `next.config.ts` (alphabetical):
 
    ```ts
-   transpilePackages: ['@void/auth', '@void/core', '@void/db', '@void/posthog', '@void/sentry', '@void/ui'],
+   transpilePackages: ['@repo/auth', '@repo/core', '@repo/db', '@repo/posthog', '@repo/sentry', '@repo/ui'],
    ```
 
 ## DCE note
@@ -88,8 +88,8 @@ To verify in your own deploy, run `bun run build` with `NEXT_PUBLIC_POSTHOG_KEY`
 
 If a future MVP needs to remove PostHog entirely:
 
-1. Drop `"@void/posthog": "workspace:*"` from `apps/<app>/package.json` deps.
-2. Remove `'@void/posthog'` from `transpilePackages` in `next.config.ts`.
+1. Drop `"@repo/posthog": "workspace:*"` from `apps/<app>/package.json` deps.
+2. Remove `'@repo/posthog'` from `transpilePackages` in `next.config.ts`.
 3. Remove the `skipTrailingSlashRedirect` flag and the three `/ingest/*` rewrite rules from `next.config.ts`.
 4. Unwrap `<AnalyticsProvider>` from `apps/<app>/src/app/layout.tsx` and drop the import.
 5. Run `bun install` to drop the lockfile entries.

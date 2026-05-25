@@ -1,5 +1,5 @@
+import { defaultSecurityHeaders } from '@repo/core/security-headers';
 import { withSentryConfig } from '@sentry/nextjs';
-import { defaultSecurityHeaders } from '@void/core/security-headers';
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
@@ -38,12 +38,12 @@ const config: NextConfig = {
     ];
   },
   transpilePackages: [
-    '@void/auth',
-    '@void/core',
-    '@void/db',
-    '@void/posthog',
-    '@void/sentry',
-    '@void/ui',
+    '@repo/auth',
+    '@repo/core',
+    '@repo/db',
+    '@repo/posthog',
+    '@repo/sentry',
+    '@repo/ui',
   ],
 };
 

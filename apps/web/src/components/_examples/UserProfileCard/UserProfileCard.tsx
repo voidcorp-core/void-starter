@@ -14,7 +14,7 @@
  * only the server default export and its prop types — the client component is
  * an implementation detail.
  */
-import { getCurrentUser } from '@void/auth';
+import { getCurrentUser } from '@repo/auth';
 import { UserProfileCardClient } from './UserProfileCard.client';
 
 export { UserProfileCardClient };

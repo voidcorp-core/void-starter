@@ -12,16 +12,16 @@ void-starter/
 |   `-- web/                       # Next.js 16 App Router (Cache Components, RSC)
 |
 |-- packages/                      # Tier 1: always-on workspace packages
-|   |-- core/                      # @void/core   -- logger, env, errors, server-action, ...
-|   |-- auth/                      # @void/auth   -- Better-Auth wrapper, RBAC, action factories
-|   |-- db/                        # @void/db     -- Drizzle schema + getDb()
-|   |-- ui/                        # @void/ui     -- Radix-backed primitives, ThemeProvider
-|   `-- config/                    # @void/config -- shared tsconfig, biome, vitest base
+|   |-- core/                      # @repo/core   -- logger, env, errors, server-action, ...
+|   |-- auth/                      # @repo/auth   -- Better-Auth wrapper, RBAC, action factories
+|   |-- db/                        # @repo/db     -- Drizzle schema + getDb()
+|   |-- ui/                        # @repo/ui     -- Radix-backed primitives, ThemeProvider
+|   `-- config/                    # @repo/config -- shared tsconfig, biome, vitest base
 |
 |-- _modules/                      # Tier 2: opt-in, build-time activation via env vars
-|   |-- observability-sentry/      # @void/sentry        -- ready, wired into apps/web
-|   |-- analytics-posthog/         # @void/posthog       -- ready, wired into apps/web
-|   |-- auth-clerk/                # @void/auth-clerk    -- alternative repository (not env-driven)
+|   |-- observability-sentry/      # @repo/sentry        -- ready, wired into apps/web
+|   |-- analytics-posthog/         # @repo/posthog       -- ready, wired into apps/web
+|   |-- auth-clerk/                # @repo/auth-clerk    -- alternative repository (not env-driven)
 |   |-- payment-stripe/            # placeholder (README only)
 |   |-- email-resend/              # placeholder
 |   |-- cms-payload/               # placeholder
@@ -48,18 +48,18 @@ The split between `packages/` and `_modules/` is the load-bearing boundary:
 
 | Package | Tier | Always-on | Opt-in trigger | Public surface |
 |---|---|---|---|---|
-| `@void/core` | 1 | yes | n/a | `logger`, `createAppEnv`, error classes (`AppError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `RateLimitError`), `defineAction`, `defineFormAction`, `ActionState`, `initialActionState`, `defaultSecurityHeaders`, `createMemoryRateLimit`, `maskEmail`, `truncate` |
-| `@void/auth` | 1 | yes | n/a | `authClient` (browser-safe via `/client` subpath), `getCurrentUser`, `requireAuth`, `requireRole`, `signOut`, auth-aware `defineAction` and `defineFormAction`, `EmailAlreadyTakenError`, `InvalidCredentialsError`, `MagicLinkExpiredError`, `computeInitials`, `displayName`, `canAccessAdminPanel`, `SessionUser`, `Role`, `AuthSession` |
-| `@void/db` | 1 | yes | n/a | `getDb()`, `Database`, `DbClient`, schema re-exports (users + Better-Auth tables) |
-| `@void/ui` | 1 | yes | n/a | `Button`, `Input`, `Label`, `Avatar`, `Card` (+ subparts), `Form` (+ slots), `Skeleton`, `Spinner`, `ThemeProvider`, `Toaster`, `toast` (re-exported from `sonner`), `cn` |
-| `@void/config` | 1 | yes (devDep only) | n/a | `tsconfig.base.json`, `tsconfig.lib.json`, `tsconfig.next.json`, `biome.base.json`, `vitest.base` |
-| `@void/sentry` | 2 | no | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | `registerServer`, `registerEdge`, `initSentryClient`, `onRequestError` (subpath imports only: `/server`, `/edge`, `/client`) |
-| `@void/posthog` | 2 | no | `NEXT_PUBLIC_POSTHOG_KEY` | `AnalyticsProvider` (via `/client` subpath) |
-| `@void/auth-clerk` | 2 | no | n/a (alternative repository, not env-driven) | Replaces `auth.repository.ts` when adopted; consumed by editing the auth wiring, not by setting an env var |
+| `@repo/core` | 1 | yes | n/a | `logger`, `createAppEnv`, error classes (`AppError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `RateLimitError`), `defineAction`, `defineFormAction`, `ActionState`, `initialActionState`, `defaultSecurityHeaders`, `createMemoryRateLimit`, `maskEmail`, `truncate` |
+| `@repo/auth` | 1 | yes | n/a | `authClient` (browser-safe via `/client` subpath), `getCurrentUser`, `requireAuth`, `requireRole`, `signOut`, auth-aware `defineAction` and `defineFormAction`, `EmailAlreadyTakenError`, `InvalidCredentialsError`, `MagicLinkExpiredError`, `computeInitials`, `displayName`, `canAccessAdminPanel`, `SessionUser`, `Role`, `AuthSession` |
+| `@repo/db` | 1 | yes | n/a | `getDb()`, `Database`, `DbClient`, schema re-exports (users + Better-Auth tables) |
+| `@repo/ui` | 1 | yes | n/a | `Button`, `Input`, `Label`, `Avatar`, `Card` (+ subparts), `Form` (+ slots), `Skeleton`, `Spinner`, `ThemeProvider`, `Toaster`, `toast` (re-exported from `sonner`), `cn` |
+| `@repo/config` | 1 | yes (devDep only) | n/a | `tsconfig.base.json`, `tsconfig.lib.json`, `tsconfig.next.json`, `biome.base.json`, `vitest.base` |
+| `@repo/sentry` | 2 | no | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | `registerServer`, `registerEdge`, `initSentryClient`, `onRequestError` (subpath imports only: `/server`, `/edge`, `/client`) |
+| `@repo/posthog` | 2 | no | `NEXT_PUBLIC_POSTHOG_KEY` | `AnalyticsProvider` (via `/client` subpath) |
+| `@repo/auth-clerk` | 2 | no | n/a (alternative repository, not env-driven) | Replaces `auth.repository.ts` when adopted; consumed by editing the auth wiring, not by setting an env var |
 
 Placeholder modules (Stripe, Resend, Payload CMS, audit-log, cookie-consent, Upstash rate-limit, next-intl, self-hosted Postgres) ship with a README describing the activation contract but no source yet. They are filled in on demand per MVP.
 
-`@void/auth-clerk` is the only tier-2 module that is NOT env-driven. It is an alternative repository: an MVP that wants Clerk swaps the auth wiring at adoption time and never goes back. See `docs/DECISIONS.md` entry 02 for why Better-Auth is the default and Clerk is opt-in.
+`@repo/auth-clerk` is the only tier-2 module that is NOT env-driven. It is an alternative repository: an MVP that wants Clerk swaps the auth wiring at adoption time and never goes back. See `docs/DECISIONS.md` entry 02 for why Better-Auth is the default and Clerk is opt-in.
 
 ---
 
@@ -85,7 +85,7 @@ Imports flow component -> action -> service -> repository -> I/O. No backward ar
 
 - **Service layer (packages).** `packages/<domain>/src/<name>.service.ts`. Pure domain logic over typed inputs. Reads via `<name>.repository.ts`. Writes via `<name>.repository.ts`. May call `<name>.policy.ts` for authorization. Carries `import 'server-only'` so a stray client import fails loud at build time. Services NEVER import from apps -- the dependency is one-way.
 
-- **Repository layer (packages).** `packages/<domain>/src/<name>.repository.ts`. The only layer allowed to call `getDb()` from `@void/db` or to make external HTTP requests. Carries `import 'server-only'`. Returns plain TS objects (mapped via `<name>.mapper.ts` if DB shape differs from domain shape).
+- **Repository layer (packages).** `packages/<domain>/src/<name>.repository.ts`. The only layer allowed to call `getDb()` from `@repo/db` or to make external HTTP requests. Carries `import 'server-only'`. Returns plain TS objects (mapped via `<name>.mapper.ts` if DB shape differs from domain shape).
 
 - **Helper layer.** `<name>.helper.ts`. Pure functions, no side effects, no I/O. Importable from anywhere, including Client Components.
 
@@ -99,19 +99,19 @@ A one-line summary fits on a sticky note: **imports flow component -> action -> 
 
 The dependency graph is intentionally a DAG:
 
-- **`@void/core`** has no `@void/*` dependencies. It is the base of the graph. It depends on `pino`, `zod`, `@t3-oss/env-nextjs` -- all pure libs.
+- **`@repo/core`** has no `@repo/*` dependencies. It is the base of the graph. It depends on `pino`, `zod`, `@t3-oss/env-nextjs` -- all pure libs.
 
-- **`@void/db`** depends on `@void/core` only (for `required()` and `logger`). It additionally depends on `drizzle-orm`, `postgres`, and `server-only`.
+- **`@repo/db`** depends on `@repo/core` only (for `required()` and `logger`). It additionally depends on `drizzle-orm`, `postgres`, and `server-only`.
 
-- **`@void/auth`** depends on `@void/core` and `@void/db`. It pulls in `better-auth`, `@better-auth/drizzle-adapter`, `server-only`, and `zod`.
+- **`@repo/auth`** depends on `@repo/core` and `@repo/db`. It pulls in `better-auth`, `@better-auth/drizzle-adapter`, `server-only`, and `zod`.
 
-- **`@void/ui`** depends on no `@void/*` package. It is React-side and self-contained: `clsx`, `tailwind-merge`, `class-variance-authority`, `next-themes`, `react-hook-form`, `@hookform/resolvers`, `sonner`, `lucide-react`, the matching `@radix-ui/react-*` packages, and React itself.
+- **`@repo/ui`** depends on no `@repo/*` package. It is React-side and self-contained: `clsx`, `tailwind-merge`, `class-variance-authority`, `next-themes`, `react-hook-form`, `@hookform/resolvers`, `sonner`, `lucide-react`, the matching `@radix-ui/react-*` packages, and React itself.
 
-- **`@void/config`** has no runtime dependencies. It is a devDep only, providing shared `tsconfig.lib.json`, `biome.base.json`, and `vitest.base.ts`.
+- **`@repo/config`** has no runtime dependencies. It is a devDep only, providing shared `tsconfig.lib.json`, `biome.base.json`, and `vitest.base.ts`.
 
-- **Apps** depend on any tier-1 package and on tier-2 packages they actively consume (e.g., `apps/web` depends on `@void/sentry`, `@void/posthog`).
+- **Apps** depend on any tier-1 package and on tier-2 packages they actively consume (e.g., `apps/web` depends on `@repo/sentry`, `@repo/posthog`).
 
-- **Tier-2 packages** depend on `@void/core` at most. They do NOT depend on `@void/auth`, `@void/db`, or `@void/ui` -- those couplings would force every tier-2 module to track auth or schema upgrades. Cross-tier-2 imports are forbidden too: a Sentry module that depends on a PostHog module is a sign the abstraction is wrong.
+- **Tier-2 packages** depend on `@repo/core` at most. They do NOT depend on `@repo/auth`, `@repo/db`, or `@repo/ui` -- those couplings would force every tier-2 module to track auth or schema upgrades. Cross-tier-2 imports are forbidden too: a Sentry module that depends on a PostHog module is a sign the abstraction is wrong.
 
 The result: no circular dependencies, predictable build order (Turborepo derives it from the graph), and every package is replaceable in isolation.
 
@@ -133,18 +133,18 @@ The canonical example is `apps/web/src/instrumentation.ts`:
 export async function register() {
   if (process.env['SENTRY_DSN']) {
     if (process.env['NEXT_RUNTIME'] === 'nodejs') {
-      const { registerServer } = await import('@void/sentry/server');
+      const { registerServer } = await import('@repo/sentry/server');
       registerServer();
     }
 
     if (process.env['NEXT_RUNTIME'] === 'edge') {
-      const { registerEdge } = await import('@void/sentry/edge');
+      const { registerEdge } = await import('@repo/sentry/edge');
       registerEdge();
     }
   }
 }
 
-export { onRequestError } from '@void/sentry/server';
+export { onRequestError } from '@repo/sentry/server';
 ```
 
 When `SENTRY_DSN` is unset, the dynamic import branch never executes and the Sentry SDK never enters the server bundle. When it is set, the matching runtime entry initializes Sentry on cold start.
@@ -205,7 +205,7 @@ The four-tier split keeps each test fast in isolation: a contributor running `bu
 - `bun install` -- workspace-aware, hoists shared deps, links workspace packages.
 - `bun run lint` -- Biome across the whole repo (root config delegates per-package).
 - `bun run type-check` -- Turborepo runs `tsc --noEmit` per package, in dependency order.
-- `bun run test` -- Turborepo runs `vitest run` per package; the `passWithNoTests` flag (centralized in `@void/config/vitest.base.ts`, see ADR 14) means skeleton packages without tests yet do not fail the pipeline.
+- `bun run test` -- Turborepo runs `vitest run` per package; the `passWithNoTests` flag (centralized in `@repo/config/vitest.base.ts`, see ADR 14) means skeleton packages without tests yet do not fail the pipeline.
 - `bun run build` -- Turborepo runs the per-package `build` task. For most packages this is a no-op (we publish source via `package.json#exports` to `./src/*.ts` -- see ADR 15). For `apps/web`, it is `next build`.
 
 ### CI

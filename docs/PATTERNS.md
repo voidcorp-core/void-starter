@@ -10,7 +10,7 @@ Every convention here reflects code that already exists in the repo. If you find
 
 ### KISS
 
-Keep interfaces small, dependencies few, abstractions earned. The starter forbids dependency injection containers (tsyringe, awilix), explicit CQRS buses, micro-packages (`@void/utils`, `@void/hooks`, `@void/types`), and runtime feature flag services. Each of those carries weight (~100KB runtime, ~hours of contributor onboarding, multi-package upgrade churn) and earns nothing at the venture-builder scale of ~24 MVPs/year. See `docs/DECISIONS.md` entry 07 (no micro-packages) and entry 10 (no DI, no CQRS).
+Keep interfaces small, dependencies few, abstractions earned. The starter forbids dependency injection containers (tsyringe, awilix), explicit CQRS buses, micro-packages (`@repo/utils`, `@repo/hooks`, `@repo/types`), and runtime feature flag services. Each of those carries weight (~100KB runtime, ~hours of contributor onboarding, multi-package upgrade churn) and earns nothing at the venture-builder scale of ~24 MVPs/year. See `docs/DECISIONS.md` entry 07 (no micro-packages) and entry 10 (no DI, no CQRS).
 
 ### DRY
 
@@ -39,7 +39,7 @@ Naming is mechanical so contributors and AI assistants can predict file paths wi
 
 ### Service files
 
-A domain package (e.g., `@void/auth`) lays out its source as:
+A domain package (e.g., `@repo/auth`) lays out its source as:
 
 ```
 packages/auth/src/
@@ -100,9 +100,9 @@ Action files inside an app live in `apps/<app>/src/actions/<name>.actions.ts` (t
 
 Per ADR 08, every domain service ships these 5 files:
 
-1. **`<name>.service.ts`** -- domain logic. Pure functions over typed inputs. Reads via `<name>.repository.ts`. Writes via `<name>.repository.ts`. Calls `<name>.policy.ts` for authorization (or inlines the check if trivial). Throws typed errors from `<name>.errors.ts` (or generic `AppError` from `@void/core/errors`).
+1. **`<name>.service.ts`** -- domain logic. Pure functions over typed inputs. Reads via `<name>.repository.ts`. Writes via `<name>.repository.ts`. Calls `<name>.policy.ts` for authorization (or inlines the check if trivial). Throws typed errors from `<name>.errors.ts` (or generic `AppError` from `@repo/core/errors`).
 
-2. **`<name>.repository.ts`** -- the only file allowed to call `getDb()` from `@void/db` or to make external HTTP requests. Carries `import 'server-only'` (per ADR 25). Returns plain TS objects. If DB shape ≠ domain shape, the conversion happens in `<name>.mapper.ts`.
+2. **`<name>.repository.ts`** -- the only file allowed to call `getDb()` from `@repo/db` or to make external HTTP requests. Carries `import 'server-only'` (per ADR 25). Returns plain TS objects. If DB shape ≠ domain shape, the conversion happens in `<name>.mapper.ts`.
 
 3. **`<name>.helper.ts`** -- pure utilities. No I/O, no global state, no `Date.now()` baked in (inject as parameter for testability). Importable from anywhere, including Client Components.
 
@@ -129,7 +129,7 @@ component (apps/web/src/components/<Feature>/Feature.tsx, server component or cl
   -> action (apps/web/src/actions/<feature>.actions.ts, defineAction / defineFormAction)
     -> service (packages/<domain>/src/<name>.service.ts, optionally <name>.policy.ts)
       -> repository (packages/<domain>/src/<name>.repository.ts)
-        -> getDb() from @void/db, OR external HTTP / SDK
+        -> getDb() from @repo/db, OR external HTTP / SDK
 ```
 
 Imports flow one direction. Never the reverse.
@@ -150,7 +150,7 @@ Example: `auth.helper.ts` exports `computeInitials(displayName)` and `displayNam
 
 Extract when DB row shape differs from domain shape. Common triggers: snake_case columns (`user_email` -> `userEmail`), computed fields (`displayName` derived from `firstName + lastName`), or relations flattened from joins. Do not bake the mapping into the repository -- that mixes I/O with shape concerns and makes the repository harder to test.
 
-If the DB shape and domain shape are identical, you do not need a mapper. The Drizzle row IS the domain object. `@void/auth` lives in this state today.
+If the DB shape and domain shape are identical, you do not need a mapper. The Drizzle row IS the domain object. `@repo/auth` lives in this state today.
 
 ### Policy
 
@@ -198,7 +198,7 @@ When promoting, place the use-case in `packages/<existing-domain>/src/<usecase>.
 
 Two canonical examples are checked into the repo. Read them before writing similar code.
 
-### Service example: `@void/auth`
+### Service example: `@repo/auth`
 
 `packages/auth/src/` uses 8 of the 10 service layers. It is the canonical reference for any new service. It demonstrates:
 
@@ -237,12 +237,12 @@ Mechanical rules. Biome enforces what it can; reviews catch the rest.
 
 ### Logging and config
 
-- **No `console.log` / `console.error`.** Use the `@void/core/logger` (`pino`-backed). It supports structured fields, child loggers, and ships JSON in production. See ADR 22.
-- **No raw `process.env` in business code.** Use `@void/core/env` (`createAppEnv` for full schema, `required(name)` for one-off presence checks). Centralizes type safety and missing-var error messages. See ADR 13.
+- **No `console.log` / `console.error`.** Use the `@repo/core/logger` (`pino`-backed). It supports structured fields, child loggers, and ships JSON in production. See ADR 22.
+- **No raw `process.env` in business code.** Use `@repo/core/env` (`createAppEnv` for full schema, `required(name)` for one-off presence checks). Centralizes type safety and missing-var error messages. See ADR 13.
 
 ### Errors
 
-- **No raw `throw new Error('...')` in service / repository / action code.** Use typed errors from `@void/core/errors` (`AppError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `RateLimitError`) or domain-specific errors from `<name>.errors.ts`.
+- **No raw `throw new Error('...')` in service / repository / action code.** Use typed errors from `@repo/core/errors` (`AppError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `RateLimitError`) or domain-specific errors from `<name>.errors.ts`.
 - The reason: typed errors carry a stable `code` field that the action layer maps to `formError`. A raw `Error` becomes a generic 500 to the client and loses the actionable shape.
 
 ### Server Actions
@@ -282,5 +282,5 @@ Mechanical rules. Biome enforces what it can; reviews catch the rest.
 - `docs/DECISIONS.md` -- the why behind every convention. Read before challenging.
 - `docs/CACHING.md` -- read / write cache strategy with `'use cache'` and `updateTag()`.
 - `docs/SECURITY.md` -- security boundary mappings.
-- `docs/AUTH.md` -- auth-specific patterns for `@void/auth`.
+- `docs/AUTH.md` -- auth-specific patterns for `@repo/auth`.
 - `docs/MODULES.md` -- catalogue of opt-in `_modules/*` and their activation rules.

@@ -5,7 +5,7 @@ import postgres from 'postgres';
  * Test helpers for E2E suites that need DB access or HTTP signup.
  *
  * Why this file exists:
- * `@void/db` and `@void/auth/repository` carry `import 'server-only'`, which
+ * `@repo/db` and `@repo/auth/repository` carry `import 'server-only'`, which
  * throws when loaded outside Next.js (Playwright's plain-Node test loader
  * picks the default condition, where `server-only` exports a throwing module).
  * Tests therefore cannot import those packages even with deferred imports.
@@ -15,7 +15,7 @@ import postgres from 'postgres';
  *     actions (sign up, sign in) -- exercises the same HTTP path as a real
  *     user, no internal coupling.
  *   - Use a raw `postgres` client for fixture seeding and cleanup -- bypasses
- *     `@void/db`'s server-only boundary and Drizzle's runtime entirely.
+ *     `@repo/db`'s server-only boundary and Drizzle's runtime entirely.
  *
  * The dev server applies migrations before E2E in CI (drizzle-kit migrate is
  * a CI step). Locally the contributor runs the same step before

@@ -1,7 +1,7 @@
 'use client';
 
-import { authClient } from '@void/auth/client';
-import { Avatar, Button } from '@void/ui';
+import { authClient } from '@repo/auth/client';
+import { Avatar, Button } from '@repo/ui';
 import { useEffect, useRef, useState } from 'react';
 import { signOutAction } from '@/actions/auth.actions';
 import { computeInitials, displayName } from './UserMenu.helper';

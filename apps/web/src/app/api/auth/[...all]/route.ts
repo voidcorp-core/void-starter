@@ -1,4 +1,4 @@
-import { getAuth } from '@void/auth/repository';
+import { getAuth } from '@repo/auth/repository';
 import { toNextJsHandler } from 'better-auth/next-js';
 
 // Lazy handler: `getAuth()` validates env vars on first call (not at module

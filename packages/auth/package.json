@@ -1,5 +1,5 @@
 {
-  "name": "@void/auth",
+  "name": "@repo/auth",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.0",
-    "@void/core": "workspace:*",
-    "@void/db": "workspace:*",
+    "@repo/core": "workspace:*",
+    "@repo/db": "workspace:*",
     "better-auth": "^1.6.0",
     "server-only": "^0.0.1",
     "zod": "^3.23.0"
@@ -28,7 +28,7 @@
     "next": "^16.0.0"
   },
   "devDependencies": {
-    "@void/config": "workspace:*",
+    "@repo/config": "workspace:*",
     "@vitest/coverage-v8": "^4.1.5",
     "drizzle-orm": "^0.45.0",
     "next": "^16.2.0",

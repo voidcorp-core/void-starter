@@ -1,7 +1,7 @@
 import type { SessionUser } from './auth.types';
 
 /**
- * Authorization policies for `@void/auth`.
+ * Authorization policies for `@repo/auth`.
  *
  * Policies are pure, synchronous predicates over a `SessionUser | null`.
  * They centralize "can this user do X" decisions so that UI guards (hide
