@@ -4,9 +4,26 @@ import { logger } from './logger';
 
 export type ActionAuth = 'public' | 'required' | `role:${string}`;
 
+export type ActionUser = { id: string; role: string };
+
 export type ActionContext = {
-  user: { id: string; role: string } | null;
+  user: ActionUser | null; // allow-null: established auth context shape; getCurrentUser / SessionUser use null per the Better-Auth + React convention.
 };
+
+/** Context for an authenticated action mode: `user` is guaranteed present. */
+export type AuthedActionContext = {
+  user: ActionUser;
+};
+
+/**
+ * Maps an auth mode to the context its handler receives. `'public'` may have an
+ * absent user; `'required'` and `'role:*'` guarantee a user (the resolver throws
+ * otherwise), so handlers can read `ctx.user.id` without a presence check.
+ * Consumed by the auth-aware factories in `@repo/auth`.
+ */
+export type ActionContextFor<A extends ActionAuth> = A extends 'public'
+  ? ActionContext
+  : AuthedActionContext;
 
 type DefineActionConfig<TSchema extends ZodType, TResult> = {
   schema: TSchema;

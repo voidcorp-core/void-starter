@@ -166,4 +166,14 @@ Things that look correct but fail in subtle ways.
 - **`docs/ARCHITECTURE.md`** -- topology, layering rules, where each cache point lives.
 - **`docs/SECURITY.md`** -- the user-scoped tag rule prevents the cross-tenant leak class of bug.
 
-When a service ships its first read path with `'use cache'`, this doc should grow a "Real-world example" section pointing at the file. Until then, the pseudocode in section 4 is the canonical reference.
+---
+
+## 8. Real-world example: the `notes` domain
+
+The `@repo/notes` package is the first shipped read/write use of Cache Components and the canonical reference (ADR 34). It exercises the full loop the pseudocode in section 4 describes:
+
+- **Read (service).** `packages/notes/src/notes.service.ts` -> `listNotes(userId)` declares `'use cache'`, tags the entry `notes:list:user:${userId}` (user-scoped, per the section 6 cross-tenant rule), and sets `cacheLife('minutes')`. It composes `notes.repository.ts`, which never caches.
+- **Write (action).** `apps/web/src/actions/notes.actions.ts` -> `createNoteAction` (a `defineFormAction`, `auth: 'required'`) inserts via the service, then calls `updateTag(\`notes:list:user:\${userId}\`)` so the next read of that one user's list repopulates. No other user's cache is touched.
+- **Component.** `apps/web/src/app/notes/page.tsx` reads `listNotes(user.id)` and renders the list; `NoteComposer.tsx` drives the action through React 19 `useActionState`. Neither is aware of caching or invalidation -- exactly the separation section 4 prescribes.
+
+Use this trio as the copy-from template when adding the next domain (posts, projects, billing).

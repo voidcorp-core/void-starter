@@ -12,3 +12,18 @@ export function truncate(input: string, max: number): string {
   if (input.length <= max) return input;
   return `${input.slice(0, max)}...`;
 }
+
+/**
+ * Coerce an untrusted redirect target to a safe SAME-ORIGIN path, preventing
+ * open-redirect (e.g. a `?callbackURL=https://evil.com` query param flowing
+ * into `router.push` / Better-Auth's `callbackURL`). Returns `fallback` unless
+ * `raw` is a clean internal path: starts with a single `/`, is not `//`
+ * (protocol-relative), and carries no scheme or backslash. Callers reading
+ * from `URLSearchParams.get()` / `Headers.get()` should pass `value ?? undefined`.
+ */
+export function safeInternalPath(raw: string | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
+  if (raw.includes('://') || raw.includes('\\')) return fallback;
+  return raw;
+}

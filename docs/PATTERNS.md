@@ -249,6 +249,7 @@ Mechanical rules. Biome enforces what it can; reviews catch the rest.
 
 - **Always use `defineAction` or `defineFormAction`.** Never write a bare `'use server'` function. The wrapper handles Zod parsing, auth resolution, error normalization, and structured logging in one place. See ADR 5 and ADR 21.
 - **Choose by call-site mode.** `defineAction` for RPC (`await action(values)` from react-hook-form's `handleSubmit`). `defineFormAction` for `<form action={...}>` and React 19 `useActionState`.
+- **`ctx.user` narrows on the auth mode.** With `auth: 'required'` or `'role:*'`, `ctx.user` is non-null (the resolver throws `UnauthorizedError` / `ForbiddenError` otherwise), so handlers read `ctx.user.id` directly -- no `?? ''` guard. Only `auth: 'public'` yields a nullable `ctx.user`. The narrowing is in the `@repo/auth` wrapper via `ActionContextFor<A>`.
 
 ### Imports and boundaries
 

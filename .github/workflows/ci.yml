@@ -66,7 +66,7 @@ jobs:
         run: cd packages/db && bunx drizzle-kit migrate
       - run: bun run test
       - run: bun run build
-      - run: bunx knip --no-progress
+      - run: bun run knip
       # gitleaks ships as a Go binary via GitHub Releases, not via npm; bunx
       # cannot resolve it. The official gitleaks-action@v2 now requires a
       # paid license for org repos. We download the pinned release directly.

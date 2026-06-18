@@ -21,14 +21,15 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "type-check": "turbo run type-check",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "knip": "knip --no-progress"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
-    "@commitlint/cli": "^21.0.1",
-    "@commitlint/config-conventional": "^21.0.1",
-    "knip": "^6.12.0",
-    "lefthook": "^2.1.6",
-    "turbo": "^2.9.9"
+    "@biomejs/biome": "^2.5.0",
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "knip": "^6.17.1",
+    "lefthook": "^2.1.9",
+    "turbo": "^2.9.18"
   }
 }

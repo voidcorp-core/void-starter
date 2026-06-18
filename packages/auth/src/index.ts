@@ -20,3 +20,5 @@ export {
   defineFormAction,
   initialActionState,
 } from './auth-action';
+export type { AdminUser } from './users.repository';
+export { listUsers } from './users.service';

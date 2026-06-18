@@ -26,8 +26,10 @@ describe('Avatar', () => {
         src = '';
         naturalWidth = 100;
         complete = true;
-        addEventListener(event: string, handler: () => void) {
-          if (event === 'load') queueMicrotask(handler);
+        addEventListener(event: string, handler: (event: { currentTarget: unknown }) => void) {
+          // Radix Avatar 1.2.0 reads event.currentTarget inside its load handler,
+          // so the stubbed event must carry the image instance.
+          if (event === 'load') queueMicrotask(() => handler({ currentTarget: this }));
         }
         removeEventListener() {}
         referrerPolicy = '';

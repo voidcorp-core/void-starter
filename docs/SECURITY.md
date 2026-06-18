@@ -73,14 +73,14 @@ Pulled from `packages/auth/src/auth.repository.ts` (Better-Auth wiring). Better-
 
 ## 6. Rate limiting strategy
 
-Two implementations, one interface (`RateLimiter` in `packages/core/src/rate-limit.ts`).
+Three layers, applied where each fits best.
 
-- **Default: in-memory `createMemoryRateLimit`.** Single-process, fine for tests and dev. INTENT documented in the source: on Vercel serverless or any horizontally-scaled deploy the `Map` state is per-invocation, so the limiter silently grants every request its own counter. Use only when you control the process model OR in unit tests.
-- **Production: `_modules/rate-limit-upstash`.** Backs the same `RateLimiter` interface with Upstash Redis (auto-provisioned via the Vercel Marketplace integration). Drop-in substitution -- the consumer code does not change when swapping. See `_modules/rate-limit-upstash/README.md`.
+- **Auth endpoints: Better-Auth native limiter, `storage: 'database'` (LIVE, ADR 33).** Sign-in, sign-up, magic-link request and password reset run through Better-Auth's own endpoints, so they are rate-limited by Better-Auth itself, configured in `packages/auth/src/auth.repository.ts`. Counters persist in the `rate_limits` Postgres table (the `rateLimits` Drizzle schema) so the limit holds across serverless invocations -- the default in-memory store is per-invocation and would grant every request its own bucket. `customRules` tighten the brute-force-prone endpoints (sign-in / magic-link / reset to 5 per 60s) below the 100/60s global default. Enabled in production by default; off in dev.
+- **Custom Server Actions / app code: in-memory `createMemoryRateLimit`.** Single-process, fine for tests and dev. INTENT documented in the source: on Vercel serverless or any horizontally-scaled deploy the `Map` state is per-invocation, so the limiter silently grants every request its own counter. Use only when you control the process model OR in unit tests.
+- **Production cross-cutting: `_modules/rate-limit-upstash`.** Backs the same `RateLimiter` interface with Upstash Redis (auto-provisioned via the Vercel Marketplace integration). Drop-in substitution for `createMemoryRateLimit` -- the consumer code does not change when swapping. See `_modules/rate-limit-upstash/README.md`.
 
-The starter does not yet apply the limiter to any specific endpoint. The application points are documented for MVPs to wire as needed:
+Remaining application points for MVPs to wire as needed:
 
-- **Auth endpoints** (sign-in, sign-up, password reset, magic-link request) -- candidates for IP + email keying.
 - **Action wrappers** -- a future enhancement to `defineAction` and `defineFormAction` could accept a `rateLimit` option keyed on `ctx.user.id` or the request IP. Until then, call the limiter inline at the start of each action handler.
 - **Routing middleware** -- `apps/web/src/proxy.ts` is the global plug point for IP-based limits. Phase D `_modules/rate-limit-upstash` wires here.
 

@@ -7,6 +7,12 @@ vi.mock('next/headers', () => ({
 vi.mock('next/server', () => ({
   connection: () => Promise.resolve(undefined),
 }));
+vi.mock('next/navigation', () => ({
+  // redirect() throws NEXT_REDIRECT in Next; emulate the throw so callers stop.
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
+}));
 
 // `getCurrentUser()` short-circuits to `null` when `BETTER_AUTH_SECRET` is unset
 // (see auth.service.ts -> `isAuthConfigured`). The unit tests below simulate a
@@ -23,8 +29,9 @@ vi.mock('./auth.repository', () => ({
   }),
 }));
 
-import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
-import { getCurrentUser, requireAuth, requireRole } from './auth.service';
+import { ForbiddenError } from '@repo/core/errors';
+import { redirect } from 'next/navigation';
+import { buildSignInRedirect, getCurrentUser, requireAuth, requireRole } from './auth.service';
 
 describe('getCurrentUser', () => {
   it('returns null when no session', async () => {
@@ -60,10 +67,27 @@ describe('getCurrentUser', () => {
   });
 });
 
+describe('buildSignInRedirect', () => {
+  it('appends the callbackURL for a normal page path', () => {
+    expect(buildSignInRedirect('/dashboard')).toBe('/sign-in?callbackURL=%2Fdashboard');
+    expect(buildSignInRedirect('/notes?tag=x')).toBe('/sign-in?callbackURL=%2Fnotes%3Ftag%3Dx');
+  });
+
+  it('never loops back onto an auth route', () => {
+    expect(buildSignInRedirect(undefined)).toBe('/sign-in');
+    expect(buildSignInRedirect('/sign-in')).toBe('/sign-in');
+    expect(buildSignInRedirect('/sign-up')).toBe('/sign-in');
+    expect(buildSignInRedirect('/reset-password')).toBe('/sign-in');
+  });
+});
+
 describe('requireAuth', () => {
-  it('throws UnauthorizedError when not signed in', async () => {
+  it('redirects to sign-in when not signed in', async () => {
     mockGetSession.mockResolvedValueOnce(null);
-    await expect(requireAuth()).rejects.toBeInstanceOf(UnauthorizedError);
+    // The next/headers mock returns empty Headers (no x-pathname), so the
+    // redirect target is the bare sign-in path.
+    await expect(requireAuth()).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(vi.mocked(redirect)).toHaveBeenCalledWith('/sign-in');
   });
 });
 

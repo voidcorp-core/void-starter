@@ -2,6 +2,7 @@ import 'server-only';
 
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { createAppEnv } from '@repo/core/env';
+import { AppError } from '@repo/core/errors';
 import { logger } from '@repo/core/logger';
 import { getDb } from '@repo/db';
 import * as schema from '@repo/db/schema';
@@ -48,13 +49,33 @@ import { z } from 'zod';
  * internal references.
  */
 
+/**
+ * Builds the Better-Auth `socialProviders` entry for Google, but ONLY when
+ * both credentials are present. Returns `undefined` otherwise so the auth
+ * instance comes up with email/password + magic link alone -- Google is
+ * opt-in (see README and docs/AUTH.md). Pure and synchronous so the
+ * "Google is optional" contract is unit-testable without constructing the
+ * full Better-Auth instance (which needs a DB).
+ */
+export function resolveGoogleProvider(env: {
+  GOOGLE_CLIENT_ID?: string | undefined;
+  GOOGLE_CLIENT_SECRET?: string | undefined;
+}): { google: { clientId: string; clientSecret: string } } | undefined {
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return undefined;
+  return { google: { clientId, clientSecret } };
+}
+
 function initAuth() {
   const env = createAppEnv({
     server: {
       BETTER_AUTH_SECRET: z.string().min(32),
       BETTER_AUTH_URL: z.url(),
-      GOOGLE_CLIENT_ID: z.string().min(1),
-      GOOGLE_CLIENT_SECRET: z.string().min(1),
+      // Optional: Google OAuth is opt-in. When unset, email/password and
+      // magic link still work. Both must be present to enable the provider.
+      GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+      GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     },
     client: {},
     runtimeEnv: {
@@ -64,6 +85,8 @@ function initAuth() {
       GOOGLE_CLIENT_SECRET: process.env['GOOGLE_CLIENT_SECRET'],
     },
   });
+
+  const googleProvider = resolveGoogleProvider(env);
 
   return betterAuth({
     secret: env['BETTER_AUTH_SECRET'],
@@ -75,27 +98,55 @@ function initAuth() {
         session: schema.sessions,
         account: schema.accounts,
         verification: schema.verifications,
+        rateLimit: schema.rateLimits,
       },
     }),
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
     },
-    socialProviders: {
-      google: {
-        clientId: env['GOOGLE_CLIENT_ID'],
-        clientSecret: env['GOOGLE_CLIENT_SECRET'],
+    // Persist rate-limit counters in Postgres so the limit holds across
+    // serverless invocations -- the default in-memory store is per-invocation
+    // and grants every request its own bucket on Vercel (ADR 33; same reason
+    // @repo/core/createMemoryRateLimit is dev/test only). Better-Auth enables
+    // rate limiting in production by default; customRules tighten the
+    // brute-force-prone endpoints below the global 100/60s default.
+    rateLimit: {
+      storage: 'database',
+      modelName: 'rateLimit',
+      customRules: {
+        '/sign-in/email': { window: 60, max: 5 },
+        '/sign-in/magic-link': { window: 60, max: 5 },
+        '/sign-up/email': { window: 60, max: 10 },
+        '/forget-password': { window: 60, max: 5 },
+        '/reset-password': { window: 60, max: 5 },
       },
     },
+    // Conditional spread (not `socialProviders: undefined`) keeps
+    // exactOptionalPropertyTypes happy when Google is not configured.
+    ...(googleProvider ? { socialProviders: googleProvider } : {}),
     plugins: [
       admin({
         defaultRole: 'user',
         adminRoles: ['admin'],
       }),
       magicLink({
-        sendMagicLink: async ({ email, token, url }) => {
+        sendMagicLink: async ({ email, url }) => {
+          // Production guard: the dev stub never delivers a real email. Fail
+          // loudly so a misconfigured deploy cannot silently swallow magic-link
+          // logins. Wire _modules/email-resend and replace this body before go-live.
+          if (process.env['NODE_ENV'] === 'production') {
+            throw new AppError({
+              message:
+                'Magic link email sender is not configured. Wire @repo/email (Resend) before enabling magic link in production.',
+              code: 'MAGIC_LINK_NOT_CONFIGURED',
+              status: 500,
+            });
+          }
+          // Dev only: log the URL (which already embeds the token) so the
+          // developer can follow the link. The raw token is not logged separately.
           logger.warn(
-            { email, url, token },
+            { email, url },
             'magic link (dev only - install @repo/email module for prod)',
           );
         },

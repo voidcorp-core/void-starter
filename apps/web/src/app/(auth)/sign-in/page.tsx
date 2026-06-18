@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { authClient } from '@repo/auth/client';
+import { safeInternalPath } from '@repo/core/sanitize';
 import {
   Button,
   Card,
@@ -36,17 +37,26 @@ export default function SignInPage() {
     defaultValues: { email: '', password: '' },
   });
 
+  // Return the user to where requireAuth() sent them from (?callbackURL),
+  // sanitized against open-redirect. Read from the URL at call time so the
+  // page stays static-friendly (no useSearchParams Suspense boundary).
+  function resolveCallbackUrl(): string {
+    const raw = new URLSearchParams(window.location.search).get('callbackURL') ?? undefined;
+    return safeInternalPath(raw, '/dashboard');
+  }
+
   async function onSubmit(values: SignInValues) {
+    const callbackURL = resolveCallbackUrl();
     const { error } = await authClient.signIn.email({
       email: values.email,
       password: values.password,
-      callbackURL: '/dashboard',
+      callbackURL,
     });
     if (error) {
       toast.error(error.message ?? 'Sign in failed');
       return;
     }
-    router.push('/dashboard');
+    router.push(callbackURL);
   }
 
   return (
@@ -94,7 +104,7 @@ export default function SignInPage() {
             variant="secondary"
             className="w-full"
             onClick={() =>
-              authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
+              authClient.signIn.social({ provider: 'google', callbackURL: resolveCallbackUrl() })
             }
           >
             Continue with Google

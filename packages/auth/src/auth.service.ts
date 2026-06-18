@@ -1,8 +1,9 @@
 import 'server-only';
 
-import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
+import { ForbiddenError } from '@repo/core/errors';
 import { logger } from '@repo/core/logger';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { getAuth } from './auth.repository';
 import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
@@ -32,8 +33,8 @@ import { type Role, type SessionUser, sessionUserSchema } from './auth.types';
  * treat the runtime as "auth not configured" and `getCurrentUser()` short-circuits
  * to `null` instead of crashing. This preserves the starter contract: a fresh
  * clone with no `.env.local` can still render unauthenticated marketing pages,
- * and protected routes correctly throw `UnauthorizedError` (which the error
- * boundary handles or which `requireAuth()` translates to a sign-in redirect).
+ * and protected routes correctly send anonymous visitors to sign-in
+ * (`requireAuth()` redirects with a `?callbackURL`).
  *
  * The first time auth is called without configuration we emit a single warning
  * so a misconfigured production deploy still surfaces the issue in logs.
@@ -82,23 +83,50 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   return parsed.success ? parsed.data : null;
 }
 
+const SIGN_IN_PATH = '/sign-in';
+
 /**
- * Require an authenticated user; throw `UnauthorizedError` (401) if not.
+ * Build the sign-in redirect target for an unauthenticated PAGE request,
+ * preserving where the user was headed via `?callbackURL`. `pathname` comes
+ * from the proxy's `x-pathname` header (our own value, already same-origin).
+ * Auth routes are never appended as a callback, which would loop or bounce the
+ * user back to a sign-in/sign-up screen after authenticating. Pure + exported
+ * so the routing rule is unit-testable without a request scope.
+ */
+export function buildSignInRedirect(pathname: string | undefined): string {
+  if (!pathname || pathname.startsWith('/sign-') || pathname.startsWith('/reset-password')) {
+    return SIGN_IN_PATH;
+  }
+  return `${SIGN_IN_PATH}?callbackURL=${encodeURIComponent(pathname)}`;
+}
+
+/**
+ * Require an authenticated user at a PAGE boundary. When there is no session,
+ * `redirect()` to the sign-in screen (carrying a `?callbackURL` so the user
+ * returns to where they were headed) rather than throwing -- a generic error
+ * boundary is the wrong UX for "you need to sign in" (ADR 35). Returns the
+ * user otherwise.
  *
  * Use in Server Components and route handlers. For Server Actions prefer
- * `defineAction({ auth: 'required', ... })` from `@repo/auth`, which raises
- * the same error class but wires `ctx.user` into the handler.
+ * `defineAction({ auth: 'required', ... })` from `@repo/auth`, which instead
+ * throws `UnauthorizedError` (mapped to a form/RPC error) -- redirecting from
+ * inside an action is the wrong layer.
  */
 export async function requireAuth(): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) throw new UnauthorizedError('Authentication required');
+  if (!user) {
+    const requestHeaders = await headers();
+    redirect(buildSignInRedirect(requestHeaders.get('x-pathname') ?? undefined));
+  }
   return user;
 }
 
 /**
- * Require a specific role; throw `UnauthorizedError` (401) without a session
- * or `ForbiddenError` (403) if the role check fails. Admin always satisfies
- * any role check (standard role-hierarchy pattern).
+ * Require a specific role at a PAGE boundary. No session redirects to sign-in
+ * (via `requireAuth`); an authenticated user who lacks the role gets a
+ * `ForbiddenError` (403) -- a genuine authorization failure, distinct from
+ * "not signed in", so it surfaces through the error boundary rather than a
+ * redirect. Admin always satisfies any role check (standard role hierarchy).
  *
  * Use in Server Components and route handlers. For Server Actions prefer
  * `defineAction({ auth: 'role:admin', ... })` from `@repo/auth`.

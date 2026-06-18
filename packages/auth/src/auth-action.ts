@@ -4,12 +4,13 @@ import { ForbiddenError, UnauthorizedError } from '@repo/core/errors';
 import {
   type ActionAuth,
   type ActionContext,
+  type ActionContextFor,
   type ActionState,
   defineAction as defineActionCore,
   defineFormAction as defineFormActionCore,
   initialActionState,
 } from '@repo/core/server-action';
-import type { ZodType } from 'zod';
+import type { ZodType, infer as zInfer } from 'zod';
 import { getCurrentUser } from './auth.service';
 
 export { type ActionState, initialActionState };
@@ -41,7 +42,7 @@ export { type ActionState, initialActionState };
  */
 
 async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
-  if (auth === 'public') return { user: null };
+  if (auth === 'public') return { user: null }; // allow-null: 'public' resolves to no authenticated user (established ActionContext shape).
 
   const user = await getCurrentUser();
   if (!user) throw new UnauthorizedError('Authentication required');
@@ -59,12 +60,16 @@ async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   throw new Error(`defineAction: unknown auth mode "${auth}"`);
 }
 
-type DefineActionConfig<TSchema extends ZodType, TResult> = Parameters<
-  typeof defineActionCore<TSchema, TResult>
->[0];
+type DefineActionConfig<TSchema extends ZodType, TResult, A extends ActionAuth> = {
+  schema: TSchema;
+  auth: A;
+  // ctx narrows on the auth mode: `'required'` / `'role:*'` give a non-null
+  // `ctx.user`, so handlers read `ctx.user.id` without a guard.
+  handler: (input: zInfer<TSchema>, ctx: ActionContextFor<A>) => Promise<TResult>;
+};
 
-export function defineAction<TSchema extends ZodType, TResult>(
-  config: DefineActionConfig<TSchema, TResult>,
+export function defineAction<TSchema extends ZodType, TResult, A extends ActionAuth>(
+  config: DefineActionConfig<TSchema, TResult, A>,
 ) {
   // Pass `auth: 'public'` to the core so its built-in auth stub no-ops
   // (it throws for any non-public mode until @repo/auth is wired in —
@@ -76,15 +81,20 @@ export function defineAction<TSchema extends ZodType, TResult>(
     schema: config.schema,
     auth: 'public',
     handler: async (input, _ctx) => {
+      // resolveAuth returns a non-null user for every non-public mode (it throws
+      // otherwise), so narrowing the resolved ActionContext to ActionContextFor<A>
+      // is sound -- it mirrors the runtime guarantee.
       const ctx = await resolveAuth(config.auth);
-      return config.handler(input, ctx);
+      return config.handler(input, ctx as ActionContextFor<A>);
     },
   });
 }
 
-type DefineFormActionConfig<TSchema extends ZodType, TResult> = Parameters<
-  typeof defineFormActionCore<TSchema, TResult>
->[0];
+type DefineFormActionConfig<TSchema extends ZodType, TResult, A extends ActionAuth> = {
+  schema: TSchema;
+  auth: A;
+  handler: (input: zInfer<TSchema>, ctx: ActionContextFor<A>) => Promise<TResult>;
+};
 
 /**
  * Auth-aware `defineFormAction` for `@repo/auth`.
@@ -101,15 +111,16 @@ type DefineFormActionConfig<TSchema extends ZodType, TResult> = Parameters<
  * formError without a try/catch, in line with React 19's `useActionState`
  * idiom.
  */
-export function defineFormAction<TSchema extends ZodType, TResult>(
-  config: DefineFormActionConfig<TSchema, TResult>,
+export function defineFormAction<TSchema extends ZodType, TResult, A extends ActionAuth>(
+  config: DefineFormActionConfig<TSchema, TResult, A>,
 ) {
   return defineFormActionCore({
     schema: config.schema,
     auth: 'public',
     handler: async (input, _ctx) => {
+      // Same sound narrowing as defineAction above.
       const ctx = await resolveAuth(config.auth);
-      return config.handler(input, ctx);
+      return config.handler(input, ctx as ActionContextFor<A>);
     },
   });
 }

@@ -13,7 +13,7 @@ pre-commit:
 pre-push:
   jobs:
     - name: knip
-      run: bunx knip --no-progress
+      run: bun run knip
 
 commit-msg:
   jobs:

@@ -15,6 +15,20 @@
       "when": 1778357398993,
       "tag": "0001_uneven_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781787293736,
+      "tag": "0002_melted_sister_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781787765125,
+      "tag": "0003_bouncy_mongoose",
+      "breakpoints": true
     }
   ]
 }

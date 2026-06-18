@@ -1,13 +1,11 @@
-import { requireRole } from '@repo/auth';
-import { getDb } from '@repo/db';
-import { users } from '@repo/db/schema';
+import { listUsers, requireRole } from '@repo/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
-import { isNull } from 'drizzle-orm';
 
 export default async function AdminPage() {
   await requireRole('admin');
-  const db = getDb();
-  const allUsers = await db.select().from(users).where(isNull(users.deletedAt)).limit(50);
+  // Read through the service, never the DB directly (layering rule). The list
+  // is a live read by design -- see listUsers in @repo/auth.
+  const allUsers = await listUsers();
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-16 space-y-6">
