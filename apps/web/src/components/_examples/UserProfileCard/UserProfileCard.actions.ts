@@ -11,10 +11,7 @@ export const updateProfileAction = defineFormAction({
   auth: 'required',
   handler: async (input, ctx) => {
     const db = getDb();
-    await db
-      .update(users)
-      .set({ name: input.name })
-      .where(eq(users.id, ctx.user?.id ?? ''));
+    await db.update(users).set({ name: input.name }).where(eq(users.id, ctx.user.id));
     return { name: input.name };
   },
 });

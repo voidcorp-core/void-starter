@@ -15,7 +15,7 @@ export const createNoteAction = defineFormAction({
   schema: createNoteSchema,
   auth: 'required',
   handler: async (input, ctx) => {
-    const userId = ctx.user?.id ?? '';
+    const userId = ctx.user.id;
     const note = await createNote({ userId, title: input.title, body: input.body });
     updateTag(`notes:list:user:${userId}`);
     return { id: note.id };
