@@ -79,6 +79,7 @@
         "@repo/auth": "workspace:*",
         "@repo/core": "workspace:*",
         "@repo/db": "workspace:*",
+        "@repo/notes": "workspace:*",
         "@repo/posthog": "workspace:*",
         "@repo/sentry": "workspace:*",
         "@repo/ui": "workspace:*",
@@ -174,6 +175,28 @@
         "drizzle-kit": "^0.31.0",
         "typescript": "^6.0.3",
         "vitest": "^4.1.9",
+      },
+    },
+    "packages/notes": {
+      "name": "@repo/notes",
+      "version": "0.0.1",
+      "dependencies": {
+        "@repo/core": "workspace:*",
+        "@repo/db": "workspace:*",
+        "drizzle-orm": "^0.45.0",
+        "server-only": "^0.0.1",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@repo/config": "workspace:*",
+        "@types/node": "^24.13.2",
+        "@vitest/coverage-v8": "^4.1.9",
+        "next": "^16.2.9",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.9",
+      },
+      "peerDependencies": {
+        "next": "^16.0.0",
       },
     },
     "packages/ui": {
@@ -641,6 +664,8 @@
     "@repo/core": ["@repo/core@workspace:packages/core"],
 
     "@repo/db": ["@repo/db@workspace:packages/db"],
+
+    "@repo/notes": ["@repo/notes@workspace:packages/notes"],
 
     "@repo/posthog": ["@repo/posthog@workspace:_modules/analytics-posthog"],
 

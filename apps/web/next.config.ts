@@ -41,6 +41,7 @@ const config: NextConfig = {
     '@repo/auth',
     '@repo/core',
     '@repo/db',
+    '@repo/notes',
     '@repo/posthog',
     '@repo/sentry',
     '@repo/ui',

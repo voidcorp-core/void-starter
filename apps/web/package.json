@@ -19,6 +19,7 @@
     "@repo/auth": "workspace:*",
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/notes": "workspace:*",
     "@repo/posthog": "workspace:*",
     "@repo/sentry": "workspace:*",
     "@repo/ui": "workspace:*",
