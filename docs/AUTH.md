@@ -215,10 +215,12 @@ Three steps, using GitHub as the example.
      server: {
        BETTER_AUTH_SECRET: z.string().min(32),
        BETTER_AUTH_URL: z.string().url(),
-       GOOGLE_CLIENT_ID: z.string().min(1),
-       GOOGLE_CLIENT_SECRET: z.string().min(1),
-       GITHUB_CLIENT_ID: z.string().min(1),
-       GITHUB_CLIENT_SECRET: z.string().min(1),
+       // Social providers are opt-in: validate them as optional and register
+       // them only when both credentials are present (see ADR 31).
+       GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+       GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+       GITHUB_CLIENT_ID: z.string().min(1).optional(),
+       GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
      },
      client: {},
      runtimeEnv: {
@@ -232,22 +234,21 @@ Three steps, using GitHub as the example.
    });
    ```
 
-3. **Add the provider to the Better-Auth config.** Same file, inside `betterAuth({ ... })`:
+3. **Register the provider conditionally.** Same file. Mirror `resolveGoogleProvider`: build each provider entry only when both credentials are present, then spread the merged object so an unconfigured provider never reaches Better-Auth (and `exactOptionalPropertyTypes` stays happy):
 
    ```ts
-   socialProviders: {
-     google: {
-       clientId: env['GOOGLE_CLIENT_ID'],
-       clientSecret: env['GOOGLE_CLIENT_SECRET'],
-     },
-     github: {
-       clientId: env['GITHUB_CLIENT_ID'],
-       clientSecret: env['GITHUB_CLIENT_SECRET'],
-     },
-   },
+   const googleProvider = resolveGoogleProvider(env);
+   const githubProvider =
+     env['GITHUB_CLIENT_ID'] && env['GITHUB_CLIENT_SECRET']
+       ? { github: { clientId: env['GITHUB_CLIENT_ID'], clientSecret: env['GITHUB_CLIENT_SECRET'] } }
+       : undefined;
+   const socialProviders = { ...googleProvider, ...githubProvider };
+
+   // inside betterAuth({ ... }):
+   ...(Object.keys(socialProviders).length > 0 ? { socialProviders } : {}),
    ```
 
-   The browser side picks it up automatically: `authClient.signIn.social({ provider: 'github' })` works the next time `bun run dev` rebuilds. No client changes needed.
+   The browser side picks it up automatically: `authClient.signIn.social({ provider: 'github' })` works the next time `bun run dev` rebuilds, once the GitHub credentials are set. No client changes needed.
 
 Do not commit real OAuth secrets. The dev pair stays in `.env.local`; prod values live in Vercel.
 
@@ -257,7 +258,8 @@ Do not commit real OAuth secrets. The dev pair stays in `.env.local`; prod value
 
 Today the magic-link sender is a development stub. The path to real email is wired but not active by default.
 
-- **Default (dev).** `sendMagicLink` in `packages/auth/src/auth.repository.ts` calls `logger.warn({ email, url, token }, 'magic link (dev only ...)')`. Open the dev console, copy the URL, paste it in the browser. No mail server needed.
+- **Default (dev).** `sendMagicLink` in `packages/auth/src/auth.repository.ts` calls `logger.warn({ email, url }, 'magic link (dev only ...)')`. Open the dev console, copy the URL, paste it in the browser. No mail server needed. The raw token is not logged separately -- the URL already embeds it.
+- **Production guard.** When `NODE_ENV === 'production'`, the dev stub throws `AppError('MAGIC_LINK_NOT_CONFIGURED')` instead of pretending to send. A deploy that enables magic link without wiring a real sender fails loud rather than silently swallowing logins (see ADR 31).
 - **Production.** Activate `_modules/email-resend` (placeholder today, see `_modules/email-resend/README.md`). The module ships React Email templates colocated with the adapter and replaces the body of `sendMagicLink` with a Resend API call. The `RESEND_API_KEY` env var gates activation.
 
 When activating Resend, update `sendMagicLink` directly in `auth.repository.ts`:
