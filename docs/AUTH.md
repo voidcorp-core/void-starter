@@ -32,8 +32,8 @@ Every export below lives at `packages/auth/src/index.ts` (the barrel) unless the
 ### Server-side session helpers (`auth.service.ts`)
 
 - **`getCurrentUser(): Promise<SessionUser | null>`** -- read the current session user via `next/headers`. Use in Server Components and route handlers. Returns `null` if no session, if the session shape no longer matches `sessionUserSchema`, or if `BETTER_AUTH_SECRET` is unset (auth-not-configured short-circuit; emits a one-time warning via `@repo/core/logger`).
-- **`requireAuth(): Promise<SessionUser>`** -- throw `UnauthorizedError` (401) if no session. Returns the user otherwise.
-- **`requireRole(role: Role): Promise<SessionUser>`** -- throw `UnauthorizedError` if no session, `ForbiddenError` (403) if the role check fails. Admin satisfies any role check (standard hierarchy).
+- **`requireAuth(): Promise<SessionUser>`** -- PAGE guard. `redirect()`s to `/sign-in?callbackURL=<path>` when there is no session (ADR 35), so an anonymous visitor lands on sign-in, not a generic error boundary, and returns to the page after authenticating. Returns the user otherwise. The path comes from the `x-pathname` header set in `proxy.ts`.
+- **`requireRole(role: Role): Promise<SessionUser>`** -- PAGE guard. No session redirects to sign-in (via `requireAuth`); an authenticated user who lacks the role gets `ForbiddenError` (403) -- a genuine authorization failure, surfaced through the error boundary, distinct from "not signed in". Admin satisfies any role check (standard hierarchy).
 - **`signOut()`** -- invalidate the current session at the Better-Auth API level. Cookie clearing happens via the response Better-Auth attaches.
 
 ### Server Action factories (`auth-action.ts`)
@@ -150,8 +150,8 @@ export default async function AdminPage() {
 
 Behavior:
 
-- **No session.** `requireRole` first calls `requireAuth`, which throws `UnauthorizedError` (401). The Next.js `error.tsx` boundary renders, or your custom handler redirects to `/sign-in`.
-- **Session, wrong role.** `ForbiddenError` (403). Render a 403 page or redirect to a "no access" route.
+- **No session.** `requireRole` first calls `requireAuth`, which `redirect()`s to `/sign-in?callbackURL=<path>` (ADR 35). The visitor signs in and is returned to the page; no error boundary involved.
+- **Session, wrong role.** `ForbiddenError` (403) -- a genuine authorization failure, surfaced through `error.tsx`. Render a dedicated 403 page if you want a tailored screen.
 - **Session, role match (or admin).** Returns the `SessionUser`. Continue rendering.
 
 The same logic works inside Server Actions via the auth-aware factory:

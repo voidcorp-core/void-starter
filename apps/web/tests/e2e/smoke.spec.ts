@@ -5,10 +5,12 @@ test('homepage loads with title', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /void factory/i })).toBeVisible();
 });
 
-test('dashboard rejects unauthenticated visitors', async ({ page }) => {
-  // requireAuth() throws UnauthorizedError; the error.tsx boundary renders.
-  // Without a session cookie, the page should NOT render the user profile card.
+test('dashboard redirects unauthenticated visitors to sign-in', async ({ page }) => {
+  // requireAuth() redirects anonymous visitors to /sign-in carrying a
+  // callbackURL (ADR 35) instead of rendering an error boundary.
   await page.goto('/dashboard');
+  await expect(page).toHaveURL(/\/sign-in\?callbackURL=%2Fdashboard/);
+  await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Profile' })).not.toBeVisible();
 });
 

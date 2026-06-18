@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { maskEmail, truncate } from './sanitize';
+import { maskEmail, safeInternalPath, truncate } from './sanitize';
+
+describe('safeInternalPath', () => {
+  it('returns a clean internal path unchanged', () => {
+    expect(safeInternalPath('/dashboard', '/home')).toBe('/dashboard');
+    expect(safeInternalPath('/notes?tag=x', '/home')).toBe('/notes?tag=x');
+  });
+
+  it('falls back when empty or undefined', () => {
+    expect(safeInternalPath(undefined, '/home')).toBe('/home');
+    expect(safeInternalPath('', '/home')).toBe('/home');
+  });
+
+  it('rejects protocol-relative and absolute URLs (open-redirect guard)', () => {
+    expect(safeInternalPath('//evil.com', '/home')).toBe('/home');
+    expect(safeInternalPath('https://evil.com', '/home')).toBe('/home');
+    expect(safeInternalPath('http://evil.com', '/home')).toBe('/home');
+    expect(safeInternalPath('javascript:alert(1)', '/home')).toBe('/home');
+  });
+
+  it('rejects paths that do not start with a single slash', () => {
+    expect(safeInternalPath('dashboard', '/home')).toBe('/home');
+    expect(safeInternalPath('\\\\evil.com', '/home')).toBe('/home');
+  });
+});
 
 describe('maskEmail', () => {
   it('masks the local part keeping first and last char', () => {
