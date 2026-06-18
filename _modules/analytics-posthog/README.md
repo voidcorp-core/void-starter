@@ -1,6 +1,6 @@
 # @repo/posthog
 
-Opt-in PostHog analytics module for void-starter MVPs. Wraps `posthog-js` 1.372.x with the modern `<PostHogProvider>` integration pattern from `posthog-js/react`, gated behind a build-time env var so PostHog never ships in the bundle when the key is unset.
+Opt-in PostHog analytics module for void-starter MVPs. Initializes the global `posthog-js` singleton through a dynamic `import()` gated on a build-time env var, so the SDK never ships in the eager client bundle when the key is unset.
 
 ## Why opt-in
 
@@ -10,7 +10,7 @@ Per `docs/DECISIONS.md` entry 04, optional infrastructure activates at build tim
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_POSTHOG_KEY` | client | Activates browser capture. Build-time inlined so the entire `posthog.init` block dead-code-eliminates when the value is unset at build time. |
+| `NEXT_PUBLIC_POSTHOG_KEY` | client | Activates browser capture. When unset, the effect returns before the dynamic `import('posthog-js')` runs, so the SDK is never loaded. |
 
 Optional:
 
@@ -78,11 +78,11 @@ The module is already wired into `apps/web` so a fresh starter clone activates P
    transpilePackages: ['@repo/auth', '@repo/core', '@repo/db', '@repo/posthog', '@repo/sentry', '@repo/ui'],
    ```
 
-## DCE note
+## Zero-bundle note (ADR 32)
 
-`AnalyticsProvider` reads `NEXT_PUBLIC_POSTHOG_KEY` inside a `useEffect`, but because `NEXT_PUBLIC_*` values are inlined at build time, the entire SDK init branch dead-code-eliminates when the var is absent at build time. Turbopack caveat: the runtime `if (!key) return;` check is preserved on disk, but the `posthog.init` call site is unreachable and the SDK is never fetched from the browser. This matches the documented behaviour of the Sentry module.
+`AnalyticsProvider` pulls `posthog-js` in through a DYNAMIC `import()` inside its `useEffect`, gated on `NEXT_PUBLIC_POSTHOG_KEY`. When the key is unset the effect returns before that import runs, so the SDK is split into an async chunk that is never fetched. This does NOT rely on dead-code elimination of a static import: Turbopack does not reliably DCE `NEXT_PUBLIC_*` branches across module boundaries (the same caveat that drove the Sentry dynamic-import gate in ADR 27), so a static `import posthog from 'posthog-js'` would ship the ~190KB SDK regardless of the key.
 
-To verify in your own deploy, run `bun run build` with `NEXT_PUBLIC_POSTHOG_KEY` unset, then load the homepage and confirm the network tab shows no requests to `/ingest/*` and no `posthog` references in the eagerly loaded chunks.
+To verify in your own deploy, run `bun run build` with `NEXT_PUBLIC_POSTHOG_KEY` unset, then load the homepage and confirm the network tab shows no requests to `/ingest/*` and no `posthog` chunk fetched.
 
 ## Removal
 
