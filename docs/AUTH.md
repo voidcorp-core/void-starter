@@ -35,6 +35,7 @@ Every export below lives at `packages/auth/src/index.ts` (the barrel) unless the
 - **`requireAuth(): Promise<SessionUser>`** -- PAGE guard. `redirect()`s to `/sign-in?callbackURL=<path>` when there is no session (ADR 35), so an anonymous visitor lands on sign-in, not a generic error boundary, and returns to the page after authenticating. Returns the user otherwise. The path comes from the `x-pathname` header set in `proxy.ts`.
 - **`requireRole(role: Role): Promise<SessionUser>`** -- PAGE guard. No session redirects to sign-in (via `requireAuth`); an authenticated user who lacks the role gets `ForbiddenError` (403) -- a genuine authorization failure, surfaced through the error boundary, distinct from "not signed in". Admin satisfies any role check (standard hierarchy).
 - **`signOut()`** -- invalidate the current session at the Better-Auth API level. Cookie clearing happens via the response Better-Auth attaches.
+- **`listUsers(): Promise<AdminUser[]>`** -- user-domain read for admin screens (active users, newest first). Goes through `users.service` -> `users.repository` so pages never touch the DB directly. Deliberately uncached: Better-Auth writes user rows without an app-side `updateTag()` hook, so a cache would go stale (see the service docstring). Gate the caller with `requireRole('admin')`.
 
 ### Server Action factories (`auth-action.ts`)
 

@@ -18,7 +18,6 @@
     "@sentry/nextjs": "^10.58.0",
     "@repo/auth": "workspace:*",
     "@repo/core": "workspace:*",
-    "@repo/db": "workspace:*",
     "@repo/notes": "workspace:*",
     "@repo/posthog": "workspace:*",
     "@repo/sentry": "workspace:*",

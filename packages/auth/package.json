@@ -21,6 +21,7 @@
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
     "better-auth": "^1.6.19",
+    "drizzle-orm": "^0.45.0",
     "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
@@ -30,7 +31,6 @@
   "devDependencies": {
     "@repo/config": "workspace:*",
     "@vitest/coverage-v8": "^4.1.9",
-    "drizzle-orm": "^0.45.0",
     "next": "^16.2.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

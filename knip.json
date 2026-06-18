@@ -18,7 +18,7 @@
       "entry": ["src/app/**/page.tsx", "src/app/**/layout.tsx", "tests/e2e/**/*.spec.ts"],
       "project": ["src/**/*.{ts,tsx}", "tests/e2e/**/*.ts"],
       "ignore": ["src/components/_examples/**"],
-      "ignoreDependencies": ["drizzle-orm", "@testing-library/react", "@testing-library/user-event"]
+      "ignoreDependencies": ["@testing-library/react", "@testing-library/user-event"]
     }
   }
 }
