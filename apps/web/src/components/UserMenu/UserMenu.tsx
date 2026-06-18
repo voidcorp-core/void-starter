@@ -89,7 +89,7 @@ export function UserMenu(_props: UserMenuProps) {
             size="sm"
             className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={async () => {
-              await signOutAction();
+              await signOutAction({});
             }}
           >
             Sign out
