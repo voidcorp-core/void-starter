@@ -98,11 +98,29 @@ function initAuth() {
         session: schema.sessions,
         account: schema.accounts,
         verification: schema.verifications,
+        rateLimit: schema.rateLimits,
       },
     }),
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
+    },
+    // Persist rate-limit counters in Postgres so the limit holds across
+    // serverless invocations -- the default in-memory store is per-invocation
+    // and grants every request its own bucket on Vercel (ADR 33; same reason
+    // @repo/core/createMemoryRateLimit is dev/test only). Better-Auth enables
+    // rate limiting in production by default; customRules tighten the
+    // brute-force-prone endpoints below the global 100/60s default.
+    rateLimit: {
+      storage: 'database',
+      modelName: 'rateLimit',
+      customRules: {
+        '/sign-in/email': { window: 60, max: 5 },
+        '/sign-in/magic-link': { window: 60, max: 5 },
+        '/sign-up/email': { window: 60, max: 10 },
+        '/forget-password': { window: 60, max: 5 },
+        '/reset-password': { window: 60, max: 5 },
+      },
     },
     // Conditional spread (not `socialProviders: undefined`) keeps
     // exactOptionalPropertyTypes happy when Google is not configured.
