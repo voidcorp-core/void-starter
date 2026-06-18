@@ -1,29 +1,20 @@
 /**
- * Smoke test for `AnalyticsProvider` gating behaviour.
+ * Smoke test for `AnalyticsProvider` render behaviour.
  *
- * We use `react-dom/server`'s `renderToString` instead of `@testing-library/react`
- * to keep this module's devDeps small. The two assertions we need (children
- * render at all, and `PostHogProvider` wraps them when the key is set) are
- * both verifiable from the rendered HTML string. We mock `posthog-js/react`
- * so the wrapper component renders a deterministic `data-testid` we can grep
- * for, and we mock `posthog-js` so the real SDK never tries to talk to the
- * network during the test.
+ * Uses `react-dom/server`'s `renderToString` to avoid pulling
+ * `@testing-library/react` into this module's devDeps. Effects do not run
+ * under SSR, which is exactly right here: the PostHog SDK init is an
+ * effect-only side effect (a dynamic `import('posthog-js')` gated on the key,
+ * see ADR 32), and what this test pins is the RENDER contract -- the provider
+ * passes children through unchanged and never injects a wrapper element,
+ * whether or not the key is set. The dynamic-import gate itself is verified by
+ * the build (README "Zero-bundle note").
  */
 import { renderToString } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('posthog-js', () => ({
-  default: { init: vi.fn() },
-}));
-
-vi.mock('posthog-js/react', () => ({
-  PostHogProvider: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="ph-provider">{children}</div>
-  ),
-}));
-
-import posthog from 'posthog-js';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AnalyticsProvider } from './AnalyticsProvider';
+
+const CHILD = '<span data-testid="child">hello</span>';
 
 describe('AnalyticsProvider', () => {
   const original = process.env['NEXT_PUBLIC_POSTHOG_KEY'];
@@ -31,10 +22,9 @@ describe('AnalyticsProvider', () => {
   afterEach(() => {
     if (original === undefined) delete process.env['NEXT_PUBLIC_POSTHOG_KEY'];
     else process.env['NEXT_PUBLIC_POSTHOG_KEY'] = original;
-    vi.mocked(posthog.init).mockClear();
   });
 
-  it('renders children without PostHogProvider when NEXT_PUBLIC_POSTHOG_KEY is unset', () => {
+  it('renders children unchanged when the key is unset', () => {
     delete process.env['NEXT_PUBLIC_POSTHOG_KEY'];
 
     const html = renderToString(
@@ -43,11 +33,10 @@ describe('AnalyticsProvider', () => {
       </AnalyticsProvider>,
     );
 
-    expect(html).toContain('data-testid="child"');
-    expect(html).not.toContain('data-testid="ph-provider"');
+    expect(html).toBe(CHILD);
   });
 
-  it('wraps children in PostHogProvider when NEXT_PUBLIC_POSTHOG_KEY is set', () => {
+  it('renders children unchanged (no wrapper element) when the key is set', () => {
     process.env['NEXT_PUBLIC_POSTHOG_KEY'] = 'phc_fake_test_key';
 
     const html = renderToString(
@@ -56,7 +45,6 @@ describe('AnalyticsProvider', () => {
       </AnalyticsProvider>,
     );
 
-    expect(html).toContain('data-testid="ph-provider"');
-    expect(html).toContain('data-testid="child"');
+    expect(html).toBe(CHILD);
   });
 });
