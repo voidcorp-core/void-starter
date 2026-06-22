@@ -15,18 +15,18 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@sentry/nextjs": "^10.58.0",
+    "@sentry/nextjs": "^10.59.0",
     "@repo/auth": "workspace:*",
     "@repo/core": "workspace:*",
     "@repo/notes": "workspace:*",
     "@repo/posthog": "workspace:*",
     "@repo/sentry": "workspace:*",
     "@repo/ui": "workspace:*",
-    "better-auth": "^1.6.19",
+    "better-auth": "^1.6.20",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-hook-form": "^7.79.0",
+    "react-hook-form": "^7.80.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
