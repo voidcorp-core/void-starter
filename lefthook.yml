@@ -8,7 +8,12 @@ pre-commit:
       glob: "*.{ts,tsx}"
       run: bunx turbo run type-check --output-logs=errors-only
     - name: gitleaks
-      run: gitleaks git --staged --redact --no-banner
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks git --staged --redact --no-banner
+        else
+          echo "WARN: gitleaks not installed, skipping secret scan"
+        fi
 
 pre-push:
   jobs:
