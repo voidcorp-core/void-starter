@@ -227,6 +227,18 @@ ${exportSource}`,
   };
 }
 
+function createVercelConfig(): GeneratedFile {
+  return {
+    path: `${WEB_ROOT}/vercel.json`,
+    content: `{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["fra1"]
+}
+`,
+  };
+}
+
 function createRootLayout(manifest: BuildManifest): GeneratedFile {
   const usesClerk = manifest.auth.provider === 'clerk';
   const usesPosthog = manifest.operations.analytics === 'posthog';
@@ -581,6 +593,7 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
     createWebPackageJson(manifest),
     createNextConfig(manifest),
     createRootLayout(manifest),
+    createVercelConfig(),
   );
 
   if (!usesDatabase) {

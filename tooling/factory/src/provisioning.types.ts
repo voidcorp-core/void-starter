@@ -11,11 +11,14 @@ const githubContextSchema = z.strictObject({
 
 const vercelContextSchema = z.strictObject({
   team_id: z.string().trim().min(1),
-  region: z.enum(['arn1', 'cdg1', 'dub1', 'fra1']),
+  region: z.literal('fra1'),
 });
 
 const neonContextSchema = z.strictObject({
-  org_id: z.string().trim().min(1),
+  org_id: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9-]{1,60}$/),
   region_id: z.enum(['aws-eu-central-1']),
 });
 
@@ -53,7 +56,8 @@ const vercelProjectActionSchema = z.strictObject({
     team_id: z.string().trim().min(1),
     name: z.string().trim().min(1),
     framework: z.literal('nextjs'),
-    region: z.enum(['arn1', 'cdg1', 'dub1', 'fra1']),
+    region: z.literal('fra1'),
+    root_directory: z.literal('apps/web'),
     repository_action_id: z.literal('github.repository'),
   }),
   idempotency_key: idempotencyKeySchema,
@@ -66,7 +70,10 @@ const neonProjectActionSchema = z.strictObject({
   depends_on: z.tuple([z.literal('github.repository')]),
   permissions: z.tuple([z.literal('project:create')]),
   input: z.strictObject({
-    org_id: z.string().trim().min(1),
+    org_id: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9-]{1,60}$/),
     name: z.string().trim().min(1),
     region_id: z.literal('aws-eu-central-1'),
   }),
@@ -110,12 +117,35 @@ export const provisioningPlanSchema = z.strictObject({
 
 export type ProvisioningPlan = z.infer<typeof provisioningPlanSchema>;
 
-export const provisionedResourceSchema = z.strictObject({
-  provider: z.enum(['github', 'vercel', 'neon']),
-  resource_kind: z.enum(['repository', 'project', 'database-binding']),
+const resourceIdentitySchema = {
   resource_id: z.string().trim().min(1),
   display_name: z.string().trim().min(1),
-});
+};
+
+export const provisionedResourceSchema = z.union([
+  z.strictObject({
+    provider: z.literal('github'),
+    resource_kind: z.literal('repository'),
+    ...resourceIdentitySchema,
+  }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('project'),
+    ...resourceIdentitySchema,
+  }),
+  z.strictObject({
+    provider: z.literal('neon'),
+    resource_kind: z.literal('project'),
+    ...resourceIdentitySchema,
+    database_name: z.string().trim().min(1),
+    role_name: z.string().trim().min(1),
+  }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('database-binding'),
+    ...resourceIdentitySchema,
+  }),
+]);
 
 export type ProvisionedResource = z.infer<typeof provisionedResourceSchema>;
 
@@ -143,7 +173,7 @@ export type ProvisioningActionState = z.infer<typeof provisioningActionStateSche
 
 export const provisioningApplyStateSchema = z.strictObject({
   schema_version: z.literal(1),
-  mode: z.literal('simulate'),
+  mode: z.enum(['simulate', 'live']),
   status: z.enum(['pending', 'running', 'failed', 'succeeded']),
   plan_sha256: sha256Schema,
   plan: provisioningPlanSchema,

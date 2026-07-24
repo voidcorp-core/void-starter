@@ -19,6 +19,8 @@ The current slice exposes:
   reconciliation actions with stable idempotency keys;
 - `applyProvisioning(input)` and the simulated adapter to exercise atomic state, locking,
   interruption recovery and resume without making remote changes;
+- `LiveProvisioningAdapter` plus separate live CLIs for authenticated provider preflight,
+  lookup-before-create reconciliation and in-memory database secret transport;
 - `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
   and capabilities, optional provisioning state, dependencies, and the absence of Harness/factory
   artifacts;
@@ -60,8 +62,7 @@ and production.
 The current Better Auth, Clerk, PostHog and Sentry adapters target the Next.js surface. A manifest
 that selects one of them without web is rejected instead of producing a misleading mobile
 integration. R2, Resend and DNS remain planned provider capabilities. The GitHub, Vercel and Neon
-tranche has a deterministic plan and simulated state machine; authenticated remote adapters are
-still future scope.
+tranche has a deterministic plan, simulated state machine and authenticated live adapter.
 
 To materialize the Expo blueprint in a temporary directory, install it, type-check it, and export
 the iOS, Android, and web bundles:
@@ -106,9 +107,42 @@ single-process lock, recovers locks whose process no longer exists, stores only 
 resource IDs and safe diagnostics, and skips completed actions on resume. `doctor` validates this
 state when present.
 
-Local `generate` still writes only to its new target. Live provider execution, secret binding and
-deployment remain unavailable; no flag silently turns simulation into remote mutation. Those
-external lifecycle stages follow the order in `docs/FACTORY.md`.
+Before allowing mutations, validate that each token targets the intended account:
+
+```sh
+GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
+  bun run preflight:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml
+```
+
+Preflight uses authenticated `GET` requests only. Tokens are read from the process environment and
+are never accepted by the manifest or provisioning context.
+
+Live apply is deliberately a separate command and requires the exact generated project name:
+
+```sh
+GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
+  bun run apply:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+It reconciles before creating and again after every create response. GitHub visibility, Vercel
+framework/root directory and Neon region must match before an existing resource is adopted. A
+database URL is retrieved from Neon and posted to Vercel as `sensitive` for Preview/Production and
+`encrypted` for Development, where Vercel does not support sensitive variables. It is never
+written to factory state or read back. A non-secret ownership marker makes the binding
+recoverable.
+
+An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
+that create blindly. Live contract tests use mocked HTTP providers. A disposable sandbox-account
+run is still required before declaring these adapters production-proven.
+
+Local `generate` still writes only to its new target. Git push, migrations, deployments and smoke
+tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns
+simulation into remote mutation.
 
 Void Harness may be used externally while developing this package. Harness artifacts and package
 dependencies must never be added to this workspace or to generated outputs.

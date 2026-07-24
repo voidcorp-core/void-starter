@@ -28,6 +28,12 @@ export {
   renderProject,
 } from './generation.service';
 export {
+  LiveProvisioningAdapter,
+  type LiveProvisioningAdapterOptions,
+  type LiveProvisioningCredentials,
+  loadLiveProvisioningCredentials,
+} from './live-provisioning.service';
+export {
   type ProvisionedResource,
   type ProvisioningAction,
   type ProvisioningActionState,
@@ -45,6 +51,7 @@ export {
   type ProvisioningAdapter,
   ProvisioningAdapterError,
   ProvisioningApplyError,
+  type ProvisioningExecutionContext,
   readProvisioningState,
   SimulatedProvisioningAdapter,
   validateProvisioningState,

@@ -38,7 +38,7 @@ vercel:
   team_id: team_example
   region: fra1
 neon:
-  org_id: org_example
+  org_id: org-example
   region_id: aws-eu-central-1
 `,
       'utf8',

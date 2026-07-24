@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseBuildManifest } from './factory.service';
 import { serializeCanonicalJson } from './integrity.service';
+import type { ProvisioningPlan } from './provisioning.types';
 import { applyProvisioning, SimulatedProvisioningAdapter } from './provisioning-apply.service';
 import {
   createProvisioningPlan,
@@ -14,8 +15,30 @@ export const provisioningUsage = `Usage:
 
 --dry-run is the safe default and prints the deterministic remote-action plan without writing.
 --simulate executes the resumable state machine locally; it does not call provider APIs.
-Live provider execution is intentionally unavailable in this increment.
+Authenticated provider execution uses the separate preflight:live, apply:live, and resume:live commands.
 `;
+
+export async function loadProvisioningPlan(input: {
+  targetArgument: string;
+  contextArgument: string;
+}): Promise<{
+  projectRoot: string;
+  plan: ProvisioningPlan;
+}> {
+  const projectRoot = resolve(process.cwd(), input.targetArgument);
+  const contextPath = resolve(process.cwd(), input.contextArgument);
+  const manifestSource = await readFile(
+    resolve(projectRoot, '.void-starter/manifest.json'),
+    'utf8',
+  );
+  const contextSource = await readFile(contextPath, 'utf8');
+  const manifest = parseBuildManifest(JSON.parse(manifestSource));
+  const context = parseProvisioningContextSource(contextSource, contextPath);
+  return {
+    projectRoot,
+    plan: createProvisioningPlan(manifest, context),
+  };
+}
 
 export async function runProvisioningCli(input: {
   arguments: string[];
@@ -33,16 +56,10 @@ export async function runProvisioningCli(input: {
     throw new Error(`resume requires --simulate in the current increment\n\n${provisioningUsage}`);
   }
 
-  const projectRoot = resolve(process.cwd(), targetArgument);
-  const contextPath = resolve(process.cwd(), contextArgument);
-  const manifestSource = await readFile(
-    resolve(projectRoot, '.void-starter/manifest.json'),
-    'utf8',
-  );
-  const contextSource = await readFile(contextPath, 'utf8');
-  const manifest = parseBuildManifest(JSON.parse(manifestSource));
-  const context = parseProvisioningContextSource(contextSource, contextPath);
-  const plan = createProvisioningPlan(manifest, context);
+  const { projectRoot, plan } = await loadProvisioningPlan({
+    targetArgument,
+    contextArgument,
+  });
 
   if (modeArgument === '--dry-run') {
     return plan;

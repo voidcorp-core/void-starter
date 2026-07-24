@@ -155,6 +155,7 @@ describe('renderProject', () => {
         'apps/web/package.json',
         'apps/web/src/app/layout.tsx',
         'apps/web/src/app/page.tsx',
+        'apps/web/vercel.json',
       ]),
     );
     expect(receipt.removed_paths).toContain('apps/worker');
@@ -345,6 +346,7 @@ describe('renderProject', () => {
       'apps/web/package.json',
       'apps/web/src/app/layout.tsx',
       'apps/web/src/app/page.tsx',
+      'apps/web/vercel.json',
     ]);
     await expect(
       readFile(join(minimal.targetRoot, '.void-starter/receipt.json'), 'utf8'),
@@ -466,7 +468,7 @@ describe('doctorProject', () => {
         region: 'fra1',
       },
       neon: {
-        org_id: 'org_example',
+        org_id: 'org-example',
         region_id: 'aws-eu-central-1',
       },
     });

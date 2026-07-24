@@ -84,6 +84,7 @@ export function createProvisioningPlan(
           name: manifest.project.name,
           framework: 'nextjs',
           region: context.vercel.region,
+          root_directory: 'apps/web',
           repository_action_id: 'github.repository',
         },
       }),

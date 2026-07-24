@@ -26,8 +26,17 @@ type LockMetadata = {
 };
 
 export type ProvisioningAdapter = {
-  readonly mode: 'simulate';
-  ensure(action: ProvisioningAction): Promise<ProvisionedResource>;
+  readonly mode: 'simulate' | 'live';
+  preflight(plan: ProvisioningPlan): Promise<void>;
+  ensure(
+    action: ProvisioningAction,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource>;
+};
+
+export type ProvisioningExecutionContext = {
+  resources: ReadonlyMap<ProvisioningAction['id'], ProvisionedResource>;
+  previousError: ProvisioningActionState['error'];
 };
 
 export type ApplyProvisioningInput = {
@@ -166,10 +175,13 @@ async function releaseLock(projectRoot: string, lock: LockMetadata): Promise<voi
   }
 }
 
-function initialState(plan: ProvisioningPlan): ProvisioningApplyState {
+function initialState(
+  plan: ProvisioningPlan,
+  mode: ProvisioningAdapter['mode'],
+): ProvisioningApplyState {
   return {
     schema_version: 1,
-    mode: 'simulate',
+    mode,
     status: 'pending',
     plan_sha256: provisioningPlanDigest(plan),
     plan,
@@ -278,16 +290,29 @@ export async function applyProvisioning(
       throw new Error('No provisioning state exists to resume');
     }
 
-    const state = existingState ?? initialState(plan);
+    const state = existingState ?? initialState(plan, input.adapter.mode);
     assertStateMatchesPlan(state, plan);
     validateProvisioningState(state, plan.manifest_sha256);
+    if (state.mode !== input.adapter.mode) {
+      throw new Error(
+        `Provisioning state mode ${state.mode} cannot resume with ${input.adapter.mode}`,
+      );
+    }
 
     if (state.status === 'succeeded') {
       return state;
     }
 
+    await input.adapter.preflight(plan);
     state.status = 'running';
     await writeStateAtomic(input.projectRoot, state);
+
+    const resources = new Map<ProvisioningAction['id'], ProvisionedResource>();
+    for (const actionState of state.actions) {
+      if (actionState.status === 'succeeded' && actionState.resource) {
+        resources.set(actionState.action_id, actionState.resource);
+      }
+    }
 
     for (const action of plan.actions) {
       const actionState = actionStateById(state, action.id);
@@ -295,14 +320,21 @@ export async function applyProvisioning(
         continue;
       }
       assertDependenciesSucceeded(state, action);
+      const previousError = actionState.error;
       actionState.status = 'running';
       actionState.attempts += 1;
       actionState.error = null;
       await writeStateAtomic(input.projectRoot, state);
 
       try {
-        actionState.resource = provisionedResourceSchema.parse(await input.adapter.ensure(action));
+        actionState.resource = provisionedResourceSchema.parse(
+          await input.adapter.ensure(action, {
+            resources,
+            previousError,
+          }),
+        );
         actionState.status = 'succeeded';
+        resources.set(action.id, actionState.resource);
         await writeStateAtomic(input.projectRoot, state);
       } catch (error) {
         const safeError = persistedError(error);
@@ -331,7 +363,12 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
     this.#failActionId = options.failActionId;
   }
 
-  async ensure(action: ProvisioningAction): Promise<ProvisionedResource> {
+  async preflight(_plan: ProvisioningPlan): Promise<void> {}
+
+  async ensure(
+    action: ProvisioningAction,
+    _context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
     if (action.id === this.#failActionId) {
       throw new ProvisioningAdapterError({
         code: 'SIMULATED_FAILURE',
@@ -355,6 +392,8 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         resource_kind: 'project',
         resource_id: resourceId,
         display_name: action.input.name,
+        database_name: 'neondb',
+        role_name: 'neondb_owner',
       };
     }
     if (action.id === 'vercel.project') {

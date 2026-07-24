@@ -158,6 +158,7 @@ async function capabilitiesMatchManifest(
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
 
   const pathExpectations = new Map<string, boolean>([
+    ['apps/web/vercel.json', hasWeb],
     ['packages/auth/package.json', usesBetterAuth],
     ['packages/db/package.json', usesDatabase],
     ['packages/notes/package.json', usesBetterAuth && usesDatabase],

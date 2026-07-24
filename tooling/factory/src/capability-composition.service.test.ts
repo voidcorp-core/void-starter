@@ -12,11 +12,18 @@ function readGeneratedJson(
   plan: ReturnType<typeof createCapabilityFilePlan>,
   path: string,
 ): Record<string, unknown> {
+  return JSON.parse(readGeneratedFile(plan, path)) as Record<string, unknown>;
+}
+
+function readGeneratedFile(
+  plan: ReturnType<typeof createCapabilityFilePlan>,
+  path: string,
+): string {
   const content = plan.writes.find((file) => file.path === path)?.content;
   if (!content) {
     throw new Error(`Missing generated file: ${path}`);
   }
-  return JSON.parse(content) as Record<string, unknown>;
+  return content;
 }
 
 describe('createCapabilityFilePlan', () => {
@@ -52,6 +59,17 @@ describe('createCapabilityFilePlan', () => {
     });
     expect(webPackage.devDependencies).not.toHaveProperty('postgres');
     expect(webPackage.scripts).not.toHaveProperty('test:e2e');
+    expect(readGeneratedJson(plan, 'apps/web/vercel.json')).toEqual({
+      $schema: 'https://openapi.vercel.sh/vercel.json',
+      framework: 'nextjs',
+      regions: ['fra1'],
+    });
+    expect(readGeneratedFile(plan, 'apps/web/vercel.json')).toBe(`{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["fra1"]
+}
+`);
 
     const generatedSource = plan.writes.map((file) => file.content).join('\n');
     expect(generatedSource).not.toMatch(

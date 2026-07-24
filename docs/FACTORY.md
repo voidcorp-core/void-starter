@@ -170,8 +170,8 @@ The implemented factory slice lives in `tooling/factory`. It validates schema v1
 objects, produces a deterministic ordered composition plan, previews a sorted local file plan, and
 can render the selected surfaces into a new directory. The Expo blueprint targets SDK 57, React
 Native 0.86, Expo Router, and EAS. Rendering remains local. A separate provisioning plan can now
-model the first GitHub, Vercel and Neon resource tranche, but only dry-run and local simulation are
-enabled.
+model the first GitHub, Vercel and Neon resource tranche. Dry-run and simulation remain the safe
+defaults; authenticated execution is isolated behind separate live commands.
 
 ```yaml
 schema_version: 1
@@ -292,13 +292,14 @@ vercel:
   region: fra1
 
 neon:
-  org_id: org_example
+  org_id: org-example
   region_id: aws-eu-central-1
 ```
 
 This strict document accepts no credentials. Owner, team and organization IDs are explicit so the
-factory never derives or invents opaque provider identity. Vercel regions are restricted to EU
-locations for the current `eu_primary` policy; the first Neon adapter contract targets Frankfurt.
+factory never derives or invents opaque provider identity. The first live contract fixes Vercel
+to `fra1` and Neon to `aws-eu-central-1`. Generated web projects contain
+`apps/web/vercel.json`, so Vercel Functions do not silently fall back to the `iad1` default.
 
 After generating a project:
 
@@ -338,6 +339,56 @@ persist the returned opaque provider ID before advancing. See the official
 [GitHub repository endpoint](https://docs.github.com/en/rest/repos/repos) and
 [Vercel REST API authentication/team routing](https://vercel.com/docs/rest-api).
 
+### 10.2 Live provider boundary
+
+The first authenticated adapter covers GitHub repository, Vercel project, Neon project and the
+Vercel `DATABASE_URL` binding. Credentials exist only in process memory:
+
+```sh
+export GITHUB_TOKEN=...
+export VERCEL_TOKEN=...
+export NEON_API_KEY=...
+
+bun run preflight:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml
+```
+
+The preflight performs only authenticated reads. It verifies the GitHub user or active
+organization membership, exact Vercel team ID and accessible Neon organization ID. It creates no
+state and performs no mutation.
+
+The mutation command is deliberately separate and requires an exact project-name confirmation:
+
+```sh
+bun run apply:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+
+bun run resume:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+Every provider resource is looked up before creation and validated before adoption. Each create is
+followed by another lookup rather than trusting an incomplete response. If a network failure or
+server error makes a create ambiguous, state records an explicit ambiguity code. Subsequent
+resume attempts perform lookup only and never issue a second create for that action.
+
+For the database binding, the adapter retrieves a pooled Neon URI into memory. It posts the URI to
+Vercel as `sensitive` for Preview/Production and as `encrypted` for Development, because Vercel
+does not permit sensitive variables in Development. Neither value is read back. The URI, access
+tokens and provider response bodies never enter `.void-starter/apply-state.json`. A plain
+`VOID_STARTER_DATABASE_BINDING_ID=<action-idempotency-key>` marker proves binding ownership
+without exposing `DATABASE_URL`; a pre-existing unmarked binding fails closed.
+
+The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
+identity mismatch tests and ambiguous-create resume tests. It has not yet been executed against
+the intended disposable sandbox accounts. That external validation is the remaining gate before
+calling this provider tranche production-proven.
+
 ## 11. Lifecycle
 
 ```text
@@ -368,8 +419,8 @@ invents them. Destructive rollback is separate from retry and requires explicit 
 The local `generate` and `doctor` stages implement the source, surface, local-capability, receipt
 and integrity parts of this lifecycle. `apply --dry-run` implements the deterministic first
 provider plan, while `apply --simulate` and `resume --simulate` implement its local state machine.
-Real provider IDs, credentials, secret transport, deployments and remote mutations remain future
-adapter work and have no executable flag yet.
+The separate live commands implement the first GitHub/Vercel/Neon provider boundary. Git source
+push, migrations, deployment and smoke verification remain future actions.
 
 ## 12. Cost policy
 
@@ -403,15 +454,15 @@ be proven locally.
 
 ## 14. Implementation order
 
-1. Freeze and test the current web baseline.
-2. Define and validate manifest schema v1.
-3. Implement deterministic local composition with fixture matrix.
-4. Implement `plan`, receipt and `doctor` before external mutations.
-5. Add GitHub, Vercel and Neon provisioning.
+1. Freeze and test the current web baseline. **Done.**
+2. Define and validate manifest schema v1. **Done.**
+3. Implement deterministic local composition with fixture matrix. **Done.**
+4. Implement `plan`, receipt and `doctor` before external mutations. **Done.**
+5. Add GitHub, Vercel and Neon provisioning. **Contract complete; sandbox canary pending.**
 6. Finish Better Auth production onboarding and seed.
-7. Add optional Expo/EAS surface.
+7. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
 8. Add R2, Resend, observability and DNS adapters.
-9. Add `resume` and failure injection tests.
+9. Add `resume` and failure injection tests. **Done for the first provider tranche.**
 10. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
