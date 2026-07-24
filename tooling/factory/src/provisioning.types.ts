@@ -36,7 +36,10 @@ const githubRepositoryActionSchema = z.strictObject({
   provider: z.literal('github'),
   kind: z.literal('ensure-repository'),
   depends_on: z.tuple([]),
-  permissions: z.tuple([z.literal('repository:administration:write')]),
+  permissions: z.union([
+    z.tuple([z.literal('repository:administration:write')]),
+    z.tuple([z.literal('organization:members:read'), z.literal('repository:administration:write')]),
+  ]),
   input: z.strictObject({
     owner: z.string().trim().min(1),
     owner_kind: z.enum(['organization', 'user']),

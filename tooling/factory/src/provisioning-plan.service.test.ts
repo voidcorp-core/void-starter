@@ -46,6 +46,10 @@ describe('createProvisioningPlan', () => {
     expect(
       first.actions.every((action) => action.idempotency_key.startsWith('void-starter:v1:')),
     ).toBe(true);
+    expect(first.actions[0]?.permissions).toEqual([
+      'organization:members:read',
+      'repository:administration:write',
+    ]);
     expect(first.actions[3]?.depends_on).toEqual(['vercel.project', 'neon.project']);
   });
 
@@ -67,6 +71,19 @@ describe('createProvisioningPlan', () => {
       'vercel.project',
     ]);
     expect(mobile.actions.map((action) => action.id)).toEqual(['github.repository']);
+
+    const personal = createProvisioningPlan(
+      parseBuildManifest(mobileOnlyManifest),
+      parseProvisioningContext({
+        schema_version: 1,
+        github: {
+          owner: 'factory-bot',
+          owner_kind: 'user',
+          visibility: 'private',
+        },
+      }),
+    );
+    expect(personal.actions[0]?.permissions).toEqual(['repository:administration:write']);
   });
 
   it('requires provider coordinates without accepting tokens or inventing opaque IDs', () => {

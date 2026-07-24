@@ -61,7 +61,10 @@ export function createProvisioningPlan(
       provider: 'github',
       kind: 'ensure-repository',
       depends_on: [],
-      permissions: ['repository:administration:write'],
+      permissions:
+        context.github.owner_kind === 'organization'
+          ? ['organization:members:read', 'repository:administration:write']
+          : ['repository:administration:write'],
       input: {
         owner: context.github.owner,
         owner_kind: context.github.owner_kind,

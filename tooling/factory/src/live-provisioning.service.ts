@@ -57,13 +57,11 @@ const githubUserSchema = z.object({
 });
 
 const githubMembershipSchema = z.object({
-  state: z.literal('active'),
+  state: z.enum(['active', 'pending']),
   organization: z.object({
     login: z.string().min(1),
   }),
 });
-
-const githubMembershipsSchema = z.array(githubMembershipSchema);
 
 const githubRepositorySchema = z.object({
   node_id: z.string().min(1),
@@ -316,34 +314,36 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       return;
     }
 
-    for (let page = 1; ; page += 1) {
-      const membershipResponse = await this.#request({
-        provider: 'github',
-        url: withQuery(`${GITHUB_API}/user/memberships/orgs`, {
-          state: 'active',
-          per_page: '100',
-          page: String(page),
-        }),
-        acceptedStatuses: [200],
-      });
-      const memberships = await this.#json('github', membershipResponse, githubMembershipsSchema);
-      if (
-        memberships.some(
-          (membership) =>
-            membership.organization.login.toLowerCase() === action.input.owner.toLowerCase(),
-        )
-      ) {
-        return;
-      }
-      if (memberships.length < 100) {
-        break;
-      }
+    const membershipResponse = await this.#request({
+      provider: 'github',
+      url: `${GITHUB_API}/user/memberships/orgs/${encoded(action.input.owner)}`,
+      acceptedStatuses: [200, 403, 404],
+    });
+    if (membershipResponse.status === 403) {
+      throw adapterFailure(
+        'github',
+        'MEMBERS_PERMISSION_REQUIRED',
+        'GitHub organization preflight requires Organization permissions > Members: read',
+      );
     }
-    throw adapterFailure(
-      'github',
-      'ORGANIZATION_MISMATCH',
-      'Authenticated GitHub user is not an active member of the requested organization',
-    );
+    if (membershipResponse.status === 404) {
+      throw adapterFailure(
+        'github',
+        'ORGANIZATION_MISMATCH',
+        'Authenticated GitHub user is not a member of the requested organization',
+      );
+    }
+    const membership = await this.#json('github', membershipResponse, githubMembershipSchema);
+    if (
+      membership.state !== 'active' ||
+      membership.organization.login.toLowerCase() !== action.input.owner.toLowerCase()
+    ) {
+      throw adapterFailure(
+        'github',
+        'ORGANIZATION_MISMATCH',
+        'Authenticated GitHub user is not an active member of the requested organization',
+      );
+    }
   }
 
   async #preflightVercel(

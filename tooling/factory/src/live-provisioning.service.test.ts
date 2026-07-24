@@ -41,6 +41,7 @@ class MockProviderApi {
   vercelProjectExists = false;
   neonProjectExists = false;
   bindingMarker: string | null = null;
+  githubMembershipPermissionDenied = false;
   neonOrganizationAccessible = true;
   failNeonCreateWithNetwork = false;
   readonly requests: RecordedRequest[] = [];
@@ -60,15 +61,18 @@ class MockProviderApi {
     if (url.hostname === 'api.github.com' && url.pathname === '/user') {
       return jsonResponse({ login: 'factory-bot' });
     }
-    if (url.hostname === 'api.github.com' && url.pathname === '/user/memberships/orgs') {
-      return jsonResponse([
-        {
-          state: 'active',
-          organization: {
-            login: 'voidcorp-core',
-          },
-        },
-      ]);
+    if (
+      url.hostname === 'api.github.com' &&
+      url.pathname === '/user/memberships/orgs/voidcorp-core'
+    ) {
+      return this.githubMembershipPermissionDenied
+        ? jsonResponse({}, 403)
+        : jsonResponse({
+            state: 'active',
+            organization: {
+              login: 'voidcorp-core',
+            },
+          });
     }
     if (url.hostname === 'api.github.com' && url.pathname === '/repos/voidcorp-core/example-saas') {
       return this.repositoryExists
@@ -415,6 +419,25 @@ describe('LiveProvisioningAdapter', () => {
         }),
       }),
     ).rejects.toThrow(/organization/i);
+    expect(await readProvisioningState(project.root)).toBeNull();
+    expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
+  });
+
+  it('explains the GitHub organization membership permission required by preflight', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.githubMembershipPermissionDenied = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({
+          credentials,
+          fetch: provider.fetch,
+        }),
+      }),
+    ).rejects.toThrow(/Members: read/);
     expect(await readProvisioningState(project.root)).toBeNull();
     expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
   });

@@ -59,15 +59,13 @@ neon:
       if (url.pathname === '/user') {
         return jsonResponse({ login: 'factory-bot' });
       }
-      if (url.pathname === '/user/memberships/orgs') {
-        return jsonResponse([
-          {
-            state: 'active',
-            organization: {
-              login: 'voidcorp-core',
-            },
+      if (url.pathname === '/user/memberships/orgs/voidcorp-core') {
+        return jsonResponse({
+          state: 'active',
+          organization: {
+            login: 'voidcorp-core',
           },
-        ]);
+        });
       }
       if (url.pathname === '/v2/teams/team_example') {
         return jsonResponse({ id: 'team_example' });

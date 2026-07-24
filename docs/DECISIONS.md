@@ -597,9 +597,12 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 - **Why:** A valid token is insufficient proof that the factory is targeting the intended owner,
   team or organization. A successful or failed create response is also insufficient proof of
   remote state after transport ambiguity. Provider identity preflight and post-create
-  reconciliation make the mutation target and retry behavior explicit. Vercel defaults Functions
-  to `iad1` unless configured, while its documentation recommends locating Functions near the
-  database. Neon documents POST as non-idempotent and exposes a safe project search endpoint.
+  reconciliation make the mutation target and retry behavior explicit. For organization-owned
+  repositories, the exact GitHub membership endpoint requires `Members: read`; the broader
+  no-permission membership listing returned an empty list during the sandbox canary, making it
+  unreliable for exact owner validation. Vercel defaults Functions to `iad1` unless configured,
+  while its documentation recommends locating Functions near the database. Neon documents POST
+  as non-idempotent and exposes a safe project search endpoint.
   Sensitive Vercel environment variables are write-only for the factory, and regular encrypted
   values are not read back, so a separate non-secret marker is required for recovery. References:
   [GitHub repository API](https://docs.github.com/en/rest/repos/repos),
