@@ -27,4 +27,32 @@ export {
   type RenderProjectInput,
   renderProject,
 } from './generation.service';
+export {
+  type ProvisionedResource,
+  type ProvisioningAction,
+  type ProvisioningActionState,
+  type ProvisioningApplyState,
+  type ProvisioningContext,
+  type ProvisioningPlan,
+  provisionedResourceSchema,
+  provisioningApplyStateSchema,
+  provisioningContextSchema,
+  provisioningPlanSchema,
+} from './provisioning.types';
+export {
+  type ApplyProvisioningInput,
+  applyProvisioning,
+  type ProvisioningAdapter,
+  ProvisioningAdapterError,
+  ProvisioningApplyError,
+  readProvisioningState,
+  SimulatedProvisioningAdapter,
+  validateProvisioningState,
+} from './provisioning-apply.service';
+export {
+  createProvisioningPlan,
+  parseProvisioningContext,
+  parseProvisioningContextSource,
+  provisioningPlanDigest,
+} from './provisioning-plan.service';
 export { createSurfaceFilePlan } from './surface-composition.service';

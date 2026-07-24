@@ -7,10 +7,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "apply": "bun ./src/apply.cli.ts",
     "doctor": "bun ./src/doctor.cli.ts",
     "generate": "bun ./src/generate.cli.ts",
     "lint": "biome check .",
     "plan": "bun ./src/cli.ts",
+    "resume": "bun ./src/resume.cli.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"

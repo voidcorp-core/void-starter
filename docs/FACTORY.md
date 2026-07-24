@@ -169,7 +169,9 @@ verification and recovery note.
 The implemented factory slice lives in `tooling/factory`. It validates schema v1 with strict Zod
 objects, produces a deterministic ordered composition plan, previews a sorted local file plan, and
 can render the selected surfaces into a new directory. The Expo blueprint targets SDK 57, React
-Native 0.86, Expo Router, and EAS. Rendering remains local and does not provision resources.
+Native 0.86, Expo Router, and EAS. Rendering remains local. A separate provisioning plan can now
+model the first GitHub, Vercel and Neon resource tranche, but only dry-run and local simulation are
+enabled.
 
 ```yaml
 schema_version: 1
@@ -273,6 +275,69 @@ only, never secret values. Better Auth, Clerk, PostHog and Sentry are currently 
 selecting them without a Next.js surface is rejected. R2, Resend and DNS remain provider-plan
 intent until `apply` adapters materialize their remote resources.
 
+### 10.1 Provisioning context
+
+Provider account coordinates are intentionally separate from the product manifest:
+
+```yaml
+schema_version: 1
+
+github:
+  owner: voidcorp-core
+  owner_kind: organization
+  visibility: private
+
+vercel:
+  team_id: team_example
+  region: fra1
+
+neon:
+  org_id: org_example
+  region_id: aws-eu-central-1
+```
+
+This strict document accepts no credentials. Owner, team and organization IDs are explicit so the
+factory never derives or invents opaque provider identity. Vercel regions are restricted to EU
+locations for the current `eu_primary` policy; the first Neon adapter contract targets Frankfurt.
+
+After generating a project:
+
+```sh
+cd tooling/factory
+
+# Safe default: prints the plan and writes nothing.
+bun run apply -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --dry-run
+
+# Exercises state, locking and resume locally; it never calls provider APIs.
+bun run apply -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --simulate
+
+bun run resume -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --simulate
+```
+
+The plan is deterministic and each action receives a content-derived idempotency key. Simulation
+stores a canonical `.void-starter/apply-state.json` after every transition using an atomic rename.
+A process lock prevents concurrent applies; a lock owned by a process that no longer exists is
+recovered. Resume verifies the manifest and complete plan digest, rejects drift, skips successful
+actions and retries the first incomplete action. Persisted failures contain only explicit safe
+diagnostics, not raw provider errors that could contain credentials.
+
+The action vocabulary uses `ensure-*` reconciliation semantics. This is especially important for
+Neon: its create-project endpoint warns that retrying a timed-out `POST` can create more than one
+project. A future live adapter must search by its stable ownership metadata before creating, then
+persist the returned opaque provider ID before advancing. See the official
+[Neon create-project contract](https://api-docs.neon.tech/reference/createproject),
+[GitHub repository endpoint](https://docs.github.com/en/rest/repos/repos) and
+[Vercel REST API authentication/team routing](https://vercel.com/docs/rest-api).
+
 ## 11. Lifecycle
 
 ```text
@@ -300,9 +365,11 @@ receipt
 Every external step is idempotent. The factory stores opaque provider IDs and never derives or
 invents them. Destructive rollback is separate from retry and requires explicit approval.
 
-The local `generate` and `doctor` stages now implement the source, surface, local-capability,
-receipt and integrity parts of this lifecycle. Provider IDs, secrets, deployments and remote
-mutations remain future `apply` work.
+The local `generate` and `doctor` stages implement the source, surface, local-capability, receipt
+and integrity parts of this lifecycle. `apply --dry-run` implements the deterministic first
+provider plan, while `apply --simulate` and `resume --simulate` implement its local state machine.
+Real provider IDs, credentials, secret transport, deployments and remote mutations remain future
+adapter work and have no executable flag yet.
 
 ## 12. Cost policy
 

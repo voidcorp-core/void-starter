@@ -6,6 +6,7 @@ import { createCompositionPlan, parseBuildManifest } from './factory.service';
 import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
 import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
+import { readProvisioningState, validateProvisioningState } from './provisioning-apply.service';
 
 const receiptSchema = z.strictObject({
   schema_version: z.literal(1),
@@ -289,6 +290,33 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
       'No Void Harness dependency is present',
     ),
   );
+
+  try {
+    const provisioningState = await readProvisioningState(projectRoot);
+    if (!provisioningState) {
+      checks.push(
+        createCheck(
+          'provisioning-state',
+          true,
+          'No provisioning state is recorded; the project remains local-only',
+        ),
+      );
+    } else {
+      validateProvisioningState(provisioningState, receipt.manifest_sha256);
+      checks.push(
+        createCheck(
+          'provisioning-state',
+          provisioningState.status === 'succeeded',
+          `Provisioning state is structurally valid and ${provisioningState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(
+      createCheck('provisioning-state', false, `Provisioning state is invalid: ${message}`),
+    );
+  }
 
   return {
     ok: checks.every((check) => check.status === 'pass'),

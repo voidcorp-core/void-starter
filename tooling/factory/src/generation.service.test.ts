@@ -13,6 +13,8 @@ import { doctorProject } from './doctor.service';
 import { parseBuildManifest } from './factory.service';
 import { renderProject } from './generation.service';
 import { sha256 } from './integrity.service';
+import { applyProvisioning, SimulatedProvisioningAdapter } from './provisioning-apply.service';
+import { createProvisioningPlan, parseProvisioningContext } from './provisioning-plan.service';
 
 const temporaryRoots: string[] = [];
 
@@ -439,6 +441,54 @@ describe('doctorProject', () => {
     expect(traversalReport.checks).toContainEqual(
       expect.objectContaining({
         id: 'generated-files',
+        status: 'fail',
+      }),
+    );
+  });
+
+  it('accepts completed simulated provisioning state and fails closed on state corruption', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    const manifest = parseBuildManifest(expoManifest);
+    await renderProject({
+      manifest,
+      sourceRoot,
+      targetRoot,
+    });
+    const context = parseProvisioningContext({
+      schema_version: 1,
+      github: {
+        owner: 'voidcorp-core',
+        owner_kind: 'organization',
+        visibility: 'private',
+      },
+      vercel: {
+        team_id: 'team_example',
+        region: 'fra1',
+      },
+      neon: {
+        org_id: 'org_example',
+        region_id: 'aws-eu-central-1',
+      },
+    });
+    await applyProvisioning({
+      projectRoot: targetRoot,
+      plan: createProvisioningPlan(manifest, context),
+      adapter: new SimulatedProvisioningAdapter(),
+    });
+
+    const healthyReport = await doctorProject(targetRoot);
+    expect(healthyReport.checks).toContainEqual({
+      id: 'provisioning-state',
+      status: 'pass',
+      message: 'Provisioning state is structurally valid and succeeded',
+    });
+
+    await writeFile(join(targetRoot, '.void-starter/apply-state.json'), '{}\n', 'utf8');
+    const corruptReport = await doctorProject(targetRoot);
+    expect(corruptReport.ok).toBe(false);
+    expect(corruptReport.checks).toContainEqual(
+      expect.objectContaining({
+        id: 'provisioning-state',
         status: 'fail',
       }),
     );
