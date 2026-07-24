@@ -1,0 +1,49 @@
+schema_version: 1
+
+project:
+  name: web-clerk
+  profile: saas
+
+surfaces:
+  web: next-vercel
+  mobile:
+    adapter: none
+  worker: none
+
+workloads:
+  http: vercel-functions
+  durable_jobs: none
+  realtime_audio: none
+  persistent_service: none
+
+data:
+  database: none
+  orm: none
+  files: none
+
+auth:
+  provider: clerk
+  access_mode: public_verified
+  passkeys: optional
+  mfa: optional
+
+operations:
+  errors: none
+  analytics: none
+  email: none
+
+data_residency:
+  policy: eu_primary
+  personal_data: eu_required
+  public_assets: global_allowed
+  non_eu_processor:
+    requires_approval: true
+    requires_dpa: true
+    requires_transfer_assessment: true
+
+dns:
+  provider: none
+
+cost_policy:
+  automatic_monthly_limit_eur: 0
+  paid_upgrade_requires_approval: true

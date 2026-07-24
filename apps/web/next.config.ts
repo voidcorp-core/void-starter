@@ -6,6 +6,12 @@ const config: NextConfig = {
   // cacheComponents was promoted from experimental to stable in Next 16.0.0.
   // It controls ppr, useCache, and dynamicIO as a single unified configuration.
   cacheComponents: true,
+  // TypeScript 7 is a native compiler without the legacy programmatic API that
+  // Next 16 probes during `next build`. CI runs `tsc --noEmit` before the build,
+  // so this only removes Next's duplicate TypeScript 6-specific check.
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Required by the PostHog reverse-proxy rewrites below: without it Next.js
   // issues a 308 trailing-slash redirect on /ingest/... before the rewrite
   // runs, which breaks the proxy. See _modules/analytics-posthog/README.md.

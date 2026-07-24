@@ -25,7 +25,7 @@ Every file owns one concern. The 5+5 service layout (section 3) is the canonical
 The Folpe standard, applied to every change:
 
 - **No hand-rolled accessibility.** Interactive primitives wrap Radix (see ADR 18). Focus management, keyboard nav, ARIA wiring come from a library that has been audited, not from us.
-- **Latest stable libs.** React 19, Next.js 16, TypeScript 6, Tailwind 4, Drizzle. We track the modern stack and accept the migration cost. We do not pin to old versions to avoid breakage.
+- **Latest stable libs.** React 19, Next.js 16, TypeScript 7, Tailwind 4, Drizzle. We track the modern stack and accept the migration cost. We do not pin to old versions to avoid breakage.
 - **No half-built features.** A feature ships with its tests, types, error states, loading states, and dark mode. If it cannot ship complete, it does not ship.
 - **No fonctionnel-but-not-exceptionnel.** "It works" is not the bar. Visual polish, motion, copy, and DX are part of the deliverable.
 

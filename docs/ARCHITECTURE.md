@@ -32,15 +32,21 @@ void-starter/
 |   `-- db-self-hosted-postgres/   # placeholder (Docker templates only)
 |
 |-- docs/                          # ADRs + this doc set
-`-- tooling/                       # Currently sparse; reserved for repo-wide scripts
+`-- tooling/
+    `-- factory/                   # Manifest validation + composition control plane
 ```
 
-Workspaces are declared in the root `package.json` as `apps/*`, `packages/*`, `_modules/*`. Bun handles workspace linking; Turborepo orchestrates the per-package `lint` / `type-check` / `test` / `build` tasks.
+Workspaces are declared in the root `package.json` as `apps/*`, `packages/*`, `_modules/*`, and
+`tooling/*`. Bun handles workspace linking; Turborepo orchestrates the per-package `lint` /
+`type-check` / `test` / `build` tasks.
 
 The split between `packages/` and `_modules/` is the load-bearing boundary:
 
 - **`packages/`** are tier 1 -- always installed, always built, always tested. Apps depend on them unconditionally. Removing one is a refactor, not a config change.
 - **`_modules/`** are tier 2 -- opt-in. They activate at build time via env var presence (see section 6). An MVP that does not need Sentry simply does not set `SENTRY_DSN`, and the entire Sentry SDK gets dead-code-eliminated from the bundle.
+- **`tooling/`** is the factory control plane. It is tested with the monorepo but never copied into
+  generated repositories. Harness remains external to both this control plane and generated
+  outputs.
 
 ---
 

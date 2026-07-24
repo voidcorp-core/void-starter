@@ -1,33 +1,28 @@
 {
-  "name": "@repo/db",
+  "name": "@repo/factory",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client.ts",
-    "./schema": "./src/schema/index.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
+    "doctor": "bun ./src/doctor.cli.ts",
+    "generate": "bun ./src/generate.cli.ts",
     "lint": "biome check .",
+    "plan": "bun ./src/cli.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"
   },
   "dependencies": {
-    "@repo/core": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.9",
-    "server-only": "^0.0.1",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/config": "workspace:*",
     "@types/node": "^24.13.3",
     "@vitest/coverage-v8": "^4.1.10",
-    "drizzle-kit": "^0.31.10",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

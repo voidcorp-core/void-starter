@@ -16,6 +16,10 @@ Forge -> build manifest -> Void Starter Factory -> deployed project -> Void Harn
 - Void Starter owns composition, provisioning, configuration, migration, deployment and receipt.
 - Void Harness owns implementation discipline and ongoing project verification.
 
+Void Harness remains external development tooling. The factory may use it while building and
+verifying Void Starter, but it never copies Harness files, hooks, skills, configuration or package
+dependencies into a generated repository.
+
 The current web starter remains the proven baseline. Optional surfaces and capabilities are added
 only when selected by the manifest. An output repository must not contain unused mobile, worker,
 analytics or payment scaffolding.
@@ -44,13 +48,17 @@ manually after generation.
 ```yaml
 surfaces:
   web: next-vercel | none
-  mobile: expo-eas | none
+  mobile:
+    adapter: expo-eas | none
+    ios_bundle_identifier: com.example.product # required for expo-eas
+    android_package: com.example.product       # required for expo-eas
   worker: persistent-node | none
 ```
 
 The factory source may support all surfaces. The generated repository contains only the selected
 ones. A web-only project must not pay the complexity of Expo. A mobile project may live in the
 same Turborepo and reuse domain logic, API contracts, auth client, validation and design tokens.
+Development-only factory and Harness tooling are excluded from every generated output as well.
 
 Expo is not copied from the current Solaar state. A new mobile surface starts from the current
 stable Expo architecture, Hermes and EAS, with Swift/Kotlin modules only when a product capability
@@ -113,12 +121,10 @@ auth:
   access_mode: public_verified
   passkeys: optional
   mfa: optional
-
-  available_access_modes:
-    - public_verified
-    - invite_only
-    - public_signup_gated_activation
 ```
+
+The available access modes are `public_verified`, `invite_only`, and
+`public_signup_gated_activation`.
 
 The production baseline includes a real verification sender, password reset or magic-link flow,
 enumeration protection, rate limiting and a deterministic seed/bootstrap path. A starter is not
@@ -160,6 +166,11 @@ verification and recovery note.
 
 ## 10. Manifest
 
+The implemented factory slice lives in `tooling/factory`. It validates schema v1 with strict Zod
+objects, produces a deterministic ordered composition plan, previews a sorted local file plan, and
+can render the selected surfaces into a new directory. The Expo blueprint targets SDK 57, React
+Native 0.86, Expo Router, and EAS. Rendering remains local and does not provision resources.
+
 ```yaml
 schema_version: 1
 
@@ -169,7 +180,9 @@ project:
 
 surfaces:
   web: next-vercel
-  mobile: none
+  mobile:
+    adapter: none
+  worker: none
 
 workloads:
   http: vercel-functions
@@ -180,13 +193,27 @@ workloads:
 data:
   database: neon-eu
   orm: drizzle
-  auth: better-auth
   files: cloudflare-r2-eu
+
+auth:
+  provider: better-auth
+  access_mode: public_verified
+  passkeys: optional
+  mfa: optional
 
 operations:
   errors: sentry
   analytics: posthog
   email: resend
+
+data_residency:
+  policy: eu_primary
+  personal_data: eu_required
+  public_assets: global_allowed
+  non_eu_processor:
+    requires_approval: true
+    requires_dpa: true
+    requires_transfer_assessment: true
 
 dns:
   provider: auto-detect
@@ -198,6 +225,53 @@ cost_policy:
 
 The manifest contains capability intent and references to secret bindings, never secret values.
 Every schema version has migrations and a compatibility policy.
+
+The current surface fixture matrix is executable without mutation:
+
+```sh
+cd tooling/factory
+bun run plan -- fixtures/manifests/web-only.yaml
+bun run plan -- fixtures/manifests/web-minimal.yaml
+bun run plan -- fixtures/manifests/web-clerk.yaml
+bun run plan -- fixtures/manifests/mobile-only.yaml
+bun run plan -- fixtures/manifests/web-expo.yaml
+```
+
+Selecting `expo-eas` requires explicit iOS and Android identifiers. The factory never derives an
+application identity from a company name it was not given.
+
+Local generation always targets a new directory:
+
+```sh
+cd tooling/factory
+bun run generate -- fixtures/manifests/web-expo.yaml /absolute/path/to/new-project
+bun run doctor -- /absolute/path/to/new-project
+
+cd /absolute/path/to/new-project
+git init
+bun install
+bun run hooks:install
+```
+
+The generator fails if the target exists or is inside the source repository. It rejects source
+symlinks and excludes `.git`, `.env*` secrets, caches, build outputs, the source lockfile, factory
+code, Harness state and agent-governance artifacts. The output stores the normalized manifest and
+a deterministic receipt under `.void-starter/`. `doctor` recalculates the plan and SHA-256
+digests, checks surface and local capability presence, scans package manifests and a newly
+generated lockfile for Harness dependencies, and fails closed on invalid metadata.
+
+Local capability composition currently handles:
+
+- a public minimal web app with auth, DB, sample notes, PostHog and Sentry fully removed;
+- Better Auth with Neon/Drizzle and the notes reference domain;
+- Clerk as a direct Next.js integration, without copying its documentation scaffold;
+- PostHog and Sentry package/configuration overlays;
+- mobile-only pruning of every Next.js-only package.
+
+The selected capability set also produces a deterministic `.env.example`; it contains placeholders
+only, never secret values. Better Auth, Clerk, PostHog and Sentry are currently web adapters, so
+selecting them without a Next.js surface is rejected. R2, Resend and DNS remain provider-plan
+intent until `apply` adapters materialize their remote resources.
 
 ## 11. Lifecycle
 
@@ -226,6 +300,10 @@ receipt
 Every external step is idempotent. The factory stores opaque provider IDs and never derives or
 invents them. Destructive rollback is separate from retry and requires explicit approval.
 
+The local `generate` and `doctor` stages now implement the source, surface, local-capability,
+receipt and integrity parts of this lifecycle. Provider IDs, secrets, deployments and remote
+mutations remain future `apply` work.
+
 ## 12. Cost policy
 
 Existing paid Vercel is treated as a sunk platform choice. Neon, Resend, Sentry and PostHog start
@@ -235,15 +313,22 @@ crossing it requires approval. The factory never upgrades a plan automatically.
 
 ## 13. Validation matrix
 
-The factory is not complete until generated outputs are tested as fixtures. Minimum profiles:
+The executable local matrix currently installs, lints, runs Knip, type-checks, tests, builds and
+doctors these profiles:
 
-- web public SaaS;
+- public minimal web;
+- Better Auth + Neon/Drizzle web;
+- Clerk web;
+- Expo mobile-only;
+- Better Auth + PostHog + Sentry web and Expo.
+
+The remaining remote validation target includes:
+
 - web invite-only internal tool;
-- web + Expo mobile;
 - durable jobs;
 - EU private documents;
 - voice/realtime control plane;
-- no optional modules.
+- provisioned provider smoke tests.
 
 Each fixture must install, type-check, migrate, seed, build and pass smoke tests. Provisioning
 adapters use contract tests and dry-run fixtures; live canaries cover the provider APIs that cannot

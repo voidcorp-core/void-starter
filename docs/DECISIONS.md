@@ -293,16 +293,17 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - **`console.log`:** zero structure, no log levels, no fields, no transports. Useless at scale and noisy in test output.
 - **When to revisit:** When deploying to Edge runtimes that lack `worker_threads` (`pino-pretty`'s transport requires it). The fix is to drop `pino-pretty` even in dev and stay on raw JSON, or swap to consola for the dev-only path. Already mitigated because `pino-pretty` only loads when `NODE_ENV !== 'production'`, but adding an Edge-targeted route would force the issue.
 
-### 23. `ignoreDeprecations: '6.0'` in apps/web tsconfig
+### 23. TypeScript 7 native compiler with a separate Next build type gate
 
-- **Date:** 2026-05-09
-- **Decision:** `apps/web/tsconfig.json` keeps `'baseUrl': '.'` alongside `'paths': { '@/*': ['./src/*'] }` and silences the TS 6 deprecation diagnostic with `'ignoreDeprecations': '6.0'`.
-- **Why:** TypeScript 6 deprecated standalone `baseUrl` (TS6504) when `paths` already provides the resolution mechanism, and `tsc --noEmit` errors on the diagnostic. The clean fix is to drop `baseUrl` and rely on `paths` only — but Next.js 16's TypeScript plugin still reads `baseUrl` to power IDE go-to-definition and `next build`'s type-check pass for the `@/*` alias. Removing `baseUrl` silently breaks alias ergonomics in tooling even though the bundler still resolves it via `paths` at runtime. Suppressing the deprecation preserves full alias UX until the Next plugin removes its `baseUrl` dependency.
+- **Date:** 2026-05-09; revised 2026-07-24
+- **Decision:** Resident baseline workspaces use TypeScript 7.0.2. `apps/web/tsconfig.json` keeps only `paths` for the `@/*` alias; the removed `baseUrl` and `ignoreDeprecations` options are not supported by TypeScript 7. The web app also declares `@typescript/native-preview` as an npm alias of the same stable TypeScript 7 package because Next 16.2.11 recognizes the native compiler under that legacy package name. `next.config.ts` sets `typescript.ignoreBuildErrors: true`, and CI runs the required `bun run type-check` gate before `bun run build`. A factory-generated Expo SDK 57 workspace pins the upstream-supported TypeScript `~6.0.3` locally; that exception moves with the Expo template rather than forcing the web compiler onto the mobile toolchain.
+- **Why:** TypeScript 7 is a native compiler and no longer ships the legacy `typescript/lib/typescript.js` programmatic API that Next 16 probes during `next build`. Without the alias, Next misclassifies TypeScript 7 as missing and attempts to install TypeScript with another package manager, which cannot resolve this Bun workspace. Next 16 already has a native-compiler branch keyed by `@typescript/native-preview`; aliasing the stable package activates that branch without installing a second compiler. The explicit CI type gate preserves strict type safety while the Next build handles compilation, route type generation, and rendering.
 - **Rejected alternatives:**
-  - Drop `baseUrl`, keep only `paths`: TS-spec correct, breaks `@/*` resolution in the Next.js TS plugin.
-  - Pin TypeScript to 5.x for the whole monorepo: regresses every package to dodge a one-line workaround.
-  - Switch the alias to a relative path: defeats the point of having an alias and bloats every import.
-- **When to revisit:** When the Next.js TypeScript plugin resolves the alias purely from `paths` (likely Next 17 or a next-plugin patch). Drop `baseUrl` AND `ignoreDeprecations` together at that point.
+  - Keep TypeScript 6 in the web app: avoids the compatibility path but leaves one workspace on the previous compiler and keeps the monorepo split across compiler generations.
+  - Install the actual `@typescript/native-preview` daily build: duplicates the compiler and replaces a stable release with a moving development snapshot.
+  - Let Next auto-install TypeScript: invokes a different package manager from `apps/web`, fails to resolve `workspace:*` packages, and mutates `node_modules`.
+  - Patch `node_modules/typescript` with a fake `typescript.js`: fragile, not represented by the lockfile, and lost on every install.
+- **When to revisit:** When Next resolves stable TypeScript 7 directly and no longer requires the legacy programmatic API, remove the alias and `ignoreBuildErrors`, then keep `bun run type-check` as the explicit CI gate unless Next's native check offers equivalent coverage.
 
 ### 24. Routing Middleware as `proxy.ts` (Next 16 rename)
 
@@ -380,8 +381,8 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 
 ### 30. Pin Node 24 LTS in CI for Node-shebang tooling
 
-- **Date:** 2026-05-09
-- **Decision:** Both jobs in `.github/workflows/ci.yml` declare `actions/setup-node@v4` with `node-version: '24'` immediately after `oven-sh/setup-bun@v2`. The root `package.json#engines.node` declares `>=24` to make the workspace contract explicit. No `NODE_OPTIONS` flag is set: Node 23.6+ ships `--experimental-strip-types` on by default, so cross-package `.ts` config loading works natively. The Bun version stays pinned at `1.3.13` (matches `packageManager`).
+- **Date:** 2026-05-09; revised 2026-07-24
+- **Decision:** Both jobs in `.github/workflows/ci.yml` declare `actions/setup-node@v6` with `node-version: '24'` immediately after `oven-sh/setup-bun@v2`. The root `package.json#engines.node` declares `>=24` to make the workspace contract explicit, and every direct `@types/node` dependency stays on major 24 to match that runtime. No `NODE_OPTIONS` flag is set: Node 23.6+ ships `--experimental-strip-types` on by default, so cross-package `.ts` config loading works natively. Bun stays pinned at `1.3.14` in both CI and `packageManager`.
 - **Why:** Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright, Sentry's webpack plugin) ship binaries with a `#!/usr/bin/env node` shebang. When `bun run test` invokes those binaries, they execute under Node, not Bun. Two consequences follow: (1) without explicit `setup-node`, the runner uses whatever Node version `ubuntu-latest` happens to ship (historically 18 or 20), producing non-deterministic CI behaviour. (2) Without modern Node, the loader refuses to load `.ts` files reached through cross-package `package.json#exports` (the case for `@repo/config/vitest.base`). Pinning Node 24 LTS gives us: (a) reproducible CI builds, (b) `.ts` consistency across the entire workspace including shared cross-package configs WITHOUT any flag, (c) parity with the local dev runtime (Folpe runs Node 24.x), (d) automatic version pickup for contributors via `nvm`/`fnm`/Volta reading `engines.node`. The flag-free path is the cleaner architectural choice: nothing experimental in the build contract, no `NODE_OPTIONS` to maintain.
 - **Rejected alternatives:**
   - Skip `setup-node` and use whatever the runner ships: non-deterministic; CI breaks every time the runner image rotates Node versions.
@@ -390,7 +391,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Reformat `packages/config/vitest.base.ts` as `.mjs` to dodge the version requirement: works without any Node version pin but breaks the "everything is `.ts`" invariant for a cosmetic Node-tooling concern. Rejected per ADR 14's revision.
   - Replace Vitest with Bun's native test runner: removes the Node dependency entirely, but Vitest's ecosystem (jsdom, @testing-library/react integration, coverage reporters, vite transformer pipeline) is non-trivial to replace. Bigger lift than is warranted; revisit if Bun test ships first-class jsdom + RTL parity.
   - Invoke Vitest under Bun explicitly via `bunx --bun vitest run`: changes every package's `test` script and adds friction for contributors who run vitest from their IDE. The Node pin is the smaller, more reversible change.
-- **When to revisit:** When Bun test reaches feature parity with Vitest for our use cases (jsdom, coverage, RTL), at which point we can drop the Node dependency entirely and remove this pin. If Vercel Functions ever lags Node 24 (currently supports 18, 20, 22, 24 as of 2026-05), the deploy runtime is a separate concern from CI testing and is configured per-project; no change to this ADR.
+- **When to revisit:** When Bun test reaches feature parity with Vitest for our use cases (jsdom, coverage, RTL), at which point we can drop the Node dependency entirely and remove this pin. Move both the runtime and `@types/node` together when Node 26 reaches LTS and the deploy target supports it. If Vercel Functions ever lags Node 24 (currently supports 18, 20, 22, 24 as of 2026-05), the deploy runtime is a separate concern from CI testing and is configured per-project; no change to this ADR.
 
 ### 31. Social providers are opt-in; magic-link fails loud in production
 
@@ -433,7 +434,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 - **Rejected alternatives:**
   - *Cache the admin user-list / retrofit auth instead*: contradicts CACHING.md section 7 (auth does not cache; session reads should not be tagged like a record) and would cache PII-adjacent auth data as the teaching example. A neutral domain is clearer.
   - *Put the service in `apps/web` as a use-case*: violates the layering (services live in packages, only actions live in apps) and would not demonstrate the package-level convention future domains follow.
-  - *Doc-only example*: leaves `cacheComponents: true` with no real call site; the pattern stays unproven against the actual toolchain (Turbopack, the TS 6 setup, the build).
+  - *Doc-only example*: leaves `cacheComponents: true` with no real call site; the pattern stays unproven against the actual toolchain (Turbopack, the TS 7 setup, the build).
 - **When to revisit:** `notes` is intentionally minimal (no update/delete, no pagination). If MVPs never grow a second domain that caches, that is fine -- this one stays as the reference. When a richer domain lands (posts, projects, billing), it follows this shape from day one; if a cross-cutting caching helper emerges across three or more such domains, extract it then (not before).
 
 ### 35. Page guards redirect to sign-in; pathname carried via a proxy header
@@ -447,3 +448,97 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - *Redirect on wrong-role too*: silently bouncing an authenticated user hides a genuine 403. Throwing keeps the authorization failure visible and distinct from the unauthenticated case.
   - *Read the pathname with `useSearchParams`/headers without the proxy*: RSC has no pathname API; the proxy header is the supported mechanism.
 - **When to revisit:** When Next ships a stable RSC pathname API, drop the `x-pathname` header. When `forbidden()`/`unauthorized()` stabilize, reconsider rendering a dedicated 403/401 segment instead of the error boundary for the wrong-role case.
+
+### 36. Security overrides are centralized and enforced by `bun audit`
+
+- **Date:** 2026-07-24
+- **Decision:** The root `package.json#overrides` is the single place for temporary transitive security pins. It currently fixes `brace-expansion`, `dompurify`, `esbuild`, `fast-uri`, `js-yaml`, `postcss`, `sharp`, `undici`, and `vite`. The root `audit` script runs `bun audit`, and the `quality` CI job executes it immediately after the frozen install.
+- **Why:** All direct dependencies were already on their latest release, but their resolved trees still produced 28 advisories. Updating owners removed most findings; the remaining packages were held behind stale exact or pre-1.0 ranges in current Next, Drizzle Kit, Sentry, PostHog, and Vitest releases. Centralized overrides moved every affected transitive package to a patched release and reduced the audit to zero without pretending the packages are direct project dependencies. The range-crossing overrides for PostCSS, sharp, and esbuild were accepted only after the production Next build, all type checks, 123 unit tests, Knip, and Drizzle schema generation passed.
+- **Rejected alternatives:**
+  - Add transitive packages as root dependencies: does not reliably replace nested versions and falsely expands the application's direct API surface.
+  - Ignore or severity-filter advisories: makes the report quieter without removing vulnerable code.
+  - Leave current direct packages pinned until upstream ranges catch up: keeps known vulnerable artifacts in the lockfile even though patched releases pass the project pipeline.
+  - Patch files inside `node_modules`: not reproducible and disappears on install.
+- **When to revisit:** On every dependency update. Remove an override as soon as all owners resolve a patched version themselves, regenerate `bun.lock`, and require both the full validation pipeline and `bun audit` to remain green.
+
+### 37. Evolve the starter into a manifest-driven project factory
+
+- **Date:** 2026-07-24
+- **Decision:** Preserve the current Next.js monorepo as the proven web baseline, then add a
+  manifest-driven factory that composes only the surfaces and capabilities a project selects.
+  Forge produces product intent and a versioned build manifest. Void Starter plans, provisions,
+  configures, migrates, deploys and returns a receipt. Void Harness governs the implementation
+  that follows while remaining external development tooling: no Harness files, hooks, skills,
+  configuration or package dependencies are copied into generated repositories. Expo is an
+  optional surface in the same factory, not a permanent dependency of every generated repository.
+  Provider routing is workload-aware and Vercel-first, not Vercel-only. The full target contract
+  lives in `docs/FACTORY.md`.
+- **Why:** The current quickstart still requires manual GitHub, Vercel, Neon, environment,
+  migration, email and administrator work before product development starts. Copying every
+  possible surface or module into every repository would replace manual wiring with permanent
+  complexity. A typed manifest plus idempotent `plan/apply/resume/doctor` lifecycle automates the
+  setup while keeping generated outputs minimal and auditable.
+- **Rejected alternatives:**
+  - Keep the repo as a clone-only template and improve the README: documents the work but does
+    not remove it or make it resumable.
+  - Always include Expo, workers and every integration: maximizes unused dependencies, CI time
+    and upgrade surface.
+  - Embed Void Harness in the template or generated output: couples application source to
+    development governance and makes every generated project carry tooling it did not select.
+  - Make tRPC mandatory to unify web and mobile: protocol choice should follow the surface and
+    workload; REST/OpenAPI, Server Actions, SSE and WebRTC have distinct jobs.
+  - Move all workloads away from Vercel: loses the best Next.js integration without solving a
+    universal problem. Persistent and realtime workloads can route elsewhere selectively.
+- **When to revisit:** If fixture-generated projects become harder to maintain than the baseline,
+  if provider APIs make reliable idempotence impossible, or if Forge cannot express project
+  requirements without leaking provider implementation details.
+
+### 38. Render only into fresh targets and verify generation receipts
+
+- **Date:** 2026-07-24
+- **Decision:** Local factory generation copies the tested baseline only into a non-existing
+  directory outside the source repository. It rejects source symlinks, removes unselected
+  surfaces, applies deterministic overlays, excludes secrets and development-governance
+  artifacts, and emits a canonical manifest plus receipt under `.void-starter/`. `doctor`
+  recalculates the plan and generated-file SHA-256 digests and scans dependencies for Void
+  Harness. The source `bun.lock` is not copied; a newly installed lockfile is allowed and checked.
+- **Why:** A generator that mutates its own baseline or overwrites an existing project makes
+  recovery ambiguous. Fresh-target rendering is easy to retry and inspect. The receipt makes the
+  generated portion tamper-evident without pretending that copied baseline files are immutable.
+- **Rejected alternatives:**
+  - Render in place: risks mixing partial output with the factory source and user changes.
+  - Overwrite an existing target: makes ownership and rollback unclear.
+  - Copy the source lockfile: retains the development-only `@repo/factory` workspace after factory
+    source is excluded.
+  - Copy symlinks: could make generated writes or removals escape the target boundary.
+- **When to revisit:** Add an explicit upgrade/migration workflow only after it has a transactional
+  plan, conflict reporting, backups, and a separate authorization path from fresh generation.
+
+### 39. Prune unselected capabilities and materialize Clerk directly
+
+- **Date:** 2026-07-24
+- **Decision:** Local generation composes the application dependency graph as well as its
+  surfaces. A public minimal web output removes Better Auth, Neon/Drizzle, the notes reference
+  domain, PostHog, Sentry and every corresponding app import. Better Auth retains the proven
+  database-backed baseline. Clerk generates direct Next.js v7 provider, middleware, route and UI
+  overlays while removing both `packages/auth` and the `_modules/auth-clerk` documentation
+  scaffold. Mobile-only output removes all Next.js-only packages. Generated `.env.example`,
+  `package.json`, `next.config.ts`, layout and entry pages are deterministic receipt-tracked
+  overlays. `doctor` verifies that local packages and dependencies match the manifest.
+- **Why:** Removing a workspace directory without removing its imports produces a repo that looks
+  smaller but cannot install, type-check or build. Keeping every optional module avoids that
+  failure but defeats the factory's purpose. Treating the package graph, app call sites and config
+  as one composition unit makes absence real and testable. The Clerk scaffold explicitly was not
+  a runtime drop-in, so copying it would misrepresent support; generating the complete direct
+  integration is the honest boundary.
+- **Rejected alternatives:**
+  - Only remove package dependencies: leaves broken TypeScript imports and routes.
+  - Keep all `_modules` directories as examples: generated projects carry unselected catalogue
+    code and Knip/build surface.
+  - Copy the Clerk repository scaffold over Better Auth: the scaffold does not include provider,
+    middleware, UI and session-model changes and documents itself as incomplete.
+  - Allow web-only adapters on mobile manifests: implies a native integration that is not
+    implemented.
+- **When to revisit:** Add native-specific auth, analytics and error adapters behind separate
+  manifest adapter names. Move R2, Resend and DNS from planned bindings to materialized
+  capabilities only when their idempotent provider `apply` adapters and smoke tests exist.

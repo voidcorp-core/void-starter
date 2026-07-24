@@ -10,7 +10,7 @@ The starter follows a Wing Chun engineering philosophy: maximum efficiency, econ
 |---|---|---|
 | Topology | Turborepo + Bun workspaces | DAG-aware builds, fast install (ADR 01) |
 | Framework | Next.js 16.2 / React 19.2 | Cache Components stable, App Router |
-| Language | TypeScript 6.0 strict | Workspace standard, no implicit any |
+| Language | TypeScript 7.0 strict | Native compiler; Expo blueprint tracks its SDK-supported TypeScript |
 | Styling | Tailwind CSS v4 with `@theme` | Token-based design system, zero-runtime |
 | UI | Radix-backed primitives via `@repo/ui` | Accessibility for free (ADR 16, 18, 19) |
 | Auth | Better-Auth (default), Clerk (opt-in) | Data sovereignty (ADR 02) |
@@ -50,10 +50,29 @@ void-starter/
 |   `-- db-self-hosted-postgres/   # placeholder (Docker templates only)
 |
 |-- docs/                          # ADRs + the doc set
-`-- tooling/                       # Reserved for repo-wide scripts
+`-- tooling/
+    `-- factory/                   # Manifest planning, local rendering + doctor
 ```
 
-The split between `packages/` and `_modules/` is the load-bearing boundary: tier 1 is always installed and built, tier 2 activates at build time via env var presence. See `docs/ARCHITECTURE.md` for the full topology and `docs/DECISIONS.md` for the rationale.
+This topology is the tested source baseline. Factory generation prunes unselected tier-1 packages,
+optional modules, application imports and configuration so they are not carried into every output.
+See `docs/ARCHITECTURE.md` for the baseline topology and `docs/DECISIONS.md` for the rationale.
+
+## Factory generation
+
+Render a minimal web, Better Auth, Clerk, Expo-only, or combined web + Expo repository from a
+strict YAML/JSON manifest:
+
+```bash
+cd tooling/factory
+bun run plan -- fixtures/manifests/web-minimal.yaml
+bun run generate -- fixtures/manifests/web-minimal.yaml /absolute/path/to/new-project
+bun run doctor -- /absolute/path/to/new-project
+```
+
+Generation only accepts a fresh target outside this source repository. Void Harness may assist
+development of the factory externally, but it is never copied or installed in generated outputs.
+See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture matrix.
 
 ## Quick start (per-MVP onboarding)
 
@@ -124,6 +143,7 @@ Modules in `_modules/` are opt-in. To activate a real workspace package (Pattern
 - [`docs/CACHING.md`](./docs/CACHING.md) -- Cache Components conventions, tag taxonomy, `updateTag` write paths.
 - [`docs/SECURITY.md`](./docs/SECURITY.md) -- OWASP Top 10 mapping, RGPD checklist, env var hygiene, secret rotation.
 - [`docs/MODULES.md`](./docs/MODULES.md) -- operational guide to the `_modules/*` catalogue (activation patterns, removal procedure, testing).
+- [`docs/FACTORY.md`](./docs/FACTORY.md) -- manifest-driven generation contract, optional Expo surface, lifecycle, and implementation order.
 - [`docs/CI.md`](./docs/CI.md) -- the `.github/workflows/ci.yml` pipeline and the recommended branch protection rules.
 - [`_modules/README.md`](./_modules/README.md) -- the per-MVP opt-in module catalogue.
 - [`SECURITY.md`](./SECURITY.md) -- vulnerability reporting policy (the GitHub-recognized location).
