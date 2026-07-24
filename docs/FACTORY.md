@@ -394,7 +394,8 @@ bun run preflight:live -- \
 
 The preflight performs only authenticated reads. It verifies the GitHub user or active
 organization membership, exact Vercel team ID and accessible Neon organization ID. It creates no
-state and performs no mutation.
+state and performs no mutation. GitHub's authenticated membership-list endpoint keeps this check
+independent of organization-level token permissions.
 
 The mutation command is deliberately separate and requires an exact project-name confirmation:
 

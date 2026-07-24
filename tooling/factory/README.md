@@ -119,7 +119,8 @@ GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
 ```
 
 Preflight uses authenticated `GET` requests only. Tokens are read from the process environment and
-are never accepted by the manifest or provisioning context.
+are never accepted by the manifest or provisioning context. GitHub organization identity uses the
+authenticated membership-list endpoint, which requires no organization-level token permission.
 
 Live apply is deliberately a separate command and requires the exact generated project name:
 

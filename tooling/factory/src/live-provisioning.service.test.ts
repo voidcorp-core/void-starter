@@ -60,11 +60,15 @@ class MockProviderApi {
     if (url.hostname === 'api.github.com' && url.pathname === '/user') {
       return jsonResponse({ login: 'factory-bot' });
     }
-    if (
-      url.hostname === 'api.github.com' &&
-      url.pathname === '/user/memberships/orgs/voidcorp-core'
-    ) {
-      return jsonResponse({ state: 'active', role: 'admin' });
+    if (url.hostname === 'api.github.com' && url.pathname === '/user/memberships/orgs') {
+      return jsonResponse([
+        {
+          state: 'active',
+          organization: {
+            login: 'voidcorp-core',
+          },
+        },
+      ]);
     }
     if (url.hostname === 'api.github.com' && url.pathname === '/repos/voidcorp-core/example-saas') {
       return this.repositoryExists
