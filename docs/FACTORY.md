@@ -255,6 +255,44 @@ bun install
 bun run hooks:install
 ```
 
+### 10.1 Forge Project Pack injection
+
+Forge can also produce `forge/project-pack-v1`, a deterministic set of 14 product foundation
+documents. This contract is consumed after local generation, or against an existing project. It
+does not select surfaces, modify the build manifest, or provision remote resources.
+
+```sh
+cd tooling/factory
+bun run foundation -- preview \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project
+
+bun run foundation -- apply \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project \
+  --confirm-project exact-project-id
+
+bun run foundation -- check \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project
+```
+
+The adapter validates the external contract, every source content hash, all path boundaries, and
+the previous per-file receipt. Its merge policy is strict:
+
+- first write is create-only;
+- a managed destination can update only when its current hash matches the previous receipt;
+- a missing, locally modified, symlinked, or unmanaged destination is a conflict;
+- one conflict blocks all 14 writes;
+- apply requires the exact Forge project id;
+- the canonical receipt lives at `.void-starter/project-pack-receipt.json`;
+- preview and check are non-mutating.
+
+The local Zod boundary is a consumer compatibility mirror, not ownership of the Forge schema.
+Contract drift is tested against real Forge output before a revision is accepted. A shared schema
+package remains premature until the ecosystem reaches the extraction thresholds documented by
+Forge.
+
 The generator fails if the target exists or is inside the source repository. It rejects source
 symlinks and excludes `.git`, `.env*` secrets, caches, build outputs, the source lockfile, factory
 code, Harness state and agent-governance artifacts. The output stores the normalized manifest and
@@ -275,7 +313,7 @@ only, never secret values. Better Auth, Clerk, PostHog and Sentry are currently 
 selecting them without a Next.js surface is rejected. R2, Resend and DNS remain provider-plan
 intent until `apply` adapters materialize their remote resources.
 
-### 10.1 Provisioning context
+### 10.2 Provisioning context
 
 Provider account coordinates are intentionally separate from the product manifest:
 
@@ -339,7 +377,7 @@ persist the returned opaque provider ID before advancing. See the official
 [GitHub repository endpoint](https://docs.github.com/en/rest/repos/repos) and
 [Vercel REST API authentication/team routing](https://vercel.com/docs/rest-api).
 
-### 10.2 Live provider boundary
+### 10.3 Live provider boundary
 
 The first authenticated adapter covers GitHub repository, Vercel project, Neon project and the
 Vercel `DATABASE_URL` binding. Credentials exist only in process memory:

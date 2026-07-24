@@ -34,6 +34,22 @@ export {
   loadLiveProvisioningCredentials,
 } from './live-provisioning.service';
 export {
+  applyProjectPack,
+  checkProjectPack,
+  createProjectPackPlan,
+} from './project-pack.service';
+export {
+  type ApplyProjectPackInput,
+  type ProjectPackAction,
+  type ProjectPackApplyResult,
+  type ProjectPackInput,
+  type ProjectPackManifest,
+  type ProjectPackPlan,
+  type ProjectPackReceipt,
+  projectPackManifestSchema,
+  projectPackReceiptSchema,
+} from './project-pack.types';
+export {
   type ProvisionedResource,
   type ProvisioningAction,
   type ProvisioningActionState,

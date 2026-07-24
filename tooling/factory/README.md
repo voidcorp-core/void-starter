@@ -24,6 +24,8 @@ The current slice exposes:
 - `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
   and capabilities, optional provisioning state, dependencies, and the absence of Harness/factory
   artifacts;
+- `createProjectPackPlan`, `applyProjectPack`, and `checkProjectPack` to inject Forge foundation
+  documents without overwriting unmanaged or locally modified files;
 - `buildManifestSchema` and the corresponding public TypeScript boundary types.
 
 Run a fixture preview without changing the repository:
@@ -143,6 +145,30 @@ run is still required before declaring these adapters production-proven.
 Local `generate` still writes only to its new target. Git push, migrations, deployments and smoke
 tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns
 simulation into remote mutation.
+
+Inject a Forge Project Pack after generation, or into an existing project, with a non-mutating
+preview first:
+
+```sh
+bun run foundation -- preview \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project
+
+bun run foundation -- apply \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project \
+  --confirm-project exact-project-id
+
+bun run foundation -- check \
+  /absolute/path/to/project/.forge/project-pack/manifest.yaml \
+  /absolute/path/to/project
+```
+
+The adapter consumes `forge/project-pack-v1`. First injection is create-only. Later injection can
+replace a destination only when its current SHA-256 matches
+`.void-starter/project-pack-receipt.json`. A missing, manually changed, symlinked, or unmanaged
+destination blocks the entire apply. `preview` and `check` never write. This lifecycle is separate
+from generation and remote provisioning.
 
 Void Harness may be used externally while developing this package. Harness artifacts and package
 dependencies must never be added to this workspace or to generated outputs.
