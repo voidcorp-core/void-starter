@@ -17,6 +17,10 @@
     "preflight:live": "bun ./src/preflight-live.cli.ts",
     "resume": "bun ./src/resume.cli.ts",
     "resume:live": "bun ./src/resume-live.cli.ts",
+    "source:live": "bun ./src/source-live.cli.ts",
+    "source:plan": "bun ./src/source-plan.cli.ts",
+    "source:preflight": "bun ./src/source-preflight.cli.ts",
+    "source:resume": "bun ./src/source-resume.cli.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"

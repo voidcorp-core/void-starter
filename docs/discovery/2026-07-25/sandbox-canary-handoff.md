@@ -74,8 +74,10 @@ Le projet d'adoption est
 `doctor` passe sur le canari principal et aucun secret ou URI PostgreSQL n'est présent dans son
 receipt.
 
-Le dépôt distant est encore vide : cette tranche ne pousse pas le code, ne migre pas la base et ne
-déploie pas.
+Le dépôt distant est encore vide. Le cycle séparé de publication source est implémenté localement
+avec plan, preflight, apply, resume, digest du contenu et adoption exacte. Son canari live reste à
+exécuter après génération de `bun.lock`. Les migrations et la vérification du déploiement restent
+hors de cette tranche.
 
 ## Suite globale
 

@@ -114,6 +114,11 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.void/usage.log'), 'external usage\n', 'utf8');
   await writeFile(join(sourceRoot, '.env.local'), 'SECRET=must-not-copy\n', 'utf8');
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
+  await writeFile(
+    join(sourceRoot, '.gitignore'),
+    '.void-starter/apply-state.json\n.void-starter/source-state.json\n',
+    'utf8',
+  );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
   await writeFile(
     join(sourceRoot, 'README.md'),
@@ -177,6 +182,10 @@ describe('renderProject', () => {
     expect(rootPackage.name).toBe('example-saas');
     expect(rootPackage.workspaces).not.toContain('tooling/*');
     expect(rootPackage.scripts['hooks:install']).toBe('lefthook install');
+
+    const rootGitignore = await readFile(join(targetRoot, '.gitignore'), 'utf8');
+    expect(rootGitignore).toContain('.void-starter/apply-state.json');
+    expect(rootGitignore).toContain('.void-starter/source-state.json');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
     expect(rootKnip.workspaces).not.toHaveProperty('tooling/*');

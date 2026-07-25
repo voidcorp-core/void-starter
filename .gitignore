@@ -45,3 +45,10 @@ bun-debug.log*
 
 # Claude Code per-user state
 .claude/settings.local.json
+
+# Void Starter local operation state
+.void-starter/apply-state.json
+.void-starter/apply.lock
+.void-starter/source-state.json
+.void-starter/source.lock
+.void-starter/.*.temporary

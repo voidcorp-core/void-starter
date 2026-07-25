@@ -120,7 +120,8 @@ GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
 
 Preflight uses authenticated `GET` requests only. Tokens are read from the process environment and
 are never accepted by the manifest or provisioning context. GitHub organization identity uses the
-authenticated membership-list endpoint, which requires no organization-level token permission.
+exact authenticated membership endpoint and requires `Organization permissions > Members:
+Read-only`.
 
 Live apply is deliberately a separate command and requires the exact generated project name:
 
@@ -140,10 +141,31 @@ written to factory state or read back. A non-secret ownership marker makes the b
 recoverable.
 
 An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
-that create blindly. Live contract tests use mocked HTTP providers. A disposable sandbox-account
-run is still required before declaring these adapters production-proven.
+that create blindly. Live contract tests use mocked HTTP providers. Creation, completed-state
+resume and stateless adoption have also passed against the isolated sandbox accounts.
 
-Local `generate` still writes only to its new target. Git push, migrations, deployments and smoke
+After `bun install` has generated the selected project lockfile, source publication remains a
+separate lifecycle:
+
+```sh
+GITHUB_TOKEN=... bun run source:preflight -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml
+
+GITHUB_TOKEN=... bun run source:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+The source plan hashes the exact publishable file set, requires `bun.lock`, excludes local
+operation state, env files, caches and build output, and refuses symlinks or credential files. The
+initial commit is attributed to the authenticated GitHub user. Git authentication uses a
+short-lived askpass helper with credential storage disabled; neither the token nor a token-bearing
+remote URL is persisted. Existing `main` is adopted only when both its source marker and exact Git
+tree match. `source:resume` safely reconciles an ambiguous push.
+
+Local `generate` still writes only to its new target. Migrations, deployment receipts and smoke
 tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns
 simulation into remote mutation.
 

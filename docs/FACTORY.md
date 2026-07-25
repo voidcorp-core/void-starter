@@ -425,9 +425,49 @@ tokens and provider response bodies never enter `.void-starter/apply-state.json`
 without exposing `DATABASE_URL`; a pre-existing unmarked binding fails closed.
 
 The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
-identity mismatch tests and ambiguous-create resume tests. It has not yet been executed against
-the intended disposable sandbox accounts. That external validation is the remaining gate before
-calling this provider tranche production-proven.
+identity mismatch tests and ambiguous-create resume tests. Its isolated-account canary created all
+four resources once, kept their IDs on completed-state resume, and adopted them from a fresh local
+state without duplication.
+
+### 10.4 Initial source publication
+
+Initial source publication is a separate receipt and lock boundary, so adding it does not
+invalidate or widen a completed infrastructure plan. It requires a successful live provisioning
+state and a generated `bun.lock`:
+
+```sh
+bun run source:plan -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml
+
+GITHUB_TOKEN=... bun run source:preflight -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml
+
+GITHUB_TOKEN=... bun run source:live -- \
+  /absolute/path/to/new-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+The plan hashes the exact publishable file set. Local apply/source receipts, `.env*` values,
+caches, build output, per-user Claude state and Git metadata are excluded. Symlinks, credential
+files and missing lockfiles fail before authenticated requests. The commit uses the authenticated
+GitHub user's noreply identity so connected Vercel Pro projects can recognize its author.
+
+The token reaches Git only through a temporary askpass process environment. Credential helpers
+are disabled, the configured origin never contains a token, and the helper is deleted after the
+push. A source SHA-256 marker and exact Git tree SHA protect adoption. A pre-existing unmarked or
+different `main` branch fails closed; an ambiguous push is looked up before resume. State is
+written atomically to `.void-starter/source-state.json`, which is ignored by Git and contains no
+credential.
+
+GitHub permits personal access tokens in place of HTTPS passwords:
+[GitHub PAT command-line authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
+Vercel automatically deploys pushes to a connected repository and detects the package manager
+from the root lockfile:
+[Vercel Git deployments](https://vercel.com/docs/git) and
+[Vercel monorepos](https://vercel.com/docs/monorepos).
 
 ## 11. Lifecycle
 
@@ -459,8 +499,9 @@ invents them. Destructive rollback is separate from retry and requires explicit 
 The local `generate` and `doctor` stages implement the source, surface, local-capability, receipt
 and integrity parts of this lifecycle. `apply --dry-run` implements the deterministic first
 provider plan, while `apply --simulate` and `resume --simulate` implement its local state machine.
-The separate live commands implement the first GitHub/Vercel/Neon provider boundary. Git source
-push, migrations, deployment and smoke verification remain future actions.
+The separate live commands implement the first GitHub/Vercel/Neon provider boundary. The source
+commands implement the guarded initial Git push. Migrations, deployment receipts and smoke
+verification remain future actions.
 
 ## 12. Cost policy
 
@@ -500,11 +541,12 @@ be proven locally.
 4. Implement `plan`, receipt and `doctor` before external mutations. **Done.**
 5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
    passed.**
-6. Finish Better Auth production onboarding and seed.
-7. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-8. Add R2, Resend, observability and DNS adapters.
-9. Add `resume` and failure injection tests. **Done for the first provider tranche.**
-10. Connect Forge as manifest producer and Linear as project bootstrap.
+6. Publish the initial Git source. **Contract complete; live canary pending.**
+7. Finish Better Auth production onboarding and seed.
+8. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
+9. Add R2, Resend, observability and DNS adapters.
+10. Add `resume` and failure injection tests. **Done for provider and source tranches.**
+11. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
 

@@ -7,6 +7,10 @@ import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from
 import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
 import { readProvisioningState, validateProvisioningState } from './provisioning-apply.service';
+import {
+  readSourcePublicationState,
+  validateSourcePublicationState,
+} from './source-publication.service';
 
 const receiptSchema = z.strictObject({
   schema_version: z.literal(1),
@@ -316,6 +320,33 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
     const message = error instanceof Error ? error.message : String(error);
     checks.push(
       createCheck('provisioning-state', false, `Provisioning state is invalid: ${message}`),
+    );
+  }
+
+  try {
+    const sourceState = await readSourcePublicationState(projectRoot);
+    if (!sourceState) {
+      checks.push(
+        createCheck('source-publication-state', true, 'No source publication state is recorded'),
+      );
+    } else {
+      await validateSourcePublicationState(sourceState, receipt.manifest_sha256, projectRoot);
+      checks.push(
+        createCheck(
+          'source-publication-state',
+          sourceState.status === 'succeeded',
+          `Source publication state is structurally valid and ${sourceState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(
+      createCheck(
+        'source-publication-state',
+        false,
+        `Source publication state is invalid: ${message}`,
+      ),
     );
   }
 

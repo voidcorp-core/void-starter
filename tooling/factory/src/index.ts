@@ -78,4 +78,23 @@ export {
   parseProvisioningContextSource,
   provisioningPlanDigest,
 } from './provisioning-plan.service';
+export {
+  applySourcePublication,
+  createSourcePublicationPlan,
+  GitSourceControl,
+  type PreparedSourceCommit,
+  preflightSourcePublication,
+  readSourcePublicationState,
+  type SourceControl,
+  SourcePublicationApplyError,
+  SourcePublicationError,
+  type SourcePublicationOptions,
+  validateSourcePublicationState,
+} from './source-publication.service';
+export {
+  type SourcePublicationPlan,
+  type SourcePublicationState,
+  sourcePublicationPlanSchema,
+  sourcePublicationStateSchema,
+} from './source-publication.types';
 export { createSurfaceFilePlan } from './surface-composition.service';
