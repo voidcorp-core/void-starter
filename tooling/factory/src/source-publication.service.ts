@@ -79,10 +79,20 @@ type AuthenticatedGitHubUser = {
   id: number;
 };
 
-type RemoteSource = {
+export type RemoteSource = {
   commitSha: string;
   treeSha: string;
   sourceSha256: string | null;
+};
+
+type SourceUpdateBase = {
+  commitSha: string;
+  treeSha: string;
+  sourceSha256: string;
+  owner: string;
+  repository: string;
+  branch: 'main';
+  token: string;
 };
 
 export type PreparedSourceCommit = {
@@ -96,6 +106,7 @@ export type SourceControl = {
     snapshot: SourceSnapshot;
     projectName: string;
     user: AuthenticatedGitHubUser;
+    base?: SourceUpdateBase;
   }): Promise<PreparedSourceCommit>;
   push(input: {
     projectRoot: string;
@@ -490,6 +501,38 @@ export async function createSourcePublicationPlan(
   });
 }
 
+function createSourceUpdatePlan(
+  sourcePlan: SourcePublicationPlan,
+  remote: RemoteSource | null,
+): SourcePublicationPlan {
+  if (!remote) {
+    throw new SourcePublicationError({
+      code: 'GITHUB_SOURCE_UPDATE_BASE_MISSING',
+      message: 'Source update requires an existing remote main branch',
+    });
+  }
+  if (!remote.sourceSha256) {
+    throw new SourcePublicationError({
+      code: 'GITHUB_SOURCE_UPDATE_BASE_UNMANAGED',
+      message: 'Remote main does not carry a Void Starter source marker',
+    });
+  }
+  if (remote.sourceSha256 === sourcePlan.source.sha256) {
+    throw new SourcePublicationError({
+      code: 'GITHUB_SOURCE_UPDATE_UNCHANGED',
+      message: 'Remote main already carries the requested source snapshot',
+    });
+  }
+  return sourcePublicationPlanSchema.parse({
+    ...sourcePlan,
+    base: {
+      commit_sha: remote.commitSha,
+      tree_sha: remote.treeSha,
+      source_sha256: remote.sourceSha256,
+    },
+  });
+}
+
 function sourceMarker(sourceSha256: string): string {
   return `${SOURCE_MARKER}: ${sourceSha256}`;
 }
@@ -675,12 +718,68 @@ async function optionalGit(arguments_: string[], cwd: string): Promise<string | 
   }
 }
 
+async function ensureSafeGitHubRemote(input: {
+  projectRoot: string;
+  owner: string;
+  repository: string;
+}): Promise<void> {
+  const remoteUrl = `https://github.com/${input.owner}/${input.repository}.git`;
+  const existingRemote = await optionalGit(['remote', 'get-url', 'origin'], input.projectRoot);
+  if (existingRemote && existingRemote !== remoteUrl) {
+    throw new SourcePublicationError({
+      code: 'LOCAL_GIT_REMOTE_CONFLICT',
+      message: 'Existing Git origin does not match the provisioned repository',
+    });
+  }
+  if (!existingRemote) {
+    try {
+      await executeGit(['remote', 'add', 'origin', remoteUrl], input.projectRoot);
+    } catch {
+      throw new SourcePublicationError({
+        code: 'LOCAL_GIT_REMOTE_FAILED',
+        message: 'Unable to configure the safe GitHub remote',
+      });
+    }
+  }
+}
+
+async function withGitHubAskPass<T>(
+  token: string,
+  operation: (environment: NodeJS.ProcessEnv) => Promise<T>,
+): Promise<T> {
+  const askPassRoot = await mkdtemp(join(tmpdir(), 'void-starter-git-askpass-'));
+  const askPassPath = join(askPassRoot, 'askpass.sh');
+  try {
+    await writeFile(
+      askPassPath,
+      `#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\\n' 'x-access-token' ;;
+  *Password*) printf '%s\\n' "$VOID_STARTER_GITHUB_TOKEN" ;;
+  *) exit 1 ;;
+esac
+`,
+      { encoding: 'utf8', mode: 0o700 },
+    );
+    await chmod(askPassPath, 0o700);
+    return await operation({
+      ...process.env,
+      GIT_ASKPASS: askPassPath,
+      GIT_TERMINAL_PROMPT: '0',
+      VOID_STARTER_GITHUB_TOKEN: token,
+    });
+  } finally {
+    await rm(askPassRoot, { force: true, recursive: true });
+  }
+}
+
 export class GitSourceControl implements SourceControl {
   async prepare(input: {
     projectRoot: string;
     snapshot: SourceSnapshot;
     projectName: string;
     user: AuthenticatedGitHubUser;
+    base?: SourceUpdateBase;
   }): Promise<PreparedSourceCommit> {
     const gitRoot = join(input.projectRoot, '.git');
     try {
@@ -709,6 +808,62 @@ export class GitSourceControl implements SourceControl {
     }
 
     try {
+      const base = input.base;
+      if (base) {
+        await ensureSafeGitHubRemote({
+          projectRoot: input.projectRoot,
+          owner: base.owner,
+          repository: base.repository,
+        });
+        try {
+          await withGitHubAskPass(base.token, async (environment) =>
+            executeGit(
+              [
+                '-c',
+                'credential.helper=',
+                'fetch',
+                '--quiet',
+                '--no-tags',
+                '--depth=1',
+                'origin',
+                base.commitSha,
+              ],
+              input.projectRoot,
+              environment,
+            ),
+          );
+        } catch {
+          throw new SourcePublicationError({
+            code: 'GITHUB_SOURCE_BASE_FETCH_FAILED',
+            message: 'Unable to fetch the exact managed source-update base',
+            retryable: true,
+          });
+        }
+        const fetchedCommit = await executeGit(['rev-parse', 'FETCH_HEAD'], input.projectRoot);
+        const fetchedTree = await executeGit(['rev-parse', 'FETCH_HEAD^{tree}'], input.projectRoot);
+        const fetchedMessage = await executeGit(
+          ['show', '--quiet', '--format=%B', 'FETCH_HEAD'],
+          input.projectRoot,
+        );
+        if (
+          fetchedCommit !== base.commitSha ||
+          fetchedTree !== base.treeSha ||
+          !fetchedMessage.includes(sourceMarker(base.sourceSha256))
+        ) {
+          throw new SourcePublicationError({
+            code: 'GITHUB_SOURCE_BASE_CONFLICT',
+            message: 'Fetched Git base does not match the guarded source-update plan',
+          });
+        }
+        const currentHead = await optionalGit(['rev-parse', '--verify', 'HEAD'], input.projectRoot);
+        if (!currentHead) {
+          await executeGit(
+            ['update-ref', `refs/heads/${base.branch}`, base.commitSha],
+            input.projectRoot,
+          );
+        }
+      }
+
       await executeGit(['read-tree', '--empty'], input.projectRoot);
       for (let index = 0; index < input.snapshot.files.length; index += 100) {
         const paths = input.snapshot.files.slice(index, index + 100).map((file) => file.path);
@@ -746,19 +901,29 @@ export class GitSourceControl implements SourceControl {
           ['show', '--quiet', '--format=%B', 'HEAD'],
           input.projectRoot,
         );
-        if (
-          existingTree !== treeSha ||
-          !existingMessage.includes(sourceMarker(input.snapshot.sha256))
-        ) {
+        const existingCommitMatchesSnapshot =
+          existingTree === treeSha && existingMessage.includes(sourceMarker(input.snapshot.sha256));
+        if (existingCommitMatchesSnapshot) {
+          if (input.base) {
+            const existingParent = await optionalGit(['rev-parse', 'HEAD^'], input.projectRoot);
+            if (existingParent !== input.base.commitSha) {
+              throw new SourcePublicationError({
+                code: 'LOCAL_GIT_HISTORY_CONFLICT',
+                message: 'Existing local source update has an unexpected parent',
+              });
+            }
+          }
+          return {
+            commitSha: existingHead,
+            treeSha,
+          };
+        }
+        if (!input.base || existingHead !== input.base.commitSha) {
           throw new SourcePublicationError({
             code: 'LOCAL_GIT_HISTORY_CONFLICT',
             message: 'Existing local Git history does not match the source publication plan',
           });
         }
-        return {
-          commitSha: existingHead,
-          treeSha,
-        };
       }
 
       const email = `${input.user.id}+${input.user.login}@users.noreply.github.com`;
@@ -777,7 +942,9 @@ export class GitSourceControl implements SourceControl {
           '--no-gpg-sign',
           '--no-verify',
           '-m',
-          `chore: initialize ${input.projectName}`,
+          input.base
+            ? `chore: update ${input.projectName}`
+            : `chore: initialize ${input.projectName}`,
           '-m',
           sourceMarker(input.snapshot.sha256),
         ],
@@ -801,7 +968,7 @@ export class GitSourceControl implements SourceControl {
       }
       throw new SourcePublicationError({
         code: 'LOCAL_GIT_PREPARE_FAILED',
-        message: 'Unable to prepare the initial source commit',
+        message: 'Unable to prepare the source commit',
       });
     }
   }
@@ -814,42 +981,10 @@ export class GitSourceControl implements SourceControl {
     branch: 'main';
     token: string;
   }): Promise<void> {
-    const remoteUrl = `https://github.com/${input.owner}/${input.repository}.git`;
-    const existingRemote = await optionalGit(['remote', 'get-url', 'origin'], input.projectRoot);
-    if (existingRemote && existingRemote !== remoteUrl) {
-      throw new SourcePublicationError({
-        code: 'LOCAL_GIT_REMOTE_CONFLICT',
-        message: 'Existing Git origin does not match the provisioned repository',
-      });
-    }
-    if (!existingRemote) {
-      try {
-        await executeGit(['remote', 'add', 'origin', remoteUrl], input.projectRoot);
-      } catch {
-        throw new SourcePublicationError({
-          code: 'LOCAL_GIT_REMOTE_FAILED',
-          message: 'Unable to configure the safe GitHub remote',
-        });
-      }
-    }
-
-    const askPassRoot = await mkdtemp(join(tmpdir(), 'void-starter-git-askpass-'));
-    const askPassPath = join(askPassRoot, 'askpass.sh');
+    await ensureSafeGitHubRemote(input);
     try {
-      await writeFile(
-        askPassPath,
-        `#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\\n' 'x-access-token' ;;
-  *Password*) printf '%s\\n' "$VOID_STARTER_GITHUB_TOKEN" ;;
-  *) exit 1 ;;
-esac
-`,
-        { encoding: 'utf8', mode: 0o700 },
-      );
-      await chmod(askPassPath, 0o700);
-      try {
-        await executeGit(
+      await withGitHubAskPass(input.token, async (environment) =>
+        executeGit(
           [
             '-c',
             'credential.helper=',
@@ -859,22 +994,15 @@ esac
             `${input.commitSha}:refs/heads/${input.branch}`,
           ],
           input.projectRoot,
-          {
-            ...process.env,
-            GIT_ASKPASS: askPassPath,
-            GIT_TERMINAL_PROMPT: '0',
-            VOID_STARTER_GITHUB_TOKEN: input.token,
-          },
-        );
-      } catch {
-        throw new SourcePublicationError({
-          code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
-          message: 'GitHub source push did not return a confirmed success',
-          retryable: true,
-        });
-      }
-    } finally {
-      await rm(askPassRoot, { force: true, recursive: true });
+          environment,
+        ),
+      );
+    } catch {
+      throw new SourcePublicationError({
+        code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
+        message: 'GitHub source push did not return a confirmed success',
+        retryable: true,
+      });
     }
   }
 }
@@ -934,6 +1062,65 @@ export async function preflightSourcePublication(input: {
     plan_sha256: sourcePlanDigest(plan),
     source_sha256: plan.source.sha256,
     remote: remote ? 'adoptable' : 'empty',
+  };
+}
+
+function assertRemoteIsUpdateBase(remote: RemoteSource | null, plan: SourcePublicationPlan): void {
+  if (
+    !remote ||
+    !plan.base ||
+    remote.commitSha !== plan.base.commit_sha ||
+    remote.treeSha !== plan.base.tree_sha ||
+    remote.sourceSha256 !== plan.base.source_sha256
+  ) {
+    throw new SourcePublicationError({
+      code: 'GITHUB_SOURCE_UPDATE_BASE_CONFLICT',
+      message: 'Remote main changed after the guarded source-update plan was created',
+    });
+  }
+}
+
+function assertUpdateStateMatchesLocalPlan(
+  state: SourcePublicationState,
+  localPlan: SourcePublicationPlan,
+): void {
+  if (!state.plan.base) {
+    throw new Error('Existing source state is not a source-update operation');
+  }
+  const { base: _base, ...stateLocalPlan } = state.plan;
+  if (serializeCanonicalJson(stateLocalPlan) !== serializeCanonicalJson(localPlan)) {
+    throw new Error('Existing source update belongs to a different local source snapshot');
+  }
+  assertSourceStateMatchesPlan(state, state.plan);
+}
+
+export async function preflightSourceUpdate(input: {
+  projectRoot: string;
+  context: ProvisioningContext;
+  environment: Record<string, string | undefined>;
+  fetch?: FetchLike;
+}): Promise<{
+  ok: true;
+  mode: 'source-update-preflight';
+  plan_sha256: string;
+  source_sha256: string;
+  base_commit_sha: string;
+  base_source_sha256: string;
+}> {
+  const localPlan = await createSourcePublicationPlan(input.projectRoot, input.context);
+  const client = new GitHubSourceClient(
+    requiredGitHubToken(input.environment),
+    input.fetch ?? fetch,
+  );
+  await client.preflight(localPlan);
+  const plan = createSourceUpdatePlan(localPlan, await client.lookup(localPlan));
+  return {
+    ok: true,
+    mode: 'source-update-preflight',
+    plan_sha256: sourcePlanDigest(plan),
+    source_sha256: plan.source.sha256,
+    base_commit_sha: plan.base?.commit_sha ?? '',
+    base_source_sha256: plan.base?.source_sha256 ?? '',
   };
 }
 
@@ -1048,6 +1235,139 @@ export async function applySourcePublication(input: {
         throw new SourcePublicationError({
           code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
           message: 'GitHub source branch was not visible after push',
+          retryable: true,
+        });
+      }
+      assertRemoteMatches(confirmedRemote, plan, prepared.treeSha);
+      state.status = 'succeeded';
+      state.commit_sha = confirmedRemote.commitSha;
+      await writeSourceStateAtomic(input.projectRoot, state);
+      return state;
+    } catch (error) {
+      const safeError = safePublicationError(error);
+      state.status = 'failed';
+      state.commit_sha = null;
+      state.error = safeError;
+      await writeSourceStateAtomic(input.projectRoot, state);
+      throw new SourcePublicationApplyError(safeError.code);
+    }
+  } finally {
+    await releaseSourceLock(input.projectRoot, lock);
+  }
+}
+
+export async function applySourceUpdate(input: {
+  projectRoot: string;
+  context: ProvisioningContext;
+  environment: Record<string, string | undefined>;
+  requireExistingState?: boolean;
+  options?: SourcePublicationOptions;
+}): Promise<SourcePublicationState> {
+  const token = requiredGitHubToken(input.environment);
+  const lock = await acquireSourceLock(input.projectRoot);
+  try {
+    const localPlan = await createSourcePublicationPlan(input.projectRoot, input.context);
+    const existingState = await readSourcePublicationState(input.projectRoot);
+    if (!existingState && input.requireExistingState) {
+      throw new Error('No source update state exists to resume');
+    }
+    if (existingState) {
+      assertUpdateStateMatchesLocalPlan(existingState, localPlan);
+      if (existingState.status === 'succeeded') {
+        return existingState;
+      }
+    }
+
+    const client = new GitHubSourceClient(token, input.options?.fetch ?? fetch);
+    const user = await client.preflight(localPlan);
+    const plan =
+      existingState?.plan ?? createSourceUpdatePlan(localPlan, await client.lookup(localPlan));
+    const state: SourcePublicationState =
+      existingState ??
+      sourcePublicationStateSchema.parse({
+        schema_version: 1,
+        mode: 'live',
+        status: 'pending',
+        plan_sha256: sourcePlanDigest(plan),
+        plan,
+        attempts: 0,
+        commit_sha: null,
+        error: null,
+      });
+    const snapshot = await collectSourceSnapshot(input.projectRoot);
+    if (
+      snapshot.sha256 !== plan.source.sha256 ||
+      snapshot.files.length !== plan.source.file_count ||
+      snapshot.totalBytes !== plan.source.total_bytes
+    ) {
+      throw new Error('Source files changed after source-update plan creation');
+    }
+
+    state.status = 'running';
+    state.attempts += 1;
+    state.error = null;
+    await writeSourceStateAtomic(input.projectRoot, state);
+
+    try {
+      const base = plan.base;
+      if (!base) {
+        throw new Error('Source update plan is missing its guarded remote base');
+      }
+      const sourceControl = input.options?.sourceControl ?? new GitSourceControl();
+      const prepared = await sourceControl.prepare({
+        projectRoot: input.projectRoot,
+        snapshot,
+        projectName: plan.repository.name,
+        user,
+        base: {
+          commitSha: base.commit_sha,
+          treeSha: base.tree_sha,
+          sourceSha256: base.source_sha256,
+          owner: plan.repository.owner,
+          repository: plan.repository.name,
+          branch: plan.repository.branch,
+          token,
+        },
+      });
+      const existingRemote = await client.lookup(plan);
+      if (existingRemote?.sourceSha256 === plan.source.sha256) {
+        assertRemoteMatches(existingRemote, plan, prepared.treeSha);
+        state.status = 'succeeded';
+        state.commit_sha = existingRemote.commitSha;
+        await writeSourceStateAtomic(input.projectRoot, state);
+        return state;
+      }
+      assertRemoteIsUpdateBase(existingRemote, plan);
+
+      try {
+        await sourceControl.push({
+          projectRoot: input.projectRoot,
+          commitSha: prepared.commitSha,
+          owner: plan.repository.owner,
+          repository: plan.repository.name,
+          branch: plan.repository.branch,
+          token,
+        });
+      } catch (error) {
+        const reconciledRemote = await client.lookup(plan);
+        if (reconciledRemote?.sourceSha256 === plan.source.sha256) {
+          assertRemoteMatches(reconciledRemote, plan, prepared.treeSha);
+          state.status = 'succeeded';
+          state.commit_sha = reconciledRemote.commitSha;
+          await writeSourceStateAtomic(input.projectRoot, state);
+          return state;
+        }
+        if (reconciledRemote) {
+          assertRemoteIsUpdateBase(reconciledRemote, plan);
+        }
+        throw error;
+      }
+
+      const confirmedRemote = await client.lookup(plan);
+      if (!confirmedRemote) {
+        throw new SourcePublicationError({
+          code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
+          message: 'GitHub source branch was not visible after update push',
           retryable: true,
         });
       }

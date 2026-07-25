@@ -21,6 +21,9 @@
     "source:plan": "bun ./src/source-plan.cli.ts",
     "source:preflight": "bun ./src/source-preflight.cli.ts",
     "source:resume": "bun ./src/source-resume.cli.ts",
+    "source:update:live": "bun ./src/source-update-live.cli.ts",
+    "source:update:preflight": "bun ./src/source-update-preflight.cli.ts",
+    "source:update:resume": "bun ./src/source-update-resume.cli.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"

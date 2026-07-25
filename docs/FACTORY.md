@@ -464,6 +464,25 @@ different `main` branch fails closed; an ambiguous push is looked up before resu
 written atomically to `.void-starter/source-state.json`, which is ignored by Git and contains no
 credential.
 
+Factory-owned revisions remain a separate explicit command:
+
+```sh
+GITHUB_TOKEN=... bun run source:update:preflight -- \
+  /absolute/path/to/fresh-updated-project \
+  fixtures/provisioning/eu.yaml
+
+GITHUB_TOKEN=... bun run source:update:live -- \
+  /absolute/path/to/fresh-updated-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+The fresh target must first adopt the existing provider resources. Update preflight accepts only
+an existing remote HEAD with a valid Void Starter source marker. Live update fetches and verifies
+that exact commit and tree, creates a single child commit, rechecks the HEAD for races, and uses a
+normal fast-forward push. It never force-pushes or adopts an unmarked/user-modified HEAD.
+`source:update:resume` reconciles a transport-ambiguous update without creating another commit.
+
 GitHub permits personal access tokens in place of HTTPS passwords:
 [GitHub PAT command-line authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
 Vercel automatically deploys pushes to a connected repository and detects the package manager

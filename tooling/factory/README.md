@@ -156,6 +156,15 @@ GITHUB_TOKEN=... bun run source:live -- \
   /absolute/path/to/new-project \
   fixtures/provisioning/eu.yaml \
   --confirm-project web-expo
+
+GITHUB_TOKEN=... bun run source:update:preflight -- \
+  /absolute/path/to/fresh-updated-project \
+  fixtures/provisioning/eu.yaml
+
+GITHUB_TOKEN=... bun run source:update:live -- \
+  /absolute/path/to/fresh-updated-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
 ```
 
 The source plan hashes the exact publishable file set, requires `bun.lock`, excludes local
@@ -169,6 +178,12 @@ Generated Expo projects keep their EAS profiles but invoke the pinned operationa
 with `bun run eas:build`; `eas-cli` is not installed in the application dependency graph. After
 source publication, `doctor` accepts the lifecycle-owned `.git` metadata only while the source
 receipt remains structurally valid and matches the current snapshot.
+
+Factory-managed revisions use a fresh generated target that has adopted the existing provider
+resources. The update preflight requires the current remote HEAD to carry a Void Starter source
+marker. Live update fetches that exact commit, verifies its tree and marker, creates one child
+commit, rechecks the remote HEAD, and performs a normal fast-forward push. An unmarked, moved or
+already-current remote fails closed; `source:update:resume` reconciles an ambiguous push.
 
 Local `generate` still writes only to its new target. Migrations, deployment receipts and smoke
 tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns

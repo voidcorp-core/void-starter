@@ -15,9 +15,11 @@ import { createProvisioningPlan, provisioningPlanDigest } from './provisioning-p
 import { runSourceApplyCli } from './source-publication.cli';
 import {
   applySourcePublication,
+  applySourceUpdate,
   createSourcePublicationPlan,
   GitSourceControl,
   preflightSourcePublication,
+  preflightSourceUpdate,
   readSourcePublicationState,
   type SourceControl,
   SourcePublicationError,
@@ -120,6 +122,7 @@ class MockGitHubSourceApi {
 class MockSourceControl implements SourceControl {
   prepareCalls = 0;
   pushCalls = 0;
+  preparedBase: Parameters<SourceControl['prepare']>[0]['base'];
   failPushAfterRemoteUpdate = false;
   failPushBeforeRemoteUpdate = false;
   readonly api: MockGitHubSourceApi;
@@ -130,8 +133,11 @@ class MockSourceControl implements SourceControl {
     this.sourceSha256 = sourceSha256;
   }
 
-  async prepare(): Promise<{ commitSha: string; treeSha: string }> {
+  async prepare(
+    input: Parameters<SourceControl['prepare']>[0],
+  ): Promise<{ commitSha: string; treeSha: string }> {
     this.prepareCalls += 1;
+    this.preparedBase = input.base;
     return { commitSha, treeSha };
   }
 
@@ -508,6 +514,116 @@ describe('source publication', () => {
       commit_sha: commitSha,
     });
     expect(succeedingControl.pushCalls).toBe(1);
+  });
+
+  it('preflights and applies a fast-forward update from the exact managed remote head', async () => {
+    const root = await createProvisionedProject();
+    const api = new MockGitHubSourceApi();
+    const localPlan = await createSourcePublicationPlan(root, context);
+    const baseCommitSha = 'c'.repeat(40);
+    const baseTreeSha = 'd'.repeat(40);
+    const baseSourceSha256 = 'e'.repeat(64);
+    api.remote = {
+      commitSha: baseCommitSha,
+      treeSha: baseTreeSha,
+      sourceSha256: baseSourceSha256,
+    };
+
+    await expect(
+      preflightSourceUpdate({
+        projectRoot: root,
+        context,
+        environment: { GITHUB_TOKEN: token },
+        fetch: api.fetch,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: 'source-update-preflight',
+      source_sha256: localPlan.source.sha256,
+      base_commit_sha: baseCommitSha,
+      base_source_sha256: baseSourceSha256,
+    });
+    expect(api.requests.every((request) => request.method === 'GET')).toBe(true);
+    expect(await readSourcePublicationState(root)).toBeNull();
+
+    const sourceControl = new MockSourceControl(api, localPlan.source.sha256);
+    const state = await applySourceUpdate({
+      projectRoot: root,
+      context,
+      environment: { GITHUB_TOKEN: token },
+      options: {
+        fetch: api.fetch,
+        sourceControl,
+      },
+    });
+    expect(state).toMatchObject({
+      status: 'succeeded',
+      attempts: 1,
+      commit_sha: commitSha,
+      plan: {
+        base: {
+          commit_sha: baseCommitSha,
+          tree_sha: baseTreeSha,
+          source_sha256: baseSourceSha256,
+        },
+      },
+    });
+    expect(sourceControl.preparedBase).toMatchObject({
+      commitSha: baseCommitSha,
+      treeSha: baseTreeSha,
+      sourceSha256: baseSourceSha256,
+    });
+    expect(sourceControl.pushCalls).toBe(1);
+    expect(await readFile(join(root, '.void-starter/source-state.json'), 'utf8')).not.toContain(
+      token,
+    );
+
+    const requestCount = api.requests.length;
+    await expect(
+      applySourceUpdate({
+        projectRoot: root,
+        context,
+        environment: { GITHUB_TOKEN: token },
+        requireExistingState: true,
+        options: {
+          fetch: api.fetch,
+          sourceControl,
+        },
+      }),
+    ).resolves.toEqual(state);
+    expect(api.requests).toHaveLength(requestCount);
+    expect(sourceControl.pushCalls).toBe(1);
+  });
+
+  it('refuses source updates from empty, unmarked, or already-current remote heads', async () => {
+    const root = await createProvisionedProject();
+    const api = new MockGitHubSourceApi();
+    const localPlan = await createSourcePublicationPlan(root, context);
+    const preflight = () =>
+      preflightSourceUpdate({
+        projectRoot: root,
+        context,
+        environment: { GITHUB_TOKEN: token },
+        fetch: api.fetch,
+      });
+
+    await expect(preflight()).rejects.toMatchObject({
+      code: 'GITHUB_SOURCE_UPDATE_BASE_MISSING',
+    });
+
+    api.remote = {
+      commitSha,
+      treeSha,
+      sourceSha256: null,
+    };
+    await expect(preflight()).rejects.toMatchObject({
+      code: 'GITHUB_SOURCE_UPDATE_BASE_UNMANAGED',
+    });
+
+    api.remote.sourceSha256 = localPlan.source.sha256;
+    await expect(preflight()).rejects.toMatchObject({
+      code: 'GITHUB_SOURCE_UPDATE_UNCHANGED',
+    });
   });
 
   it('requires exact project confirmation before source mutation', async () => {

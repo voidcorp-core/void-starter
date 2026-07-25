@@ -7,6 +7,13 @@ export const sourcePublicationPlanSchema = z.strictObject({
   schema_version: z.literal(1),
   manifest_sha256: sha256Schema,
   context_sha256: sha256Schema,
+  base: z
+    .strictObject({
+      commit_sha: gitShaSchema,
+      tree_sha: gitShaSchema,
+      source_sha256: sha256Schema,
+    })
+    .optional(),
   repository: z.strictObject({
     owner: z.string().trim().min(1),
     owner_kind: z.enum(['organization', 'user']),
