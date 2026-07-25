@@ -12,9 +12,10 @@ import {
 import { doctorProject } from './doctor.service';
 import { parseBuildManifest } from './factory.service';
 import { renderProject } from './generation.service';
-import { sha256 } from './integrity.service';
+import { serializeCanonicalJson, sha256 } from './integrity.service';
 import { applyProvisioning, SimulatedProvisioningAdapter } from './provisioning-apply.service';
 import { createProvisioningPlan, parseProvisioningContext } from './provisioning-plan.service';
+import { createSourcePublicationPlan } from './source-publication.service';
 
 const temporaryRoots: string[] = [];
 
@@ -486,6 +487,23 @@ describe('doctorProject', () => {
       plan: createProvisioningPlan(manifest, context),
       adapter: new SimulatedProvisioningAdapter(),
     });
+    const applyStatePath = join(targetRoot, '.void-starter/apply-state.json');
+    const applyState = JSON.parse(await readFile(applyStatePath, 'utf8'));
+    applyState.mode = 'live';
+    await writeJson(applyStatePath, applyState);
+    await writeFile(join(targetRoot, 'bun.lock'), 'lockfileVersion = 1\n', 'utf8');
+    const sourcePlan = await createSourcePublicationPlan(targetRoot, context);
+    await writeJson(join(targetRoot, '.void-starter/source-state.json'), {
+      schema_version: 1,
+      mode: 'live',
+      status: 'succeeded',
+      plan_sha256: sha256(serializeCanonicalJson(sourcePlan)),
+      plan: sourcePlan,
+      attempts: 1,
+      commit_sha: 'a'.repeat(40),
+      error: null,
+    });
+    await mkdir(join(targetRoot, '.git'));
 
     const healthyReport = await doctorProject(targetRoot);
     expect(healthyReport.checks).toContainEqual({
@@ -493,8 +511,18 @@ describe('doctorProject', () => {
       status: 'pass',
       message: 'Provisioning state is structurally valid and succeeded',
     });
+    expect(healthyReport.checks).toContainEqual({
+      id: 'development-artifacts',
+      status: 'pass',
+      message: 'Factory and external development-governance artifacts are absent',
+    });
+    expect(healthyReport.checks).toContainEqual({
+      id: 'source-publication-state',
+      status: 'pass',
+      message: 'Source publication state is structurally valid and succeeded',
+    });
 
-    await writeFile(join(targetRoot, '.void-starter/apply-state.json'), '{}\n', 'utf8');
+    await writeFile(applyStatePath, '{}\n', 'utf8');
     const corruptReport = await doctorProject(targetRoot);
     expect(corruptReport.ok).toBe(false);
     expect(corruptReport.checks).toContainEqual(

@@ -272,8 +272,26 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
     ),
   );
 
+  let sourcePublicationState: Awaited<ReturnType<typeof readSourcePublicationState>> | undefined;
+  let sourcePublicationStateError: unknown;
+  try {
+    sourcePublicationState = await readSourcePublicationState(projectRoot);
+    if (sourcePublicationState) {
+      await validateSourcePublicationState(
+        sourcePublicationState,
+        receipt.manifest_sha256,
+        projectRoot,
+      );
+    }
+  } catch (error) {
+    sourcePublicationStateError = error;
+  }
+
   const presentForbiddenPaths: string[] = [];
   for (const forbiddenPath of FORBIDDEN_OUTPUT_PATHS) {
+    if (forbiddenPath === '.git' && sourcePublicationState && !sourcePublicationStateError) {
+      continue;
+    }
     if (await pathExists(join(projectRoot, forbiddenPath))) {
       presentForbiddenPaths.push(forbiddenPath);
     }
@@ -323,29 +341,28 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
     );
   }
 
-  try {
-    const sourceState = await readSourcePublicationState(projectRoot);
-    if (!sourceState) {
-      checks.push(
-        createCheck('source-publication-state', true, 'No source publication state is recorded'),
-      );
-    } else {
-      await validateSourcePublicationState(sourceState, receipt.manifest_sha256, projectRoot);
-      checks.push(
-        createCheck(
-          'source-publication-state',
-          sourceState.status === 'succeeded',
-          `Source publication state is structurally valid and ${sourceState.status}`,
-        ),
-      );
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  if (sourcePublicationStateError) {
+    const message =
+      sourcePublicationStateError instanceof Error
+        ? sourcePublicationStateError.message
+        : String(sourcePublicationStateError);
     checks.push(
       createCheck(
         'source-publication-state',
         false,
         `Source publication state is invalid: ${message}`,
+      ),
+    );
+  } else if (!sourcePublicationState) {
+    checks.push(
+      createCheck('source-publication-state', true, 'No source publication state is recorded'),
+    );
+  } else {
+    checks.push(
+      createCheck(
+        'source-publication-state',
+        sourcePublicationState.status === 'succeeded',
+        `Source publication state is structurally valid and ${sourcePublicationState.status}`,
       ),
     );
   }

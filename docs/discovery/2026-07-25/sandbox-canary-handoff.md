@@ -14,8 +14,10 @@
 - `resume:live` a conservé les mêmes IDs et compteurs sans nouvelle mutation.
 - Un second projet généré sans état local a adopté les quatre ressources avec les mêmes IDs, sans
   doublon.
-- Le worktree est propre au commit
-  `5fa09ad fix(factory): require explicit GitHub member scope`.
+- Le code initial a été publié sur `main` au commit
+  `86b47407a951d24d83567607219936ba2cf34b59`.
+- Le push a retourné une confirmation ambiguë, puis `source:resume` a adopté exactement ce commit
+  distant en deuxième tentative, sans second push.
 
 ## Sandbox
 
@@ -74,20 +76,32 @@ Le projet d'adoption est
 `doctor` passe sur le canari principal et aucun secret ou URI PostgreSQL n'est présent dans son
 receipt.
 
-Le dépôt distant est encore vide. Le cycle séparé de publication source est implémenté localement
-avec plan, preflight, apply, resume, digest du contenu et adoption exacte. Son canari live reste à
-exécuter après génération de `bun.lock`. Les migrations et la vérification du déploiement restent
-hors de cette tranche.
+Le dépôt distant contient maintenant le snapshot initial de 242 fichiers, dont le SHA-256 source
+est `0d4e9402186becd431162732cc896b92222b70fe2ef81eafebb41e31559d0f75`. Son premier
+workflow GitHub Actions a échoué uniquement sur `bun audit` : `eas-cli`, bien qu'inutilisé par la
+CI et les exports Expo, ajoutait sept dépendances transitives vulnérables. Le correctif local :
+
+- exécute EAS à la demande avec `bunx eas-cli@21.2.0`;
+- retire `eas-cli` du lockfile applicatif;
+- fixe `uuid` à une version corrigée compatible;
+- autorise le `.git` créé par la publication seulement si son receipt est valide.
+
+Le canari corrigé `/tmp/void-starter-canary-fixed-20260725` passe lint, type-check, tests, Knip,
+doctor et les builds Next.js + Expo iOS/Android/Web. Il contient 930 paquets au lieu de 1 200.
+La publication contrôlée de cette correction, la CI distante verte, les migrations et les smoke
+tests de déploiement restent à terminer.
 
 ## Suite globale
 
-1. Ajouter le push Git, le déploiement Vercel, les migrations/seed et les smoke tests distants.
-2. Terminer Better Auth en production.
-3. Ajouter le provisioning Expo/EAS.
-4. Ajouter R2, Resend, Sentry/PostHog et DNS.
-5. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-6. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-7. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+1. Ajouter la publication contrôlée des mises à jour, puis obtenir une CI et un déploiement Vercel
+   verts sur le canari corrigé.
+2. Ajouter les migrations/seed et les smoke tests distants.
+3. Terminer Better Auth en production.
+4. Ajouter le provisioning Expo/EAS.
+5. Ajouter R2, Resend, Sentry/PostHog et DNS.
+6. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+7. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+8. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.

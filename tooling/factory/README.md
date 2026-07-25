@@ -165,6 +165,11 @@ short-lived askpass helper with credential storage disabled; neither the token n
 remote URL is persisted. Existing `main` is adopted only when both its source marker and exact Git
 tree match. `source:resume` safely reconciles an ambiguous push.
 
+Generated Expo projects keep their EAS profiles but invoke the pinned operational CLI on demand
+with `bun run eas:build`; `eas-cli` is not installed in the application dependency graph. After
+source publication, `doctor` accepts the lifecycle-owned `.git` metadata only while the source
+receipt remains structurally valid and matches the current snapshot.
+
 Local `generate` still writes only to its new target. Migrations, deployment receipts and smoke
 tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns
 simulation into remote mutation.

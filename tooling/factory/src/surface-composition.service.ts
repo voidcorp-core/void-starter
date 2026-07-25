@@ -25,7 +25,7 @@ function createExpoFiles(manifest: BuildManifest): GeneratedFile[] {
       web: 'expo start --web',
       build: 'expo export --platform all --output-dir dist',
       'type-check': 'tsc --noEmit',
-      'eas:build': 'eas build --platform all',
+      'eas:build': 'bunx eas-cli@21.2.0 build --platform all',
     },
     dependencies: {
       '@expo/metro-runtime': '~57.0.7',
@@ -44,7 +44,6 @@ function createExpoFiles(manifest: BuildManifest): GeneratedFile[] {
     },
     devDependencies: {
       '@types/react': '~19.2.2',
-      'eas-cli': '^21.2.0',
       typescript: '~6.0.3',
     },
   };

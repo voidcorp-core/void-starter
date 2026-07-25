@@ -57,8 +57,11 @@ describe('createSurfaceFilePlan', () => {
       react: '19.2.3',
       'react-native': '0.86.0',
     });
-    expect(packageJson.devDependencies).toMatchObject({
-      'eas-cli': '^21.2.0',
+    expect(packageJson.scripts).toMatchObject({
+      'eas:build': 'bunx eas-cli@21.2.0 build --platform all',
+    });
+    expect(packageJson.devDependencies).toEqual({
+      '@types/react': '~19.2.2',
       typescript: '~6.0.3',
     });
   });

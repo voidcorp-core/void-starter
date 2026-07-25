@@ -169,9 +169,11 @@ verification and recovery note.
 The implemented factory slice lives in `tooling/factory`. It validates schema v1 with strict Zod
 objects, produces a deterministic ordered composition plan, previews a sorted local file plan, and
 can render the selected surfaces into a new directory. The Expo blueprint targets SDK 57, React
-Native 0.86, Expo Router, and EAS. Rendering remains local. A separate provisioning plan can now
-model the first GitHub, Vercel and Neon resource tranche. Dry-run and simulation remain the safe
-defaults; authenticated execution is isolated behind separate live commands.
+Native 0.86, Expo Router, and EAS. The EAS configuration is generated, while its pinned CLI runs
+on demand through `bun run eas:build` and does not inflate the application lockfile. Rendering
+remains local. A separate provisioning plan can now model the first GitHub, Vercel and Neon
+resource tranche. Dry-run and simulation remain the safe defaults; authenticated execution is
+isolated behind separate live commands.
 
 ```yaml
 schema_version: 1
