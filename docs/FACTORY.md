@@ -498,7 +498,8 @@ be proven locally.
 2. Define and validate manifest schema v1. **Done.**
 3. Implement deterministic local composition with fixture matrix. **Done.**
 4. Implement `plan`, receipt and `doctor` before external mutations. **Done.**
-5. Add GitHub, Vercel and Neon provisioning. **Contract complete; sandbox canary pending.**
+5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
+   passed.**
 6. Finish Better Auth production onboarding and seed.
 7. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
 8. Add R2, Resend, observability and DNS adapters.

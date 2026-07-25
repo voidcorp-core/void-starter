@@ -10,7 +10,10 @@
 - La génération, `doctor`, le dry-run, les tests de la factory, le lint et le type-check passent.
 - Le preflight réel GitHub/Vercel/Neon passe :
   `b380170501c889c4af41a4078e486936cc03f09bf380285ec802ed29ce9ee39f`.
-- `apply:live` n'a pas été lancé. La factory n'a donc encore créé aucune ressource distante.
+- `apply:live` a créé les quatre ressources attendues en une tentative chacune.
+- `resume:live` a conservé les mêmes IDs et compteurs sans nouvelle mutation.
+- Un second projet généré sans état local a adopté les quatre ressources avec les mêmes IDs, sans
+  doublon.
 - Le worktree est propre au commit
   `5fa09ad fix(factory): require explicit GitHub member scope`.
 
@@ -59,34 +62,30 @@ neon:
 Si `/tmp` a été vidé, reconstruire ces fichiers et relancer `generate`, `doctor`, le dry-run puis
 le preflight avant toute mutation.
 
-## Reprise immédiate
+## Ressources créées
 
-Après avoir rechargé les trois secrets et obtenu un nouveau preflight vert, lancer :
+- GitHub repository : `R_kgDOTi-2Vg`;
+- Vercel project : `prj_NRGjMkzkuXsF3ppd9Bgd2fPIhkNP`;
+- Neon project : `dark-mountain-89324488`;
+- Vercel database binding : `4oT3Pp8aD5apDAiv`.
 
-```sh
-cd /Users/folpe/Developer/void-starter/tooling/factory
+Le projet d'adoption est
+`/tmp/void-starter-canary-adoption-20260725`. Son état live confirme les mêmes quatre IDs.
+`doctor` passe sur le canari principal et aucun secret ou URI PostgreSQL n'est présent dans son
+receipt.
 
-bun run apply:live -- \
-  /tmp/void-starter-canary-20260725 \
-  /tmp/void-starter-canary-20260725.context.yaml \
-  --confirm-project void-starter-canary-20260725
-```
-
-Cette commande doit créer le dépôt GitHub, le projet Vercel, le projet Neon et les bindings
-Vercel `DATABASE_URL`. Elle ne pousse pas encore le code, ne migre pas la base et ne déploie pas.
-En cas d'échec partiel, inspecter la sortie et utiliser `resume:live`; ne pas relancer ou nettoyer
-manuellement sans vérifier `.void-starter/apply-state.json`.
+Le dépôt distant est encore vide : cette tranche ne pousse pas le code, ne migre pas la base et ne
+déploie pas.
 
 ## Suite globale
 
-1. Exécuter et valider ce premier `apply:live`, puis tester la reprise et l'adoption sans doublon.
-2. Ajouter le push Git, le déploiement Vercel, les migrations/seed et les smoke tests distants.
-3. Terminer Better Auth en production.
-4. Ajouter le provisioning Expo/EAS.
-5. Ajouter R2, Resend, Sentry/PostHog et DNS.
-6. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-7. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-8. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+1. Ajouter le push Git, le déploiement Vercel, les migrations/seed et les smoke tests distants.
+2. Terminer Better Auth en production.
+3. Ajouter le provisioning Expo/EAS.
+4. Ajouter R2, Resend, Sentry/PostHog et DNS.
+5. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+6. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+7. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.
