@@ -48,7 +48,10 @@ export default function SignUpPage() {
       toast.error(error.message ?? 'Sign up failed');
       return;
     }
-    router.push('/dashboard');
+    // `requireEmailVerification` deliberately leaves a fresh account without
+    // a session. Sending it to /dashboard would immediately bounce through
+    // requireAuth() and land on /sign-in, hiding the actual next step.
+    router.push('/verify-email/pending');
   }
 
   return (

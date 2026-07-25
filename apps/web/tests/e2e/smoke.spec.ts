@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test';
 
 test('homepage loads with title', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /void factory/i })).toBeVisible();
+  // The factory replaces the baseline product name with the generated
+  // project name, so assert the semantic page contract rather than a
+  // template-only string.
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });
 
 test('dashboard redirects unauthenticated visitors to sign-in', async ({ page }) => {

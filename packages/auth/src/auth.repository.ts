@@ -105,6 +105,25 @@ function initAuth() {
       enabled: true,
       requireEmailVerification: true,
     },
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url }) => {
+        // Match the magic-link development contract below: local projects are
+        // usable without a mail vendor, but production must wire a real sender
+        // instead of leaking a verification URL into logs.
+        if (process.env['NODE_ENV'] === 'production') {
+          throw new AppError({
+            message:
+              'Verification email sender is not configured. Wire @repo/email (Resend) before accepting production sign-ups.',
+            code: 'VERIFICATION_EMAIL_NOT_CONFIGURED',
+            status: 500,
+          });
+        }
+        logger.warn(
+          { email: user.email, url },
+          'verification email (dev only - install @repo/email module for prod)',
+        );
+      },
+    },
     // Persist rate-limit counters in Postgres so the limit holds across
     // serverless invocations -- the default in-memory store is per-invocation
     // and grants every request its own bucket on Vercel (ADR 33; same reason
