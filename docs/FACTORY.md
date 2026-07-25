@@ -297,10 +297,11 @@ Forge.
 
 The generator fails if the target exists or is inside the source repository. It rejects source
 symlinks and excludes `.git`, `.env*` secrets, caches, build outputs, the source lockfile, factory
-code, Harness state and agent-governance artifacts. The output stores the normalized manifest and
-a deterministic receipt under `.void-starter/`. `doctor` recalculates the plan and SHA-256
-digests, checks surface and local capability presence, scans package manifests and a newly
-generated lockfile for Harness dependencies, and fails closed on invalid metadata.
+code, Harness state, agent-governance artifacts, internal discovery handoffs and historical
+implementation plans. The output stores the normalized manifest and a deterministic receipt under
+`.void-starter/`. `doctor` recalculates the plan and SHA-256 digests, checks surface and local
+capability presence, scans package manifests and a newly generated lockfile for Harness
+dependencies, and fails closed on invalid metadata.
 
 Local capability composition currently handles:
 

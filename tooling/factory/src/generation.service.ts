@@ -28,7 +28,9 @@ const EXCLUDED_SOURCE_PATHS = [
   'AGENTS.md',
   'CLAUDE.md',
   'bun.lock',
+  'docs/discovery',
   'docs/FACTORY.md',
+  'docs/superpowers',
   'tooling/factory',
 ].toSorted();
 

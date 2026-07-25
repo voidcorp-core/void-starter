@@ -257,10 +257,17 @@ Do not commit real OAuth secrets. The dev pair stays in `.env.local`; prod value
 
 ## 8. Customizing email templates
 
-Today the magic-link sender is a development stub. The path to real email is wired but not active by default.
+Today the verification-email and magic-link senders are development stubs. The path to real email
+is wired but not active by default.
 
-- **Default (dev).** `sendMagicLink` in `packages/auth/src/auth.repository.ts` calls `logger.warn({ email, url }, 'magic link (dev only ...)')`. Open the dev console, copy the URL, paste it in the browser. No mail server needed. The raw token is not logged separately -- the URL already embeds it.
-- **Production guard.** When `NODE_ENV === 'production'`, the dev stub throws `AppError('MAGIC_LINK_NOT_CONFIGURED')` instead of pretending to send. A deploy that enables magic link without wiring a real sender fails loud rather than silently swallowing logins (see ADR 31).
+- **Default (dev).** `sendVerificationEmail` and `sendMagicLink` in
+  `packages/auth/src/auth.repository.ts` log the recipient and generated URL. Open the dev console,
+  copy the URL, and paste it in the browser. No mail server is needed. The raw token is not logged
+  separately -- the URL already embeds it. After email/password sign-up, the browser opens
+  `/verify-email/pending` instead of attempting the protected dashboard without a session.
+- **Production guard.** When `NODE_ENV === 'production'`, both dev stubs throw a configuration
+  error instead of pretending to send or leaking authentication URLs into logs. Wire the email
+  adapter before accepting production sign-ups or enabling magic links (see ADR 31).
 - **Production.** Activate `_modules/email-resend` (placeholder today, see `_modules/email-resend/README.md`). The module ships React Email templates colocated with the adapter and replaces the body of `sendMagicLink` with a Resend API call. The `RESEND_API_KEY` env var gates activation.
 
 When activating Resend, update `sendMagicLink` directly in `auth.repository.ts`:
@@ -274,7 +281,9 @@ magicLink({
 }),
 ```
 
-The same pattern (`forgetPassword`, `verifyEmail` callbacks) applies to password reset and email verification when the Better-Auth `emailAndPassword.requireEmailVerification: true` flow needs production-grade email.
+Use the same adapter for password-reset delivery. Email verification is already required by
+`emailAndPassword.requireEmailVerification: true`; production sign-up is not complete until its
+development callback has been replaced.
 
 ---
 

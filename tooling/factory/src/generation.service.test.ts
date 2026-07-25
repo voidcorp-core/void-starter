@@ -32,6 +32,8 @@ async function createBaseline() {
   await mkdir(join(sourceRoot, 'apps/web'), { recursive: true });
   await mkdir(join(sourceRoot, 'tooling/factory'), { recursive: true });
   await mkdir(join(sourceRoot, 'docs'), { recursive: true });
+  await mkdir(join(sourceRoot, 'docs/discovery'), { recursive: true });
+  await mkdir(join(sourceRoot, 'docs/superpowers/plans'), { recursive: true });
   await mkdir(join(sourceRoot, '.agents'), { recursive: true });
   await mkdir(join(sourceRoot, '.git'), { recursive: true });
   await mkdir(join(sourceRoot, '.void'), { recursive: true });
@@ -110,6 +112,16 @@ async function createBaseline() {
     'utf8',
   );
   await writeFile(join(sourceRoot, 'docs/FACTORY.md'), '# Factory control plane\n', 'utf8');
+  await writeFile(
+    join(sourceRoot, 'docs/discovery/internal-handoff.md'),
+    '# Internal handoff\n',
+    'utf8',
+  );
+  await writeFile(
+    join(sourceRoot, 'docs/superpowers/plans/legacy-plan.md'),
+    '# Internal implementation plan\n',
+    'utf8',
+  );
   await writeFile(join(sourceRoot, '.agents/skill.md'), '# External governance\n', 'utf8');
   await writeFile(join(sourceRoot, '.git/config'), '[core]\nrepositoryformatversion = 0\n', 'utf8');
   await writeFile(join(sourceRoot, '.void/usage.log'), 'external usage\n', 'utf8');
@@ -207,6 +219,8 @@ describe('renderProject', () => {
     for (const forbiddenPath of [
       'tooling/factory/package.json',
       'docs/FACTORY.md',
+      'docs/discovery/internal-handoff.md',
+      'docs/superpowers/plans/legacy-plan.md',
       '.agents/skill.md',
       '.git/config',
       '.void/usage.log',

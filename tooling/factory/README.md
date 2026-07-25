@@ -50,9 +50,9 @@ bun run hooks:install
 
 `generate` refuses an existing target, a target inside the source repository, and source
 symlinks. It copies neither `.env*` secrets nor caches, lockfiles, Harness state, factory source,
-or agent-governance files. A generated project receives `.void-starter/manifest.json` and
-`.void-starter/receipt.json`; the receipt is deterministic and records SHA-256 digests for every
-generated file.
+agent-governance files, internal discovery handoffs, or historical implementation plans. A
+generated project receives `.void-starter/manifest.json` and `.void-starter/receipt.json`; the
+receipt is deterministic and records SHA-256 digests for every generated file.
 
 The fixture matrix covers public minimal web, Better Auth + Neon/Drizzle web, Clerk web,
 mobile-only, and web + Expo. Unselected auth, database, sample-domain, PostHog and Sentry packages

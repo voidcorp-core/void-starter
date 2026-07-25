@@ -18,6 +18,9 @@
   `86b47407a951d24d83567607219936ba2cf34b59`.
 - Le push a retourné une confirmation ambiguë, puis `source:resume` a adopté exactement ce commit
   distant en deuxième tentative, sans second push.
+- Deux mises à jour protégées ont validé le fast-forward, puis le correctif final
+  `1153689e0a67695f3c97700baeef566e5ee0e75c` a passé la CI complète et le déploiement
+  Vercel Production.
 
 ## Sandbox
 
@@ -76,32 +79,60 @@ Le projet d'adoption est
 `doctor` passe sur le canari principal et aucun secret ou URI PostgreSQL n'est présent dans son
 receipt.
 
-Le dépôt distant contient maintenant le snapshot initial de 242 fichiers, dont le SHA-256 source
-est `0d4e9402186becd431162732cc896b92222b70fe2ef81eafebb41e31559d0f75`. Son premier
+Le snapshot initial de 242 fichiers avait pour SHA-256 source
+`0d4e9402186becd431162732cc896b92222b70fe2ef81eafebb41e31559d0f75`. Son premier
 workflow GitHub Actions a échoué uniquement sur `bun audit` : `eas-cli`, bien qu'inutilisé par la
-CI et les exports Expo, ajoutait sept dépendances transitives vulnérables. Le correctif local :
+CI et les exports Expo, ajoutait sept dépendances transitives vulnérables. Le correctif :
 
 - exécute EAS à la demande avec `bunx eas-cli@21.2.0`;
 - retire `eas-cli` du lockfile applicatif;
 - fixe `uuid` à une version corrigée compatible;
 - autorise le `.git` créé par la publication seulement si son receipt est valide.
 
-Le canari corrigé `/tmp/void-starter-canary-fixed-20260725` passe lint, type-check, tests, Knip,
-doctor et les builds Next.js + Expo iOS/Android/Web. Il contient 930 paquets au lieu de 1 200.
-La publication contrôlée de cette correction, la CI distante verte, les migrations et les smoke
-tests de déploiement restent à terminer.
+La première mise à jour protégée a publié
+`e32990a756d6acb655abdfcdb8d48ada41d90e39`. Le job qualité a alors tout validé, mais
+Playwright ne résolvait pas le `tsconfig` partagé par sous-chemin de package sous Linux. La seconde
+mise à jour `ac94c8195a84e6553854db3dd303543c72593a20` a corrigé ce chargement, puis les
+tests ont révélé deux défauts fonctionnels : le nom d'accueil attendu était fixe malgré la
+personnalisation du projet, et l'inscription envoyait un utilisateur non vérifié vers le
+dashboard avant de le renvoyer vers la connexion.
+
+Le correctif final :
+
+- teste le `<h1>` dynamique plutôt qu'un nom de template;
+- ajoute `/verify-email/pending` et y dirige les nouveaux comptes;
+- fournit en développement un callback de vérification qui journalise le lien;
+- échoue explicitement en production tant qu'un vrai expéditeur d'e-mail n'est pas branché.
+
+Il est publié au commit `1153689e0a67695f3c97700baeef566e5ee0e75c`, avec 243 fichiers,
+le SHA-256 source `009bfb205194bb3e9bf4486e8d2c05f23841a3bddaf28e434d8f90e6f0136f79`
+et une seule tentative. Le workflow GitHub Actions `30151740597` est entièrement vert :
+
+- qualité : audit, lint, type-check, migrations PostgreSQL, tests, builds Next.js et Expo, Knip
+  et gitleaks;
+- E2E : les neuf scénarios Playwright passent;
+- Vercel : déploiement Production `5599957241` réussi sur le même SHA.
+
+L'URL de déploiement est protégée par le SSO Vercel : un smoke anonyme retourne `302` vers
+`vercel.com/sso-api`. La compilation et le statut de déploiement sont donc prouvés, mais le smoke
+HTTP applicatif doit utiliser un bypass contrôlé ou une URL explicitement publique.
+
+Une inspection finale a aussi montré que `docs/discovery` et `docs/superpowers` étaient copiés
+dans l'application. Ils ne contiennent pas de secret, mais appartiennent au développement de la
+Factory. La génération et `doctor` les excluent désormais explicitement; cette dernière correction
+doit encore être publiée sur le canari.
 
 ## Suite globale
 
-1. Ajouter la publication contrôlée des mises à jour, puis obtenir une CI et un déploiement Vercel
-   verts sur le canari corrigé.
-2. Ajouter les migrations/seed et les smoke tests distants.
-3. Terminer Better Auth en production.
-4. Ajouter le provisioning Expo/EAS.
-5. Ajouter R2, Resend, Sentry/PostHog et DNS.
-6. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-7. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-8. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+1. Publier l'exclusion des documents internes et confirmer une dernière CI verte.
+2. Ajouter un receipt d'observation de déploiement et un smoke HTTP avec bypass Vercel contrôlé.
+3. Appliquer migrations/seed sur Neon, pas uniquement sur PostgreSQL éphémère en CI.
+4. Terminer Better Auth en production : secrets, URL canonique et envoi Resend réel.
+5. Ajouter le provisioning Expo/EAS.
+6. Ajouter R2, Resend, Sentry/PostHog et DNS.
+7. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+8. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+9. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.
