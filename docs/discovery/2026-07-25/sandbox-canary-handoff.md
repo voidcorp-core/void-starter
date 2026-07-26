@@ -24,6 +24,9 @@
 - La source Auth/Resend finale `6c663f667850ca2bf385e0f271f2b9c6eb6cef87` est publiée, la
   base est à jour, les variables Production sont liées, le déploiement est fumé en HTTP 200 et
   l'identité bootstrap réelle accède à `/admin` avec le rôle `admin`.
+- Le projet EAS `@void-sandbox/void-starter-canary-20260725` est créé et vérifié, son lien public
+  non secret est publié au commit `eb7c7db9ff64fed96d7c0f9c85f541f124f11bdb`, la CI complète
+  est verte et le déploiement exact passe le smoke Production protégé en HTTP 200.
 
 ## Sandbox
 
@@ -47,7 +50,9 @@ recharger dans le terminal. Le fine-grained GitHub PAT doit cibler `void-sandbox
 - contexte : `/tmp/void-starter-canary-20260725.context.yaml`;
 - projet généré : `/tmp/void-starter-canary-20260725`;
 - projet Auth final : `/tmp/void-starter-canary-auth-20260726`;
+- projet EAS final : `/tmp/void-starter-canary-eas-20260726`;
 - contexte Auth non secret : `/tmp/void-starter-canary-20260725.auth.yaml`;
+- contexte EAS non secret : `/tmp/void-starter-canary-20260725.eas.yaml`;
 - nom : `void-starter-canary-20260725`;
 - identifiants natifs : `com.voidsandbox.voidstartercanary`.
 
@@ -192,14 +197,38 @@ et le SHA-256 `ed659bc1a2b3aa99471434b92e3e9c57fdd4e8c8e1c05878a1910372ea652fe0`
 Enfin, un magic link réel a créé l'identité exacte, établi la session puis autorisé `/admin` avec
 le rôle `admin`. Aucun lien d'authentification, token fournisseur ou secret n'a été persisté.
 
+Le jalon Expo/EAS est également validé en live. Le plan
+`13be128d263c22b0a544bb42ffc9efe3fc173a6b1d80e33fbf5281ed1111bfe0` a utilisé le robot
+`Developer` de `void-sandbox` pour créer et relire
+`@void-sandbox/void-starter-canary-20260725`, UUID
+`a37e6150-91af-461c-9d4f-ebf6ef100088`. Les deux premières tentatives ont révélé que le projet
+temporaire EAS devait posséder un `package.json` minimal et ne contenir que la configuration
+d'identité, sans plugins d'exécution. Les correctifs `92e72c8` et `e138601` couvrent ces cas,
+redactent le diagnostic fournisseur en mémoire et conservent un état persistant générique sans
+secret. La troisième tentative a réussi avec le lien SHA-256
+`5fae99a26059ec7ce3ac22b94e546b17e73fd53c55b1c17c50b87bcac285ba18`.
+
+La génération fraîche a ensuite adopté les quatre ressources historiques sans doublon. Le plan
+source `4892cce9bfc208c87e69b2f4e627d2b1e6876b905de8a6722a961b2d9b2119d8` a publié 245 fichiers,
+923 574 octets et le SHA-256
+`002b398b9f164d4a893df4eae1926107a5f39f351a23b7c5a00500e590434a34` au commit
+`eb7c7db9ff64fed96d7c0f9c85f541f124f11bdb`. GitHub a d'abord retourné une confirmation
+post-push ambiguë; `source:update:resume` a adopté le commit exact en deuxième tentative, sans
+second push. Le workflow `30207323123` a validé les jobs qualité et E2E, dont le build Expo réel.
+
+Enfin, le plan delivery `95f7f8d23ed81b4271d18fe93a5f2dd717e5cb0b6ed93bb85149b7038416ff9a`
+a lié ce commit au déploiement `dpl_dSKnNMRMEXsWwnoSxBKD7jx2Hxh7`. Le smoke protégé a obtenu
+HTTP 200 HTML, 14 427 octets et le SHA-256
+`69db3fd50b062fa2ae9c20054870cc996efcceb3f9b10dd5f94fcbf267479fd5`. `doctor` valide
+simultanément les reçus EAS, provisioning, source et delivery; le lien EAS est public, mais les
+tokens Expo/Vercel/GitHub et le bypass restent absents de la source et des reçus.
+
 ## Suite globale
 
-1. Exécuter le canary isolé du provisioning Expo/EAS désormais implémenté, puis publier le lien
-   EAS par un source update gardé.
-2. Ajouter R2, Sentry/PostHog et DNS; Resend est terminé.
-3. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-4. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-5. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
+1. Ajouter R2, Sentry/PostHog et DNS; Resend et le projet EAS sont terminés.
+2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
    CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou

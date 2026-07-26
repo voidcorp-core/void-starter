@@ -698,6 +698,14 @@ store. Those are separate cost- and credential-bearing actions. See Expo's
 [programmatic access](https://docs.expo.dev/accounts/programmatic-access/) and
 [EAS project initialization](https://github.com/expo/eas-cli#eas-init) contracts.
 
+The isolated live canary created `@void-sandbox/void-starter-canary-20260725`, verified its UUID,
+published the non-secret link through a guarded source fast-forward and passed the complete CI,
+E2E, Vercel deployment and protected HTTP smoke chain. The canary also established that the
+provider-owned temporary directory needs a minimal `package.json` and an identity-only Expo config:
+copying runtime plugins into that dependency-free directory makes provider initialization depend
+on modules that do not belong to the provisioning boundary. Failed CLI output is now redacted in
+memory for operator diagnosis while persisted failures remain generic and secret-free.
+
 ## 11. Lifecycle
 
 ```text
@@ -779,8 +787,8 @@ be proven locally.
    bypass canary passed.**
 9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Done; guarded binding,
    Resend delivery, redeployment, magic-link session and exact-email admin access passed live.**
-10. Add optional Expo/EAS surface. **Local surface and guarded project provisioning done; isolated
-    live canary pending.**
+10. Add optional Expo/EAS surface. **Done; isolated project creation, guarded link publication,
+    complete CI and protected Production smoke passed.**
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2,
     observability and DNS remain.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
