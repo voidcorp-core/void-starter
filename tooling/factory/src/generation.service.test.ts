@@ -9,6 +9,8 @@ import {
   minimalManifest,
   mobileOnlyManifest,
 } from './__fixtures__/manifest.fixture';
+import { createDeliveryPlan, deliveryPlanDigest } from './delivery.service';
+import { deliveryStateSchema } from './delivery.types';
 import { doctorProject } from './doctor.service';
 import { parseBuildManifest } from './factory.service';
 import { renderProject } from './generation.service';
@@ -129,7 +131,7 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
   await writeFile(
     join(sourceRoot, '.gitignore'),
-    '.void-starter/apply-state.json\n.void-starter/source-state.json\n',
+    '.void-starter/apply-state.json\n.void-starter/source-state.json\n.void-starter/delivery-state.json\n',
     'utf8',
   );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
@@ -199,6 +201,7 @@ describe('renderProject', () => {
     const rootGitignore = await readFile(join(targetRoot, '.gitignore'), 'utf8');
     expect(rootGitignore).toContain('.void-starter/apply-state.json');
     expect(rootGitignore).toContain('.void-starter/source-state.json');
+    expect(rootGitignore).toContain('.void-starter/delivery-state.json');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
     expect(rootKnip.workspaces).not.toHaveProperty('tooling/*');
@@ -517,6 +520,37 @@ describe('doctorProject', () => {
       commit_sha: 'a'.repeat(40),
       error: null,
     });
+    const deliveryPlan = await createDeliveryPlan(targetRoot, context);
+    const deliveryState = deliveryStateSchema.parse({
+      schema_version: 1,
+      mode: 'live',
+      status: 'succeeded',
+      plan_sha256: deliveryPlanDigest(deliveryPlan),
+      plan: deliveryPlan,
+      attempts: 1,
+      observation: {
+        deployment_id: 'dpl_example',
+        url: 'https://example-saas-abc.vercel.app',
+        ready_state: 'READY',
+        target: 'production',
+        source_commit_sha: 'a'.repeat(40),
+        created_at: 1_760_000_000_000,
+        ready_at: 1_760_000_005_000,
+        observed_at: '2026-07-26T08:00:00.000Z',
+        smoke: {
+          status: 200,
+          content_type: 'text/html; charset=utf-8',
+          body_sha256: 'b'.repeat(64),
+          body_bytes: 128,
+          bypass_used: true,
+          final_url: 'https://example-saas-abc.vercel.app/',
+          checked_at: '2026-07-26T08:00:01.000Z',
+        },
+      },
+      error: null,
+    });
+    const deliveryStatePath = join(targetRoot, '.void-starter/delivery-state.json');
+    await writeJson(deliveryStatePath, deliveryState);
     await mkdir(join(targetRoot, '.git'));
 
     const healthyReport = await doctorProject(targetRoot);
@@ -535,6 +569,22 @@ describe('doctorProject', () => {
       status: 'pass',
       message: 'Source publication state is structurally valid and succeeded',
     });
+    expect(healthyReport.checks).toContainEqual({
+      id: 'delivery-state',
+      status: 'pass',
+      message: 'Delivery state is structurally valid and succeeded',
+    });
+
+    await writeFile(deliveryStatePath, '{}\n', 'utf8');
+    const corruptDeliveryReport = await doctorProject(targetRoot);
+    expect(corruptDeliveryReport.ok).toBe(false);
+    expect(corruptDeliveryReport.checks).toContainEqual(
+      expect.objectContaining({
+        id: 'delivery-state',
+        status: 'fail',
+      }),
+    );
+    await writeJson(deliveryStatePath, deliveryState);
 
     await writeFile(applyStatePath, '{}\n', 'utf8');
     const corruptReport = await doctorProject(targetRoot);

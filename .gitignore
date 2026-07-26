@@ -51,4 +51,6 @@ bun-debug.log*
 .void-starter/apply.lock
 .void-starter/source-state.json
 .void-starter/source.lock
+.void-starter/delivery-state.json
+.void-starter/delivery.lock
 .void-starter/.*.temporary

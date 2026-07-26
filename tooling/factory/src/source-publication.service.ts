@@ -54,6 +54,8 @@ const EXCLUDED_EXACT_PATHS = new Set([
   '.claude/settings.local.json',
   '.void-starter/apply-state.json',
   '.void-starter/apply.lock',
+  '.void-starter/delivery-state.json',
+  '.void-starter/delivery.lock',
   '.void-starter/source-state.json',
   '.void-starter/source.lock',
 ]);
@@ -204,6 +206,9 @@ function isExcludedPath(path: string, isDirectory: boolean): boolean {
     return true;
   }
   if (path.startsWith('.void-starter/.source-state.json.')) {
+    return true;
+  }
+  if (path.startsWith('.void-starter/.delivery-state.json.')) {
     return true;
   }
   const fileName = segments.at(-1) ?? '';

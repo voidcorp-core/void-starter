@@ -2,6 +2,7 @@ import { lstat, readdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { createProjectFilePlan } from './capability-composition.service';
+import { readDeliveryState, validateDeliveryState } from './delivery.service';
 import { createCompositionPlan, parseBuildManifest } from './factory.service';
 import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
 import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
@@ -365,6 +366,33 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
         `Source publication state is structurally valid and ${sourcePublicationState.status}`,
       ),
     );
+  }
+
+  try {
+    const deliveryState = await readDeliveryState(projectRoot);
+    if (!deliveryState) {
+      checks.push(createCheck('delivery-state', true, 'No delivery state is recorded'));
+    } else if (!sourcePublicationState || sourcePublicationStateError) {
+      checks.push(
+        createCheck(
+          'delivery-state',
+          false,
+          'Delivery state requires a valid source publication state',
+        ),
+      );
+    } else {
+      await validateDeliveryState(deliveryState, receipt.manifest_sha256, sourcePublicationState);
+      checks.push(
+        createCheck(
+          'delivery-state',
+          deliveryState.status === 'succeeded',
+          `Delivery state is structurally valid and ${deliveryState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(createCheck('delivery-state', false, `Delivery state is invalid: ${message}`));
   }
 
   return {

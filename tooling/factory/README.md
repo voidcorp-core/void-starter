@@ -21,9 +21,11 @@ The current slice exposes:
   interruption recovery and resume without making remote changes;
 - `LiveProvisioningAdapter` plus separate live CLIs for authenticated provider preflight,
   lookup-before-create reconciliation and in-memory database secret transport;
+- `createDeliveryPlan`, `preflightDelivery`, and `observeDelivery` to bind a Vercel Production
+  deployment and HTTP smoke receipt to the exact published source commit;
 - `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
-  and capabilities, optional provisioning state, dependencies, and the absence of Harness/factory
-  artifacts;
+  and capabilities, optional provisioning/source/delivery state, dependencies, and the absence of
+  Harness/factory artifacts;
 - `createProjectPackPlan`, `applyProjectPack`, and `checkProjectPack` to inject Forge foundation
   documents without overwriting unmanaged or locally modified files;
 - `buildManifestSchema` and the corresponding public TypeScript boundary types.
@@ -185,9 +187,38 @@ marker. Live update fetches that exact commit, verifies its tree and marker, cre
 commit, rechecks the remote HEAD, and performs a normal fast-forward push. An unmarked, moved or
 already-current remote fails closed; `source:update:resume` reconciles an ambiguous push.
 
-Local `generate` still writes only to its new target. Migrations, deployment receipts and smoke
-tests remain later lifecycle stages. No ordinary `apply` or `resume` flag silently turns
-simulation into remote mutation.
+Observe the exact Vercel Production deployment and smoke its root page as a separate read-only
+provider lifecycle:
+
+```sh
+VERCEL_TOKEN=... bun run delivery:preflight -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+VERCEL_TOKEN=... VERCEL_AUTOMATION_BYPASS_SECRET=... \
+  bun run delivery:live -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+
+VERCEL_TOKEN=... VERCEL_AUTOMATION_BYPASS_SECRET=... \
+  bun run delivery:resume -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+The plan is bound to the source-publication commit and SHA-256, provisioned Vercel team/project,
+and Production target. Live observation polls only that commit, requires `READY`, then expects a
+200 HTML root page containing the generated project name. Deployment evidence and a body digest
+are written atomically to `.void-starter/delivery-state.json`; the Vercel token and optional
+Deployment Protection bypass secret remain in process memory. A protected deployment without a
+valid bypass fails with a resumable safe code. Delivery state and locks are excluded from source
+publication, and `doctor` validates a completed receipt against the source state.
+
+Local `generate` still writes only to its new target. Production migrations and seed remain later
+lifecycle stages. No ordinary `apply` or `resume` flag silently turns simulation into remote
+mutation.
 
 Inject a Forge Project Pack after generation, or into an existing project, with a non-mutating
 preview first:

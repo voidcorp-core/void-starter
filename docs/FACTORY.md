@@ -491,6 +491,42 @@ from the root lockfile:
 [Vercel Git deployments](https://vercel.com/docs/git) and
 [Vercel monorepos](https://vercel.com/docs/monorepos).
 
+### 10.5 Deployment observation and HTTP smoke
+
+Deployment verification is a separate receipt and lock boundary. Its local plan requires valid
+live provisioning and source-publication state, then binds the exact published commit and source
+SHA-256 to the opaque Vercel team/project IDs and Production target:
+
+```sh
+bun run delivery:plan -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+VERCEL_TOKEN=... bun run delivery:preflight -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+VERCEL_TOKEN=... VERCEL_AUTOMATION_BYPASS_SECRET=... \
+  bun run delivery:live -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+Preflight performs authenticated Vercel reads only. Live observation polls Production deployments
+for the exact Git commit, rejects deployments from any other commit, and waits for `READY`. It then
+requests the immutable deployment root with redirects disabled, requiring HTTP 200, an HTML
+content type and the generated project name in a response capped at 1 MiB.
+
+Protected deployments use Vercel's `x-vercel-protection-bypass` header. The value comes only from
+`VERCEL_AUTOMATION_BYPASS_SECRET`; it is never accepted in a manifest or context and never written
+to disk. A missing or rejected bypass produces a safe retryable code, so `delivery:resume` can
+continue after the operator configures the secret. The receipt stores only the deployment ID and
+URL, exact commit, timestamps, status, response metadata and body SHA-256 in
+`.void-starter/delivery-state.json`. See Vercel's
+[Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation)
+and [REST API](https://vercel.com/docs/rest-api) contracts.
+
 ## 11. Lifecycle
 
 ```text
@@ -522,8 +558,9 @@ The local `generate` and `doctor` stages implement the source, surface, local-ca
 and integrity parts of this lifecycle. `apply --dry-run` implements the deterministic first
 provider plan, while `apply --simulate` and `resume --simulate` implement its local state machine.
 The separate live commands implement the first GitHub/Vercel/Neon provider boundary. The source
-commands implement the guarded initial Git push. Migrations, deployment receipts and smoke
-verification remain future actions.
+commands implement guarded initial publication and fast-forward updates. The delivery commands
+implement exact-commit Vercel observation and protected HTTP smoke verification. Production
+migrations and seed remain future actions.
 
 ## 12. Cost policy
 
@@ -563,12 +600,14 @@ be proven locally.
 4. Implement `plan`, receipt and `doctor` before external mutations. **Done.**
 5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
    passed.**
-6. Publish the initial Git source. **Contract complete; live canary pending.**
-7. Finish Better Auth production onboarding and seed.
-8. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-9. Add R2, Resend, observability and DNS adapters.
-10. Add `resume` and failure injection tests. **Done for provider and source tranches.**
-11. Connect Forge as manifest producer and Linear as project bootstrap.
+6. Publish the initial Git source. **Done; initial publication and guarded update canaries passed.**
+7. Observe the exact Production deployment and run a protected HTTP smoke. **Contract complete;
+   live bypass canary pending.**
+8. Finish Better Auth production onboarding, migrations and seed.
+9. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
+10. Add R2, Resend, observability and DNS adapters.
+11. Add `resume` and failure injection tests. **Done for provider, source and delivery tranches.**
+12. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
 

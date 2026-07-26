@@ -2,6 +2,25 @@ export {
   createCapabilityFilePlan,
   createProjectFilePlan,
 } from './capability-composition.service';
+export {
+  createDeliveryPlan,
+  DeliveryApplyError,
+  DeliveryError,
+  type DeliveryOptions,
+  deliveryPlanDigest,
+  observeDelivery,
+  preflightDelivery,
+  readDeliveryState,
+  validateDeliveryState,
+} from './delivery.service';
+export {
+  type DeliveryPlan,
+  type DeliveryState,
+  type DeploymentObservation,
+  deliveryPlanSchema,
+  deliveryStateSchema,
+  type SmokeReceipt,
+} from './delivery.types';
 export { doctorProject } from './doctor.service';
 export { createCompositionPlan, parseBuildManifest } from './factory.service';
 export {

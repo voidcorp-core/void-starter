@@ -136,9 +136,14 @@ Le smoke anonyme de cette URL finale retourne lui aussi `302` vers le SSO Vercel
 de validation du jalon reste donc l'accès HTTP applicatif derrière Deployment Protection, pas le
 build ou le déploiement.
 
+Le contrat local qui ferme cette limite est désormais implémenté : plan lié au commit source exact,
+observation Vercel Production, smoke HTTP protégé, état atomique et reprise. Le bypass
+`VERCEL_AUTOMATION_BYPASS_SECRET` reste uniquement en mémoire. Les tests de contrat passent; il
+reste à exécuter le canary live sur ce projet.
+
 ## Suite globale
 
-1. Ajouter un receipt d'observation de déploiement et un smoke HTTP avec bypass Vercel contrôlé.
+1. Exécuter le canary live du receipt de déploiement et du smoke HTTP avec bypass Vercel contrôlé.
 2. Appliquer migrations/seed sur Neon, pas uniquement sur PostgreSQL éphémère en CI.
 3. Terminer Better Auth en production : secrets, URL canonique et envoi Resend réel.
 4. Ajouter le provisioning Expo/EAS.
