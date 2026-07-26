@@ -484,6 +484,9 @@ an existing remote HEAD with a valid Void Starter source marker. Live update fet
 that exact commit and tree, creates a single child commit, rechecks the HEAD for races, and uses a
 normal fast-forward push. It never force-pushes or adopts an unmarked/user-modified HEAD.
 `source:update:resume` reconciles a transport-ambiguous update without creating another commit.
+If GitHub briefly returns the old exact base after a successful push, the lifecycle records
+`GITHUB_SOURCE_PUSH_UNCONFIRMED` as retryable instead of misclassifying eventual consistency as a
+source conflict; resume then adopts the already-published child commit.
 
 GitHub permits personal access tokens in place of HTTPS passwords:
 [GitHub PAT command-line authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).

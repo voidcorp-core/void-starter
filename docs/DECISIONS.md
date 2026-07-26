@@ -740,6 +740,8 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   existing infrastructure first. Treat the current remote `main` commit SHA, tree SHA and source
   marker as the immutable update base. Fetch and verify that exact base, create one child commit,
   recheck the remote immediately before mutation, and push only as a normal fast-forward.
+  Treat an immediate post-push read of that same old base as a retryable unconfirmed mutation;
+  `resume` reconciles the new exact child once GitHub exposes it.
 - **Why:** Initial publication intentionally rejects different remote content, but the first live
   canary exposed fixes that must be delivered without bypassing the receipt and credential
   boundaries. A remote source marker alone is insufficient if another commit lands between

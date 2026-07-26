@@ -65,6 +65,9 @@ function jsonResponse(value: unknown, status = 200): Response {
 
 class MockGitHubSourceApi {
   remote: RemoteSource | null = null;
+  staleRemote: RemoteSource | null = null;
+  staleLookupsRemaining = 0;
+  lastObservedRemote: RemoteSource | null = null;
   readonly requests: Array<{ method: string; path: string; authorization: string | null }> = [];
 
   readonly fetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -95,23 +98,27 @@ class MockGitHubSourceApi {
       });
     }
     if (url.pathname === '/repos/voidcorp-core/example-saas/git/ref/heads/main') {
-      return this.remote
+      const observedRemote = this.staleLookupsRemaining > 0 ? this.staleRemote : this.remote;
+      if (this.staleLookupsRemaining > 0) this.staleLookupsRemaining -= 1;
+      this.lastObservedRemote = observedRemote;
+      return observedRemote
         ? jsonResponse({
             object: {
-              sha: this.remote.commitSha,
+              sha: observedRemote.commitSha,
             },
           })
         : jsonResponse({}, 409);
     }
     if (
-      this.remote &&
-      url.pathname === `/repos/voidcorp-core/example-saas/git/commits/${this.remote.commitSha}`
+      this.lastObservedRemote &&
+      url.pathname ===
+        `/repos/voidcorp-core/example-saas/git/commits/${this.lastObservedRemote.commitSha}`
     ) {
       return jsonResponse({
-        sha: this.remote.commitSha,
-        message: `chore: initialize example-saas\n\nVoid-Starter-Source-SHA256: ${this.remote.sourceSha256}`,
+        sha: this.lastObservedRemote.commitSha,
+        message: `chore: initialize example-saas\n\nVoid-Starter-Source-SHA256: ${this.lastObservedRemote.sourceSha256}`,
         tree: {
-          sha: this.remote.treeSha,
+          sha: this.lastObservedRemote.treeSha,
         },
       });
     }
@@ -125,6 +132,7 @@ class MockSourceControl implements SourceControl {
   preparedBase: Parameters<SourceControl['prepare']>[0]['base'];
   failPushAfterRemoteUpdate = false;
   failPushBeforeRemoteUpdate = false;
+  staleLookupAfterRemoteUpdate = false;
   readonly api: MockGitHubSourceApi;
   readonly sourceSha256: string;
 
@@ -150,11 +158,16 @@ class MockSourceControl implements SourceControl {
         retryable: true,
       });
     }
+    const previousRemote = this.api.remote;
     this.api.remote = {
       commitSha,
       treeSha,
       sourceSha256: this.sourceSha256,
     };
+    if (this.staleLookupAfterRemoteUpdate) {
+      this.api.staleRemote = previousRemote;
+      this.api.staleLookupsRemaining = 1;
+    }
     if (this.failPushAfterRemoteUpdate) {
       throw new SourcePublicationError({
         code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
@@ -604,6 +617,45 @@ describe('source publication', () => {
       }),
     ).resolves.toEqual(state);
     expect(api.requests).toHaveLength(requestCount);
+    expect(sourceControl.pushCalls).toBe(1);
+  });
+
+  it('records a retryable ambiguity when GitHub briefly returns the stale base after push', async () => {
+    const root = await createProvisionedProject();
+    const api = new MockGitHubSourceApi();
+    const localPlan = await createSourcePublicationPlan(root, context);
+    api.remote = {
+      commitSha: 'c'.repeat(40),
+      treeSha: 'd'.repeat(40),
+      sourceSha256: 'e'.repeat(64),
+    };
+    const sourceControl = new MockSourceControl(api, localPlan.source.sha256);
+    sourceControl.staleLookupAfterRemoteUpdate = true;
+
+    await expect(
+      applySourceUpdate({
+        projectRoot: root,
+        context,
+        environment: { GITHUB_TOKEN: token },
+        options: { fetch: api.fetch, sourceControl },
+      }),
+    ).rejects.toMatchObject({ code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED' });
+    expect(await readSourcePublicationState(root)).toMatchObject({
+      status: 'failed',
+      attempts: 1,
+      error: { code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED', retryable: true },
+    });
+    expect(sourceControl.pushCalls).toBe(1);
+
+    await expect(
+      applySourceUpdate({
+        projectRoot: root,
+        context,
+        environment: { GITHUB_TOKEN: token },
+        requireExistingState: true,
+        options: { fetch: api.fetch, sourceControl },
+      }),
+    ).resolves.toMatchObject({ status: 'succeeded', attempts: 2, commit_sha: commitSha });
     expect(sourceControl.pushCalls).toBe(1);
   });
 

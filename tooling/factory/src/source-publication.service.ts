@@ -1379,18 +1379,21 @@ export async function applySourceUpdate(input: {
       }
 
       const confirmedRemote = await client.lookup(plan);
-      if (!confirmedRemote) {
-        throw new SourcePublicationError({
-          code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
-          message: 'GitHub source branch was not visible after update push',
-          retryable: true,
-        });
+      if (confirmedRemote?.sourceSha256 === plan.source.sha256) {
+        assertRemoteMatches(confirmedRemote, plan, prepared.treeSha);
+        state.status = 'succeeded';
+        state.commit_sha = confirmedRemote.commitSha;
+        await writeSourceStateAtomic(input.projectRoot, state);
+        return state;
       }
-      assertRemoteMatches(confirmedRemote, plan, prepared.treeSha);
-      state.status = 'succeeded';
-      state.commit_sha = confirmedRemote.commitSha;
-      await writeSourceStateAtomic(input.projectRoot, state);
-      return state;
+      if (confirmedRemote) {
+        assertRemoteIsUpdateBase(confirmedRemote, plan);
+      }
+      throw new SourcePublicationError({
+        code: 'GITHUB_SOURCE_PUSH_UNCONFIRMED',
+        message: 'GitHub source update was not yet visible after push',
+        retryable: true,
+      });
     } catch (error) {
       const safeError = safePublicationError(error);
       state.status = 'failed';
