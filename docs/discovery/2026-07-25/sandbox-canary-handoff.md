@@ -136,21 +136,26 @@ Le smoke anonyme de cette URL finale retourne lui aussi `302` vers le SSO Vercel
 de validation du jalon reste donc l'accès HTTP applicatif derrière Deployment Protection, pas le
 build ou le déploiement.
 
-Le contrat local qui ferme cette limite est désormais implémenté : plan lié au commit source exact,
-observation Vercel Production, smoke HTTP protégé, état atomique et reprise. Le bypass
-`VERCEL_AUTOMATION_BYPASS_SECRET` reste uniquement en mémoire. Les tests de contrat passent; il
-reste à exécuter le canary live sur ce projet.
+Le contrat qui ferme cette limite est désormais implémenté et validé en live. Le plan
+`b9c7b565e2dff702c5af745af0560f0b69e93abb1f7a233ce5a5860f3dbb3d39` a lié le commit source exact
+au déploiement Production `dpl_EXWCJj38baScgC5BMjADNsHVkf3P`. Le bypass
+`VERCEL_AUTOMATION_BYPASS_SECRET`, resté uniquement en mémoire, a permis un smoke HTTP 200 sur
+l'URL immuable finale. La réponse HTML de 14 427 octets contient l'identité projet et porte le
+SHA-256 `f8b0e7ece95c0564da75d54b22d52ab587c10abd1c1530f43052b94308db4309`.
+
+Le receipt `.void-starter/delivery-state.json` est en mode `0600`, `doctor` est entièrement vert et
+le snapshot source reste strictement inchangé : 237 fichiers, 882 429 octets et SHA-256
+`aaebae1f24de578bb5649163e3ef61e6b2e93faef8bbd78c01448907b549994a`.
 
 ## Suite globale
 
-1. Exécuter le canary live du receipt de déploiement et du smoke HTTP avec bypass Vercel contrôlé.
-2. Appliquer migrations/seed sur Neon, pas uniquement sur PostgreSQL éphémère en CI.
-3. Terminer Better Auth en production : secrets, URL canonique et envoi Resend réel.
-4. Ajouter le provisioning Expo/EAS.
-5. Ajouter R2, Resend, Sentry/PostHog et DNS.
-6. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-7. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-8. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+1. Appliquer migrations/seed sur Neon, pas uniquement sur PostgreSQL éphémère en CI.
+2. Terminer Better Auth en production : secrets, URL canonique et envoi Resend réel.
+3. Ajouter le provisioning Expo/EAS.
+4. Ajouter R2, Resend, Sentry/PostHog et DNS.
+5. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+6. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+7. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.

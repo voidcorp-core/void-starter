@@ -527,6 +527,11 @@ URL, exact commit, timestamps, status, response metadata and body SHA-256 in
 [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation)
 and [REST API](https://vercel.com/docs/rest-api) contracts.
 
+The isolated sandbox canary resolved the exact published commit to a `READY` Production
+deployment, crossed Vercel Authentication with the memory-only header, and received a 200 HTML
+response containing the project identity. The resulting receipt passed `doctor`, retained mode
+`0600`, and left the publishable source digest unchanged.
+
 ## 11. Lifecycle
 
 ```text
@@ -601,8 +606,8 @@ be proven locally.
 5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
    passed.**
 6. Publish the initial Git source. **Done; initial publication and guarded update canaries passed.**
-7. Observe the exact Production deployment and run a protected HTTP smoke. **Contract complete;
-   live bypass canary pending.**
+7. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
+   bypass canary passed.**
 8. Finish Better Auth production onboarding, migrations and seed.
 9. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
 10. Add R2, Resend, observability and DNS adapters.
