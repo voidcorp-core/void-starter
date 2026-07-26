@@ -20,7 +20,8 @@ check the connection with `codex mcp list` or `/mcp`.
 Before creating or updating Linear data:
 
 1. read the repository roadmap and current handoff;
-2. present the proposed project, milestones, issues and relationships for review;
+2. read `LINEAR_BACKLOG.md` and present its proposed project, milestones, issues and relationships
+   for review;
 3. apply only the approved structure;
 4. do not invent owners, deadlines, estimates or dependencies;
 5. read the created objects back and report their identifiers.
