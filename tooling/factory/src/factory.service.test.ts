@@ -64,6 +64,18 @@ describe('parseBuildManifest', () => {
     ).toThrow(/better auth/i);
   });
 
+  it('rejects Better Auth without its production email adapter', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        operations: {
+          ...canonicalManifest.operations,
+          email: 'none',
+        },
+      }),
+    ).toThrow(/resend/i);
+  });
+
   it('rejects auth options when no auth provider is selected', () => {
     expect(() =>
       parseBuildManifest({

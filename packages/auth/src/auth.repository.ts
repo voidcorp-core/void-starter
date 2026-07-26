@@ -6,6 +6,11 @@ import { AppError } from '@repo/core/errors';
 import { logger } from '@repo/core/logger';
 import { getDb } from '@repo/db';
 import * as schema from '@repo/db/schema';
+import {
+  sendMagicLinkEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from '@repo/email-resend/server';
 import { betterAuth } from 'better-auth';
 import { admin, magicLink } from 'better-auth/plugins';
 import { z } from 'zod';
@@ -31,11 +36,10 @@ import { z } from 'zod';
  *   - `admin` — role-based admin endpoints. We standardize on a single
  *     `'admin'` role; new roles can be added later without a schema
  *     migration because `users.role` is `text` not `enum`.
- *   - `magicLink` — passwordless email links. The `sendMagicLink`
- *     callback here is a development stub that logs the URL via the
- *     project logger. The production sender lands in Phase D as the
- *     `_modules/email-resend` integration; swap the body of this
- *     callback when that module is wired in.
+ *   - `magicLink` — passwordless email links. Verification, password-reset
+ *     and magic-link callbacks all use the selected Resend adapter in
+ *     production. Local development falls back to explicit URL logging only
+ *     when neither Resend variable is configured.
  *
  * Note on `tsconfig.json`: this package overrides `declaration: false`
  * because the inferred return type of `betterAuth(...)` references
@@ -65,6 +69,60 @@ export function resolveGoogleProvider(env: {
   const clientSecret = env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return undefined;
   return { google: { clientId, clientSecret } };
+}
+
+type AuthEmail =
+  | { kind: 'verification'; email: string; url: string }
+  | { kind: 'password-reset'; email: string; url: string }
+  | { kind: 'magic-link'; email: string; url: string };
+
+/**
+ * Deliver an authentication email through Resend when configured. A local
+ * project with neither variable retains the deliberate console-link workflow;
+ * partial configuration always fails, and production never logs a credential
+ * URL. Exported for contract tests without constructing Better Auth or a DB.
+ */
+export async function deliverAuthEmail(
+  input: AuthEmail,
+  environment: Record<string, string | undefined> = process.env,
+): Promise<'development-log' | 'resend'> {
+  const apiKey = environment['RESEND_API_KEY']?.trim();
+  const from = environment['EMAIL_FROM']?.trim();
+  const configured = Boolean(apiKey && from);
+  const partiallyConfigured = Boolean(apiKey || from) && !configured;
+
+  if (!configured) {
+    if (environment['NODE_ENV'] === 'production' || partiallyConfigured) {
+      throw new AppError({
+        message:
+          'Authentication email delivery requires both RESEND_API_KEY and EMAIL_FROM in production.',
+        code: 'AUTH_EMAIL_NOT_CONFIGURED',
+        status: 500,
+      });
+    }
+    logger.warn(
+      { email: input.email, url: input.url, kind: input.kind },
+      'authentication email (development only - configure Resend for production)',
+    );
+    return 'development-log';
+  }
+
+  const options = {
+    environment: {
+      RESEND_API_KEY: apiKey,
+      EMAIL_FROM: from,
+      EMAIL_REPLY_TO: environment['EMAIL_REPLY_TO'],
+      EMAIL_APP_NAME: environment['EMAIL_APP_NAME'],
+    },
+  };
+  if (input.kind === 'verification') {
+    await sendVerificationEmail({ to: input.email, url: input.url }, options);
+  } else if (input.kind === 'password-reset') {
+    await sendPasswordResetEmail({ to: input.email, url: input.url }, options);
+  } else {
+    await sendMagicLinkEmail({ to: input.email, url: input.url }, options);
+  }
+  return 'resend';
 }
 
 function initAuth() {
@@ -104,24 +162,15 @@ function initAuth() {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
+      sendResetPassword: async ({ user, url }) => {
+        await deliverAuthEmail({ kind: 'password-reset', email: user.email, url });
+      },
     },
     emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
       sendVerificationEmail: async ({ user, url }) => {
-        // Match the magic-link development contract below: local projects are
-        // usable without a mail vendor, but production must wire a real sender
-        // instead of leaking a verification URL into logs.
-        if (process.env['NODE_ENV'] === 'production') {
-          throw new AppError({
-            message:
-              'Verification email sender is not configured. Wire @repo/email (Resend) before accepting production sign-ups.',
-            code: 'VERIFICATION_EMAIL_NOT_CONFIGURED',
-            status: 500,
-          });
-        }
-        logger.warn(
-          { email: user.email, url },
-          'verification email (dev only - install @repo/email module for prod)',
-        );
+        await deliverAuthEmail({ kind: 'verification', email: user.email, url });
       },
     },
     // Persist rate-limit counters in Postgres so the limit holds across
@@ -151,23 +200,7 @@ function initAuth() {
       }),
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // Production guard: the dev stub never delivers a real email. Fail
-          // loudly so a misconfigured deploy cannot silently swallow magic-link
-          // logins. Wire _modules/email-resend and replace this body before go-live.
-          if (process.env['NODE_ENV'] === 'production') {
-            throw new AppError({
-              message:
-                'Magic link email sender is not configured. Wire @repo/email (Resend) before enabling magic link in production.',
-              code: 'MAGIC_LINK_NOT_CONFIGURED',
-              status: 500,
-            });
-          }
-          // Dev only: log the URL (which already embeds the token) so the
-          // developer can follow the link. The raw token is not logged separately.
-          logger.warn(
-            { email, url },
-            'magic link (dev only - install @repo/email module for prod)',
-          );
+          await deliverAuthEmail({ kind: 'magic-link', email, url });
         },
       }),
     ],

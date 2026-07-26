@@ -255,35 +255,25 @@ Do not commit real OAuth secrets. The dev pair stays in `.env.local`; prod value
 
 ---
 
-## 8. Customizing email templates
+## 8. Authentication email
 
-Today the verification-email and magic-link senders are development stubs. The path to real email
-is wired but not active by default.
+`operations.email: resend` materializes the server-only `@repo/email-resend` workspace. Better
+Auth already routes email verification, password reset and magic links through its three typed
+exports. The adapter sends HTML plus text directly to Resend's HTTPS API, sets a deterministic
+idempotency key and never includes the provider response body or API key in errors.
 
-- **Default (dev).** `sendVerificationEmail` and `sendMagicLink` in
-  `packages/auth/src/auth.repository.ts` log the recipient and generated URL. Open the dev console,
-  copy the URL, and paste it in the browser. No mail server is needed. The raw token is not logged
-  separately -- the URL already embeds it. After email/password sign-up, the browser opens
-  `/verify-email/pending` instead of attempting the protected dashboard without a session.
-- **Production guard.** When `NODE_ENV === 'production'`, both dev stubs throw a configuration
-  error instead of pretending to send or leaking authentication URLs into logs. Wire the email
-  adapter before accepting production sign-ups or enabling magic links (see ADR 31).
-- **Production.** Activate `_modules/email-resend` (placeholder today, see `_modules/email-resend/README.md`). The module ships React Email templates colocated with the adapter and replaces the body of `sendMagicLink` with a Resend API call. The `RESEND_API_KEY` env var gates activation.
+- **Development without Resend.** When both `RESEND_API_KEY` and `EMAIL_FROM` are absent, the three
+  callbacks log the recipient, purpose and generated URL so local flows remain testable. Partial
+  configuration throws instead of hiding a typo.
+- **Production.** Both variables are mandatory. A missing value throws
+  `AUTH_EMAIL_NOT_CONFIGURED`; production never logs authentication URLs. `EMAIL_REPLY_TO` and
+  `EMAIL_APP_NAME` are optional presentation settings.
+- **Sender domain.** `EMAIL_FROM` may use `Name <address@example.com>`. Its domain must be verified
+  in Resend before arbitrary recipients can receive messages.
 
-When activating Resend, update `sendMagicLink` directly in `auth.repository.ts`:
-
-```ts
-magicLink({
-  sendMagicLink: async ({ email, url }) => {
-    const { sendMagicLinkEmail } = await import('@repo/email-resend/server');
-    await sendMagicLinkEmail({ to: email, url });
-  },
-}),
-```
-
-Use the same adapter for password-reset delivery. Email verification is already required by
-`emailAndPassword.requireEmailVerification: true`; production sign-up is not complete until its
-development callback has been replaced.
+After email/password sign-up, the browser opens `/verify-email/pending`. Verification is sent on
+signup and again on an unverified sign-in; password reset and five-minute single-use magic links
+use their own subjects and expiry copy.
 
 ---
 
@@ -294,4 +284,5 @@ development callback has been replaced.
 - `docs/PATTERNS.md` -- Server Action patterns, file naming, code style.
 - `docs/SECURITY.md` -- session security defaults, secret management, CSP.
 - `docs/CACHING.md` -- why `@repo/auth` does not yet use Cache Components.
-- `docs/MODULES.md` -- catalogue: `_modules/auth-clerk` (alternative repository), `_modules/email-resend` (placeholder).
+- `docs/MODULES.md` -- catalogue: `_modules/auth-clerk` (alternative repository),
+  `_modules/email-resend` (real server-only adapter).

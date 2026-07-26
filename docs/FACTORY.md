@@ -308,13 +308,14 @@ Local capability composition currently handles:
 - a public minimal web app with auth, DB, sample notes, PostHog and Sentry fully removed;
 - Better Auth with Neon/Drizzle and the notes reference domain;
 - Clerk as a direct Next.js integration, without copying its documentation scaffold;
-- PostHog and Sentry package/configuration overlays;
+- PostHog, Sentry and Resend package/configuration overlays;
 - mobile-only pruning of every Next.js-only package.
 
 The selected capability set also produces a deterministic `.env.example`; it contains placeholders
-only, never secret values. Better Auth, Clerk, PostHog and Sentry are currently web adapters, so
-selecting them without a Next.js surface is rejected. R2, Resend and DNS remain provider-plan
-intent until `apply` adapters materialize their remote resources.
+only, never secret values. Better Auth, Clerk, PostHog, Sentry and Resend are currently web
+adapters, so selecting them without a Next.js surface is rejected. R2 and DNS remain provider-plan
+intent; Resend's local adapter is materialized while its remote account/domain and secret binding
+remain a later lifecycle.
 
 ### 10.2 Provisioning context
 
@@ -654,9 +655,11 @@ be proven locally.
 7. Apply exact Drizzle migrations to Neon. **Done; empty-to-current live Neon canary passed.**
 8. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
    bypass canary passed.**
-9. Finish Better Auth production onboarding and explicit bootstrap/seed.
+9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Real Resend delivery is
+   locally wired; Vercel binding, canonical URL and administrator bootstrap remain.**
 10. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-11. Add R2, Resend, observability and DNS adapters.
+11. Add R2, Resend, observability and DNS adapters. **Resend local adapter done; remote bindings
+    pending.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration and delivery
     tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.

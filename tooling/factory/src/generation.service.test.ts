@@ -86,6 +86,7 @@ async function createBaseline() {
     ['packages/notes', '@repo/notes'],
     ['packages/ui', '@repo/ui'],
     ['_modules/analytics-posthog', '@repo/posthog'],
+    ['_modules/email-resend', '@repo/email-resend'],
     ['_modules/observability-sentry', '@repo/sentry'],
   ]) {
     await mkdir(join(sourceRoot, path), { recursive: true });

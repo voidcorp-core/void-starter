@@ -136,7 +136,8 @@ async function sanitizeGeneratedBaseline(targetRoot: string, manifest: BuildMani
       !(
         workspace === '_modules/*' &&
         manifest.operations.analytics === 'none' &&
-        manifest.operations.errors === 'none'
+        manifest.operations.errors === 'none' &&
+        manifest.operations.email === 'none'
       ),
   );
   await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');

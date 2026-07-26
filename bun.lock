@@ -53,6 +53,21 @@
         "next": "^16.0.0",
       },
     },
+    "_modules/email-resend": {
+      "name": "@repo/email-resend",
+      "version": "0.0.1",
+      "dependencies": {
+        "server-only": "^0.0.1",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@repo/config": "workspace:*",
+        "@types/node": "^24.13.3",
+        "@vitest/coverage-v8": "^4.1.10",
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.10",
+      },
+    },
     "_modules/observability-sentry": {
       "name": "@repo/sentry",
       "version": "0.0.1",
@@ -116,6 +131,7 @@
         "@better-auth/drizzle-adapter": "^1.6.25",
         "@repo/core": "workspace:*",
         "@repo/db": "workspace:*",
+        "@repo/email-resend": "workspace:*",
         "better-auth": "^1.6.25",
         "drizzle-orm": "^0.45.2",
         "server-only": "^0.0.1",
@@ -713,6 +729,8 @@
     "@repo/core": ["@repo/core@workspace:packages/core"],
 
     "@repo/db": ["@repo/db@workspace:packages/db"],
+
+    "@repo/email-resend": ["@repo/email-resend@workspace:_modules/email-resend"],
 
     "@repo/factory": ["@repo/factory@workspace:tooling/factory"],
 

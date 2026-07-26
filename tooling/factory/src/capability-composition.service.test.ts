@@ -39,6 +39,7 @@ describe('createCapabilityFilePlan', () => {
       expect.arrayContaining([
         '_modules/analytics-posthog',
         '_modules/auth-clerk',
+        '_modules/email-resend',
         '_modules/observability-sentry',
         'apps/web/src/app/(auth)',
         'apps/web/src/app/api/auth',
@@ -89,6 +90,7 @@ describe('createCapabilityFilePlan', () => {
     expect(plan.removals).not.toContain('packages/notes');
     expect(plan.removals).not.toContain('_modules/analytics-posthog');
     expect(plan.removals).not.toContain('_modules/observability-sentry');
+    expect(plan.removals).not.toContain('_modules/email-resend');
     expect(plan.removals).toContain('_modules/auth-clerk');
     expect(webPackage.dependencies).toMatchObject({
       '@repo/auth': 'workspace:*',
@@ -99,6 +101,8 @@ describe('createCapabilityFilePlan', () => {
       'better-auth': '^1.6.25',
     });
     expect(webPackage.devDependencies).toHaveProperty('postgres');
+    expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).toContain("'@repo/email-resend'");
+    expect(readGeneratedFile(plan, '.env.example')).toContain('EMAIL_APP_NAME=example-saas');
   });
 
   it('materializes Clerk directly and removes the non-runtime scaffold and Better Auth graph', () => {

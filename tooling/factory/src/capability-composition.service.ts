@@ -155,6 +155,7 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
   const usesBetterAuth = manifest.auth.provider === 'better-auth';
   const usesPosthog = manifest.operations.analytics === 'posthog';
   const usesSentry = manifest.operations.errors === 'sentry';
+  const usesResend = manifest.operations.email === 'resend';
   const transpilePackages = ['@repo/core', '@repo/ui'];
 
   if (usesBetterAuth) {
@@ -165,6 +166,9 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
   }
   if (usesSentry) {
     transpilePackages.push('@repo/sentry');
+  }
+  if (usesResend) {
+    transpilePackages.push('@repo/email-resend');
   }
   transpilePackages.sort();
 
@@ -524,7 +528,14 @@ function createEnvironmentExample(manifest: BuildManifest): GeneratedFile {
     );
   }
   if (manifest.operations.email === 'resend') {
-    lines.push('', '# Resend', 'RESEND_API_KEY=', 'EMAIL_FROM=');
+    lines.push(
+      '',
+      '# Resend',
+      'RESEND_API_KEY=',
+      'EMAIL_FROM=',
+      'EMAIL_REPLY_TO=',
+      `EMAIL_APP_NAME=${manifest.project.name}`,
+    );
   }
   if (manifest.data.files === 'cloudflare-r2-eu') {
     lines.push(
@@ -563,11 +574,13 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
   const usesDatabase = hasWeb && manifest.data.database !== 'none';
   const usesPosthog = hasWeb && manifest.operations.analytics === 'posthog';
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
+  const usesResend = hasWeb && manifest.operations.email === 'resend';
 
   for (const modulePath of OPTIONAL_MODULES) {
     const selected =
       (modulePath === '_modules/analytics-posthog' && usesPosthog) ||
-      (modulePath === '_modules/observability-sentry' && usesSentry);
+      (modulePath === '_modules/observability-sentry' && usesSentry) ||
+      (modulePath === '_modules/email-resend' && usesResend);
     if (!selected) {
       removals.add(modulePath);
     }

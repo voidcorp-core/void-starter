@@ -162,6 +162,7 @@ async function capabilitiesMatchManifest(
   const usesDatabase = hasWeb && manifest.data.database !== 'none';
   const usesPosthog = hasWeb && manifest.operations.analytics === 'posthog';
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
+  const usesResend = hasWeb && manifest.operations.email === 'resend';
 
   const pathExpectations = new Map<string, boolean>([
     ['apps/web/vercel.json', hasWeb],
@@ -170,6 +171,7 @@ async function capabilitiesMatchManifest(
     ['packages/notes/package.json', usesBetterAuth && usesDatabase],
     ['_modules/analytics-posthog/package.json', usesPosthog],
     ['_modules/observability-sentry/package.json', usesSentry],
+    ['_modules/email-resend/package.json', usesResend],
     ['apps/web/src/instrumentation.ts', usesSentry],
     ['apps/web/src/instrumentation-client.ts', usesSentry],
     ['apps/web/src/app/sign-in/[[...sign-in]]/page.tsx', usesClerk],

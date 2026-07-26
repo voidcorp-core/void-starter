@@ -128,6 +128,14 @@ export const buildManifestSchema = z
       });
     }
 
+    if (manifest.auth.provider === 'better-auth' && manifest.operations.email !== 'resend') {
+      context.addIssue({
+        code: 'custom',
+        path: ['operations', 'email'],
+        message: 'The production Better Auth profile requires the Resend email adapter',
+      });
+    }
+
     const hasAuthOptions =
       manifest.auth.access_mode !== 'none' ||
       manifest.auth.passkeys !== 'disabled' ||

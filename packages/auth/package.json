@@ -20,6 +20,7 @@
     "@better-auth/drizzle-adapter": "^1.6.25",
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/email-resend": "workspace:*",
     "better-auth": "^1.6.25",
     "drizzle-orm": "^0.45.2",
     "server-only": "^0.0.1",
