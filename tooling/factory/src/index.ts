@@ -53,6 +53,29 @@ export {
   loadLiveProvisioningCredentials,
 } from './live-provisioning.service';
 export {
+  applyMigration,
+  createMigrationPlan,
+  MigrationApplyError,
+  type MigrationDatabase,
+  type MigrationDatabaseInspection,
+  MigrationError,
+  type MigrationHistoryEntry,
+  type MigrationOptions,
+  migrationPlanDigest,
+  preflightMigration,
+  readMigrationState,
+  validateMigrationState,
+} from './migration.service';
+export {
+  type MigrationEntry,
+  type MigrationObservation,
+  type MigrationPlan,
+  type MigrationState,
+  migrationEntrySchema,
+  migrationPlanSchema,
+  migrationStateSchema,
+} from './migration.types';
+export {
   applyProjectPack,
   checkProjectPack,
   createProjectPackPlan,

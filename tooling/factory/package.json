@@ -17,6 +17,10 @@
     "foundation": "bun ./src/foundation.cli.ts",
     "generate": "bun ./src/generate.cli.ts",
     "lint": "biome check .",
+    "migration:live": "bun ./src/migration-live.cli.ts",
+    "migration:plan": "bun ./src/migration-plan.cli.ts",
+    "migration:preflight": "bun ./src/migration-preflight.cli.ts",
+    "migration:resume": "bun ./src/migration-resume.cli.ts",
     "plan": "bun ./src/cli.ts",
     "preflight:live": "bun ./src/preflight-live.cli.ts",
     "resume": "bun ./src/resume.cli.ts",
@@ -33,6 +37,8 @@
     "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },

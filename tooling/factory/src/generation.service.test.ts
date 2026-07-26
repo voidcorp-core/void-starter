@@ -15,6 +15,8 @@ import { doctorProject } from './doctor.service';
 import { parseBuildManifest } from './factory.service';
 import { renderProject } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
+import { createMigrationPlan, migrationPlanDigest } from './migration.service';
+import { migrationStateSchema } from './migration.types';
 import { applyProvisioning, SimulatedProvisioningAdapter } from './provisioning-apply.service';
 import { createProvisioningPlan, parseProvisioningContext } from './provisioning-plan.service';
 import { createSourcePublicationPlan } from './source-publication.service';
@@ -97,6 +99,25 @@ async function createBaseline() {
     'export const core = true;\n',
     'utf8',
   );
+  await mkdir(join(sourceRoot, 'packages/db/migrations/meta'), { recursive: true });
+  await writeFile(
+    join(sourceRoot, 'packages/db/migrations/0000_initial_schema.sql'),
+    'CREATE TABLE users (id text PRIMARY KEY);\n',
+    'utf8',
+  );
+  await writeJson(join(sourceRoot, 'packages/db/migrations/meta/_journal.json'), {
+    version: '7',
+    dialect: 'postgresql',
+    entries: [
+      {
+        idx: 0,
+        version: '7',
+        when: 1_750_000_000_000,
+        tag: '0000_initial_schema',
+        breakpoints: true,
+      },
+    ],
+  });
   await mkdir(join(sourceRoot, 'apps/web/src'), { recursive: true });
   await writeFile(
     join(sourceRoot, 'apps/web/src/instrumentation.ts'),
@@ -131,7 +152,7 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
   await writeFile(
     join(sourceRoot, '.gitignore'),
-    '.void-starter/apply-state.json\n.void-starter/source-state.json\n.void-starter/delivery-state.json\n',
+    '.void-starter/apply-state.json\n.void-starter/source-state.json\n.void-starter/migration-state.json\n.void-starter/delivery-state.json\n',
     'utf8',
   );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
@@ -201,6 +222,7 @@ describe('renderProject', () => {
     const rootGitignore = await readFile(join(targetRoot, '.gitignore'), 'utf8');
     expect(rootGitignore).toContain('.void-starter/apply-state.json');
     expect(rootGitignore).toContain('.void-starter/source-state.json');
+    expect(rootGitignore).toContain('.void-starter/migration-state.json');
     expect(rootGitignore).toContain('.void-starter/delivery-state.json');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
@@ -507,6 +529,11 @@ describe('doctorProject', () => {
     const applyStatePath = join(targetRoot, '.void-starter/apply-state.json');
     const applyState = JSON.parse(await readFile(applyStatePath, 'utf8'));
     applyState.mode = 'live';
+    const neonAction = applyState.actions.find(
+      (action: { action_id: string }) => action.action_id === 'neon.project',
+    );
+    if (!neonAction?.resource) throw new Error('Expected simulated Neon resource');
+    neonAction.resource.resource_id = 'neon-example';
     await writeJson(applyStatePath, applyState);
     await writeFile(join(targetRoot, 'bun.lock'), 'lockfileVersion = 1\n', 'utf8');
     const sourcePlan = await createSourcePublicationPlan(targetRoot, context);
@@ -520,6 +547,33 @@ describe('doctorProject', () => {
       commit_sha: 'a'.repeat(40),
       error: null,
     });
+    const migrationPlan = await createMigrationPlan(targetRoot, context);
+    const latestMigration = migrationPlan.migrations.entries.at(-1);
+    if (!latestMigration) throw new Error('Expected migration entry');
+    const migrationState = migrationStateSchema.parse({
+      schema_version: 1,
+      mode: 'live',
+      status: 'succeeded',
+      plan_sha256: migrationPlanDigest(migrationPlan),
+      plan: migrationPlan,
+      attempts: 1,
+      observation: {
+        database_project_id: migrationPlan.database.project_id,
+        database_name: migrationPlan.database.database_name,
+        migration_schema: 'drizzle',
+        migration_table: '__drizzle_migrations',
+        applied_before: 0,
+        applied_during_attempt: migrationPlan.migrations.entries.length,
+        applied_migrations: migrationPlan.migrations.entries.length,
+        latest_migration_tag: latestMigration.tag,
+        latest_migration_sha256: latestMigration.sha256,
+        latest_migration_created_at: latestMigration.created_at,
+        verified_at: '2026-07-26T10:00:00.000Z',
+      },
+      error: null,
+    });
+    const migrationStatePath = join(targetRoot, '.void-starter/migration-state.json');
+    await writeJson(migrationStatePath, migrationState);
     const deliveryPlan = await createDeliveryPlan(targetRoot, context);
     const deliveryState = deliveryStateSchema.parse({
       schema_version: 1,
@@ -570,6 +624,11 @@ describe('doctorProject', () => {
       message: 'Source publication state is structurally valid and succeeded',
     });
     expect(healthyReport.checks).toContainEqual({
+      id: 'migration-state',
+      status: 'pass',
+      message: 'Migration state is structurally valid and succeeded',
+    });
+    expect(healthyReport.checks).toContainEqual({
       id: 'delivery-state',
       status: 'pass',
       message: 'Delivery state is structurally valid and succeeded',
@@ -585,6 +644,17 @@ describe('doctorProject', () => {
       }),
     );
     await writeJson(deliveryStatePath, deliveryState);
+
+    await writeFile(migrationStatePath, '{}\n', 'utf8');
+    const corruptMigrationReport = await doctorProject(targetRoot);
+    expect(corruptMigrationReport.ok).toBe(false);
+    expect(corruptMigrationReport.checks).toContainEqual(
+      expect.objectContaining({
+        id: 'migration-state',
+        status: 'fail',
+      }),
+    );
+    await writeJson(migrationStatePath, migrationState);
 
     await writeFile(applyStatePath, '{}\n', 'utf8');
     const corruptReport = await doctorProject(targetRoot);

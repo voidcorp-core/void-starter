@@ -149,8 +149,9 @@ le snapshot source reste strictement inchangé : 237 fichiers, 882 429 octets et
 
 ## Suite globale
 
-1. Appliquer migrations/seed sur Neon, pas uniquement sur PostgreSQL éphémère en CI.
-2. Terminer Better Auth en production : secrets, URL canonique et envoi Resend réel.
+1. Exécuter le canary live des quatre migrations Drizzle exactes sur Neon.
+2. Terminer Better Auth en production : secrets, URL canonique, envoi Resend réel et bootstrap
+   administrateur explicite.
 3. Ajouter le provisioning Expo/EAS.
 4. Ajouter R2, Resend, Sentry/PostHog et DNS.
 5. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.

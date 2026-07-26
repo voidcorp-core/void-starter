@@ -7,6 +7,7 @@ import { createCompositionPlan, parseBuildManifest } from './factory.service';
 import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
 import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
+import { readMigrationState, validateMigrationState } from './migration.service';
 import { readProvisioningState, validateProvisioningState } from './provisioning-apply.service';
 import {
   readSourcePublicationState,
@@ -366,6 +367,33 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
         `Source publication state is structurally valid and ${sourcePublicationState.status}`,
       ),
     );
+  }
+
+  try {
+    const migrationState = await readMigrationState(projectRoot);
+    if (!migrationState) {
+      checks.push(createCheck('migration-state', true, 'No database migration state is recorded'));
+    } else if (!sourcePublicationState || sourcePublicationStateError) {
+      checks.push(
+        createCheck(
+          'migration-state',
+          false,
+          'Migration state requires a valid source publication state',
+        ),
+      );
+    } else {
+      await validateMigrationState(migrationState, receipt.manifest_sha256, sourcePublicationState);
+      checks.push(
+        createCheck(
+          'migration-state',
+          migrationState.status === 'succeeded',
+          `Migration state is structurally valid and ${migrationState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(createCheck('migration-state', false, `Migration state is invalid: ${message}`));
   }
 
   try {

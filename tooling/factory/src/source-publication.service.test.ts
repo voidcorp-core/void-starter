@@ -262,6 +262,12 @@ describe('source publication', () => {
     await writeFile(join(root, '.next/output.txt'), 'changed build output\n', 'utf8');
     await writeFile(join(root, '.void-starter/delivery-state.json'), '{"local":"state"}\n', 'utf8');
     await writeFile(join(root, '.void-starter/delivery.lock'), '{"local":"lock"}\n', 'utf8');
+    await writeFile(
+      join(root, '.void-starter/migration-state.json'),
+      '{"local":"state"}\n',
+      'utf8',
+    );
+    await writeFile(join(root, '.void-starter/migration.lock'), '{"local":"lock"}\n', 'utf8');
     const second = await createSourcePublicationPlan(root, context);
     expect(second).toEqual(first);
     expect(first.source.file_count).toBe(4);

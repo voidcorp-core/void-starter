@@ -243,6 +243,8 @@
       "name": "@repo/factory",
       "version": "0.0.1",
       "dependencies": {
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
         "yaml": "^2.9.0",
         "zod": "^4.4.3",
       },

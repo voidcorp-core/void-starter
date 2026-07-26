@@ -187,6 +187,37 @@ marker. Live update fetches that exact commit, verifies its tree and marker, cre
 commit, rechecks the remote HEAD, and performs a normal fast-forward push. An unmarked, moved or
 already-current remote fails closed; `source:update:resume` reconciles an ambiguous push.
 
+Apply the exact published Drizzle history to the provisioned Neon database through another
+receipt boundary:
+
+```sh
+NEON_API_KEY=... bun run migration:preflight -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+NEON_API_KEY=... bun run migration:live -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+
+NEON_API_KEY=... bun run migration:resume -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+The plan binds the source commit and digest, opaque Neon project/database identity, and every
+journaled SQL migration hash and timestamp. Preflight retrieves a direct Neon URI into memory and
+only inspects `drizzle.__drizzle_migrations`. Live execution fails closed on divergent history,
+holds both a local process lock and a PostgreSQL advisory lock, and applies pending migrations
+through Drizzle's transaction. The API key and connection URI are never persisted. The atomic
+`.void-starter/migration-state.json` receipt records only exact non-secret migration evidence;
+`doctor` validates it and source publication excludes it.
+
+Application seed/bootstrap is deliberately separate: the starter currently has no safe identity
+from which to create or promote an administrator. That contract belongs to Better Auth production
+onboarding, where the bootstrap principal can be explicit and auditable.
+
 Observe the exact Vercel Production deployment and smoke its root page as a separate read-only
 provider lifecycle:
 
@@ -216,8 +247,8 @@ Deployment Protection bypass secret remain in process memory. A protected deploy
 valid bypass fails with a resumable safe code. Delivery state and locks are excluded from source
 publication, and `doctor` validates a completed receipt against the source state.
 
-Local `generate` still writes only to its new target. Production migrations and seed remain later
-lifecycle stages. No ordinary `apply` or `resume` flag silently turns simulation into remote
+Local `generate` still writes only to its new target. Production auth bootstrap/seed remains a
+later lifecycle stage. No ordinary `apply` or `resume` flag silently turns simulation into remote
 mutation.
 
 Inject a Forge Project Pack after generation, or into an existing project, with a non-mutating

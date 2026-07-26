@@ -491,7 +491,46 @@ from the root lockfile:
 [Vercel Git deployments](https://vercel.com/docs/git) and
 [Vercel monorepos](https://vercel.com/docs/monorepos).
 
-### 10.5 Deployment observation and HTTP smoke
+### 10.5 Exact Neon schema migration
+
+Schema migration has its own plan, receipt and lock boundary. It requires valid live provisioning
+and source-publication state, then binds the exact source commit and digest to the provisioned Neon
+project/database identity and every journaled Drizzle SQL hash and timestamp:
+
+```sh
+bun run migration:plan -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+NEON_API_KEY=... bun run migration:preflight -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml
+
+NEON_API_KEY=... bun run migration:live -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  --confirm-project web-expo
+```
+
+Preflight performs authenticated Neon reads, retrieves a direct connection URI into process
+memory, and reads only `drizzle.__drizzle_migrations`. An existing history must be the exact prefix
+of the published plan; extra, reordered or changed migrations fail closed. Live execution holds a
+local process lock plus a PostgreSQL advisory lock, applies pending migrations through Drizzle's
+transactional migrator, and re-reads the complete history before success. Statement and lock
+timeouts bound blocked executions; `migration:resume` safely re-inspects after an unconfirmed
+attempt.
+
+`.void-starter/migration-state.json` stores the project/database IDs, counts, latest tag/hash and
+verification timestamp, never `NEON_API_KEY` or the connection URI. It is written mode `0600`,
+excluded from source publication and validated by `doctor`. This follows Neon's
+[connection URI](https://api-docs.neon.tech/reference/getconnectionuri) contract and Drizzle's
+[applied migration log](https://orm.drizzle.team/docs/drizzle-kit-migrate).
+
+The lifecycle does not invent seed data. A production administrator bootstrap needs an explicit
+product identity and belongs to Better Auth onboarding; separating it prevents schema readiness
+from silently creating a user with guessed credentials or privileges.
+
+### 10.6 Deployment observation and HTTP smoke
 
 Deployment verification is a separate receipt and lock boundary. Its local plan requires valid
 live provisioning and source-publication state, then binds the exact published commit and source
@@ -563,9 +602,10 @@ The local `generate` and `doctor` stages implement the source, surface, local-ca
 and integrity parts of this lifecycle. `apply --dry-run` implements the deterministic first
 provider plan, while `apply --simulate` and `resume --simulate` implement its local state machine.
 The separate live commands implement the first GitHub/Vercel/Neon provider boundary. The source
-commands implement guarded initial publication and fast-forward updates. The delivery commands
-implement exact-commit Vercel observation and protected HTTP smoke verification. Production
-migrations and seed remain future actions.
+commands implement guarded initial publication and fast-forward updates. Migration commands bind
+and apply exact Drizzle history to Neon. Delivery commands implement exact-commit Vercel
+observation and protected HTTP smoke verification. Production auth bootstrap/seed remains a
+future action.
 
 ## 12. Cost policy
 
@@ -606,13 +646,15 @@ be proven locally.
 5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
    passed.**
 6. Publish the initial Git source. **Done; initial publication and guarded update canaries passed.**
-7. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
+7. Apply exact Drizzle migrations to Neon. **Contract complete; live Neon canary pending.**
+8. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
    bypass canary passed.**
-8. Finish Better Auth production onboarding, migrations and seed.
-9. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-10. Add R2, Resend, observability and DNS adapters.
-11. Add `resume` and failure injection tests. **Done for provider, source and delivery tranches.**
-12. Connect Forge as manifest producer and Linear as project bootstrap.
+9. Finish Better Auth production onboarding and explicit bootstrap/seed.
+10. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
+11. Add R2, Resend, observability and DNS adapters.
+12. Add `resume` and failure injection tests. **Done for provider, source, migration and delivery
+    tranches.**
+13. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
 
