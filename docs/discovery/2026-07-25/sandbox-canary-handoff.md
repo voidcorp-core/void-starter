@@ -147,16 +147,26 @@ Le receipt `.void-starter/delivery-state.json` est en mode `0600`, `doctor` est 
 le snapshot source reste strictement inchangé : 237 fichiers, 882 429 octets et SHA-256
 `aaebae1f24de578bb5649163e3ef61e6b2e93faef8bbd78c01448907b549994a`.
 
+Le lifecycle de migration Neon est également validé en live. Le plan
+`cbae8f088dbf96dd666ce202a6b83f48839afb841ff228977b96d217a00bfa11` ciblait le projet
+`dark-mountain-89324488` et les quatre migrations du même commit source. Le preflight a observé
+zéro migration appliquée; `migration:live` a appliqué les quatre en une tentative puis attesté
+`0003_bouncy_mongoose`, SHA-256
+`76d7ffa18d3a0f296f4a8d1f89baf7efbc8f63e432b9520ca4b01b5c93237037`, comme dernière entrée.
+
+Le receipt `.void-starter/migration-state.json` est en mode `0600`, `doctor` reste entièrement
+vert, et le snapshot source conserve exactement ses 237 fichiers, 882 429 octets et son SHA-256.
+La clé Neon et l'URI de connexion n'ont jamais été persistées.
+
 ## Suite globale
 
-1. Exécuter le canary live des quatre migrations Drizzle exactes sur Neon.
-2. Terminer Better Auth en production : secrets, URL canonique, envoi Resend réel et bootstrap
+1. Terminer Better Auth en production : secrets, URL canonique, envoi Resend réel et bootstrap
    administrateur explicite.
-3. Ajouter le provisioning Expo/EAS.
-4. Ajouter R2, Resend, Sentry/PostHog et DNS.
-5. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-6. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-7. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+2. Ajouter le provisioning Expo/EAS.
+3. Ajouter R2, Resend, Sentry/PostHog et DNS.
+4. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+5. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+6. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.

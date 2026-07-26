@@ -530,6 +530,11 @@ The lifecycle does not invent seed data. A production administrator bootstrap ne
 product identity and belongs to Better Auth onboarding; separating it prevents schema readiness
 from silently creating a user with guessed credentials or privileges.
 
+The isolated sandbox canary started from an empty Drizzle history, applied all four published SQL
+migrations in one attempt, and re-read the exact final history through
+`drizzle.__drizzle_migrations`. The receipt passed `doctor`, retained mode `0600`, and left the
+publishable source digest unchanged.
+
 ### 10.6 Deployment observation and HTTP smoke
 
 Deployment verification is a separate receipt and lock boundary. Its local plan requires valid
@@ -646,7 +651,7 @@ be proven locally.
 5. Add GitHub, Vercel and Neon provisioning. **Done; live creation, resume and adoption canaries
    passed.**
 6. Publish the initial Git source. **Done; initial publication and guarded update canaries passed.**
-7. Apply exact Drizzle migrations to Neon. **Contract complete; live Neon canary pending.**
+7. Apply exact Drizzle migrations to Neon. **Done; empty-to-current live Neon canary passed.**
 8. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
    bypass canary passed.**
 9. Finish Better Auth production onboarding and explicit bootstrap/seed.
