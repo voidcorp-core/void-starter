@@ -643,6 +643,12 @@ the bound variable IDs, email ID, bootstrap strategy and `requires_redeployment:
 environment changes apply only to a new deployment: redeploy Production, rerun the delivery smoke,
 then test sign-up/verification or magic link with the exact administrator address.
 
+The isolated live canary bound all eight Production variables, delivered the Resend configuration
+email through a verified subdomain, redeployed the exact source commit and passed the protected
+HTTP smoke. A real magic link then created the planned identity and `/admin` reported its role as
+`admin`. The auth receipt remained mode `0600`, `doctor` stayed green and the publishable source
+digest did not change.
+
 ## 11. Lifecycle
 
 ```text
@@ -721,14 +727,13 @@ be proven locally.
 7. Apply exact Drizzle migrations to Neon. **Done; empty-to-current live Neon canary passed.**
 8. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
    bypass canary passed.**
-9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Local lifecycle done:
-   guarded Vercel binding, canonical URL, Resend smoke and exact-email admin bootstrap; live canary
-   and post-binding authenticated smoke remain.**
+9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Done; guarded binding,
+   Resend delivery, redeployment, magic-link session and exact-email admin access passed live.**
 10. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-11. Add R2, Resend, observability and DNS adapters. **Resend adapter and guarded Production
-    binding done locally; live canary pending. R2, observability and DNS remain.**
-12. Add `resume` and failure injection tests. **Done for provider, source, migration and delivery
-    tranches.**
+11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2,
+    observability and DNS remain.**
+12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery and
+    auth tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions

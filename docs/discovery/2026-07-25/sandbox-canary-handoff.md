@@ -1,6 +1,6 @@
 # Sandbox canary handoff
 
-> État arrêté le 2026-07-25. Aucun secret n'est enregistré dans ce document.
+> État actualisé le 2026-07-26. Aucun secret n'est enregistré dans ce document.
 
 ## État validé
 
@@ -21,6 +21,9 @@
 - Deux mises à jour protégées ont validé le fast-forward, puis le correctif final
   `1153689e0a67695f3c97700baeef566e5ee0e75c` a passé la CI complète et le déploiement
   Vercel Production.
+- La source Auth/Resend finale `6c663f667850ca2bf385e0f271f2b9c6eb6cef87` est publiée, la
+  base est à jour, les variables Production sont liées, le déploiement est fumé en HTTP 200 et
+  l'identité bootstrap réelle accède à `/admin` avec le rôle `admin`.
 
 ## Sandbox
 
@@ -30,7 +33,7 @@
 - Neon : organization API key, org ID `org-withered-mode-66336948`.
 - Régions : Vercel `fra1`, Neon `aws-eu-central-1`.
 
-Les trois credentials existent mais ne sont jamais persistés. À chaque nouvelle session, les
+Les credentials requis existent mais ne sont jamais persistés. À chaque nouvelle session, les
 recharger dans le terminal. Le fine-grained GitHub PAT doit cibler `void-sandbox` et posséder :
 
 - Organization permissions — Members: Read-only;
@@ -43,6 +46,8 @@ recharger dans le terminal. Le fine-grained GitHub PAT doit cibler `void-sandbox
 - manifeste : `/tmp/void-starter-canary-20260725.manifest.yaml`;
 - contexte : `/tmp/void-starter-canary-20260725.context.yaml`;
 - projet généré : `/tmp/void-starter-canary-20260725`;
+- projet Auth final : `/tmp/void-starter-canary-auth-20260726`;
+- contexte Auth non secret : `/tmp/void-starter-canary-20260725.auth.yaml`;
 - nom : `void-starter-canary-20260725`;
 - identifiants natifs : `com.voidsandbox.voidstartercanary`.
 
@@ -158,15 +163,43 @@ Le receipt `.void-starter/migration-state.json` est en mode `0600`, `doctor` res
 vert, et le snapshot source conserve exactement ses 237 fichiers, 882 429 octets et son SHA-256.
 La clé Neon et l'URI de connexion n'ont jamais été persistées.
 
+Le jalon Auth production est validé en live sur une nouvelle génération propre. La mise à jour
+source protégée a publié le commit `6c663f667850ca2bf385e0f271f2b9c6eb6cef87`, enfant direct de
+`54efeb2c19fc354a333ad262e68482e77c841ec9`, avec 243 fichiers, 918 365 octets et le SHA-256
+`a50b935b5c84bbe9cea6295caa38e69b2b223daa8eb862c07ef181e0211828cc`. La première confirmation
+post-push a relu momentanément l'ancien HEAD et enregistré un conflit; `source:update:resume` a
+adopté le commit déjà distant en deuxième tentative, sans second push. Le correctif Factory
+`7ada6af` reproduit désormais ce cas comme `GITHUB_SOURCE_PUSH_UNCONFIRMED` réessayable.
+
+Le nouveau plan migration `31bad67dc61fe350570af07c18a35213e84a9bcb043f9f87611157c476bd93b0`
+a observé les quatre migrations présentes et zéro en attente, puis a écrit une attestation liée au
+nouveau commit sans modifier le schéma. Le plan Auth
+`d35ef5db9e8e88a03927719f9546ae561d9cda8f53135363b8670a4fbb7c8e97` a ensuite :
+
+- lié huit variables Vercel Production, dont `BETTER_AUTH_SECRET` et `RESEND_API_KEY` en
+  Sensitive;
+- utilisé le domaine Resend vérifié `updates.voidcorp.io` et envoyé avec succès l'e-mail de
+  configuration à l'identité bootstrap;
+- persisté uniquement le marker Vercel `Dz0dYmRJpxfxJOiP`, l'email Resend
+  `5c2c2fe8-254a-4f18-a5f7-4ca2fe38faaa` et les métadonnées non secrètes;
+- conservé `.void-starter/auth-state.json` en mode `0600`, `doctor` vert et le snapshot source
+  inchangé.
+
+Après redéploiement sans cache, le plan delivery
+`6909d344721ad2acb91dbb2680db56d99aad3dcec646e8961ffb16c508474382` a lié le même commit au
+déploiement `dpl_E7Z6Y9pjS9ETrUy3qKHavhBFN4M3`. Le smoke protégé a obtenu HTTP 200 HTML, 14 427 octets
+et le SHA-256 `ed659bc1a2b3aa99471434b92e3e9c57fdd4e8c8e1c05878a1910372ea652fe0`.
+Enfin, un magic link réel a créé l'identité exacte, établi la session puis autorisé `/admin` avec
+le rôle `admin`. Aucun lien d'authentification, token fournisseur ou secret n'a été persisté.
+
 ## Suite globale
 
-1. Terminer Better Auth en production : secrets, URL canonique, envoi Resend réel et bootstrap
-   administrateur explicite.
-2. Ajouter le provisioning Expo/EAS.
-3. Ajouter R2, Resend, Sentry/PostHog et DNS.
-4. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-5. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-6. Définir les garanties de rollback, le modèle de secrets et la distribution finale du CLI.
+1. Ajouter le provisioning Expo/EAS.
+2. Ajouter R2, Sentry/PostHog et DNS; Resend est terminé.
+3. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+4. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+5. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
+   CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.
