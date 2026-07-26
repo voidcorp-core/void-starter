@@ -1,8 +1,10 @@
 [mcp_servers.linear]
 enabled = true
 url = "https://mcp.linear.app/mcp"
+auth = "oauth"
 startup_timeout_sec = 20.0
 tool_timeout_sec = 60.0
+default_tools_approval_mode = "writes"
 
 # This repository owns the `linear` connection above. Keep the similarly named personal server
 # disabled here to avoid duplicate tools without changing the user's global configuration.
