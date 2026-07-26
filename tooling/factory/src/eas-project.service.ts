@@ -346,7 +346,18 @@ async function createTemporaryAppConfig(input: {
         : {};
     source.expo['extra'] = { ...extra, eas: { ...eas, projectId: input.link.project_id } };
   }
-  await writeFile(join(directory, 'app.json'), `${JSON.stringify(source, null, 2)}\n`, 'utf8');
+  await Promise.all([
+    writeFile(join(directory, 'app.json'), `${JSON.stringify(source, null, 2)}\n`, 'utf8'),
+    writeFile(
+      join(directory, 'package.json'),
+      serializeCanonicalJson({
+        name: 'void-starter-eas-provisioning',
+        private: true,
+        version: '0.0.0',
+      }),
+      'utf8',
+    ),
+  ]);
   return directory;
 }
 

@@ -70,6 +70,16 @@ class MockEasRunner implements EasCliRunner {
       return { stdout: this.accountOutput, stderr: '' };
     }
     if (command === 'project:init') {
+      const temporaryPackage = JSON.parse(
+        await readFile(join(input.cwd, 'package.json'), 'utf8'),
+      ) as Record<string, unknown>;
+      if (
+        temporaryPackage['name'] !== 'void-starter-eas-provisioning' ||
+        temporaryPackage['private'] !== true ||
+        temporaryPackage['version'] !== '0.0.0'
+      ) {
+        throw new Error('temporary EAS project package.json is invalid');
+      }
       if (!this.remoteExists) {
         this.remoteExists = true;
         this.remoteCreates += 1;
