@@ -7,6 +7,7 @@ import { createProjectFilePlan } from './capability-composition.service';
 import {
   applyEasProject,
   createEasProjectPlan,
+  EasCliExecutionError,
   type EasCliRunner,
   EasProjectApplyError,
   parseEasProjectContext,
@@ -57,6 +58,7 @@ class MockEasRunner implements EasCliRunner {
   remoteExists = false;
   remoteCreates = 0;
   initFailuresRemaining = 0;
+  initExecutionError: EasCliExecutionError | null = null;
   accountOutput = `factory-user (authenticated using EXPO_TOKEN)\n\nAccounts:\n• void-sandbox (Role: Admin)\n`;
 
   async run(input: Parameters<EasCliRunner['run']>[0]) {
@@ -70,6 +72,13 @@ class MockEasRunner implements EasCliRunner {
       return { stdout: this.accountOutput, stderr: '' };
     }
     if (command === 'project:init') {
+      if (this.initExecutionError) throw this.initExecutionError;
+      const temporaryApp = JSON.parse(await readFile(join(input.cwd, 'app.json'), 'utf8')) as {
+        expo: Record<string, unknown>;
+      };
+      if ('plugins' in temporaryApp.expo || 'experiments' in temporaryApp.expo) {
+        throw new Error('temporary EAS config includes runtime-only Expo configuration');
+      }
       const temporaryPackage = JSON.parse(
         await readFile(join(input.cwd, 'package.json'), 'utf8'),
       ) as Record<string, unknown>;
@@ -255,6 +264,30 @@ describe('EAS project provisioning', () => {
     expect(resumed.status).toBe('succeeded');
     expect(resumed.attempts).toBe(2);
     expect(runner.remoteCreates).toBe(1);
+  });
+
+  it('surfaces a redacted provider diagnostic without persisting it', async () => {
+    const root = await createProject();
+    const runner = new MockEasRunner();
+    runner.initExecutionError = new EasCliExecutionError({
+      stdout: '',
+      stderr: `GraphQL request failed for token=${token}: project creation rejected`,
+    });
+
+    await expect(
+      applyEasProject({
+        projectRoot: root,
+        context,
+        environment: { EXPO_TOKEN: token },
+        options: { runner },
+      }),
+    ).rejects.toThrow(
+      'EAS_PROJECT_INIT_FAILED: GraphQL request failed for token=[REDACTED]: project creation rejected',
+    );
+
+    const persistedState = await readFile(join(root, '.void-starter/eas-state.json'), 'utf8');
+    expect(persistedState).not.toContain(token);
+    expect(persistedState).not.toContain('GraphQL request failed');
   });
 
   it('rejects an unowned link and detects linked-file corruption', async () => {

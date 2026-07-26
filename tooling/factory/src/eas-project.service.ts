@@ -75,22 +75,43 @@ const expoAppConfigSchema = z.object({
 export class EasProjectError extends Error {
   readonly code: string;
   readonly retryable: boolean;
+  readonly diagnostic: string | undefined;
 
-  constructor(input: { code: string; message: string; retryable?: boolean }) {
+  constructor(input: {
+    code: string;
+    message: string;
+    retryable?: boolean;
+    diagnostic?: string;
+  }) {
     super(input.message);
     this.name = 'EasProjectError';
     this.code = input.code;
     this.retryable = input.retryable ?? false;
+    this.diagnostic = input.diagnostic;
   }
 }
 
 export class EasProjectApplyError extends Error {
   readonly code: string;
 
-  constructor(code: string) {
-    super(`EAS project provisioning failed with code ${code}`);
+  constructor(code: string, diagnostic?: string) {
+    super(
+      `EAS project provisioning failed with code ${code}${diagnostic ? `: ${diagnostic}` : ''}`,
+    );
     this.name = 'EasProjectApplyError';
     this.code = code;
+  }
+}
+
+export class EasCliExecutionError extends Error {
+  readonly stdout: string;
+  readonly stderr: string;
+
+  constructor(input: { stdout: string; stderr: string }) {
+    super('EAS CLI process failed');
+    this.name = 'EasCliExecutionError';
+    this.stdout = input.stdout;
+    this.stderr = input.stderr;
   }
 }
 
@@ -227,7 +248,7 @@ class BunxEasCliRunner implements EasCliRunner {
         },
         (error, stdout, stderr) => {
           if (error) {
-            rejectPromise(error);
+            rejectPromise(new EasCliExecutionError({ stdout, stderr }));
             return;
           }
           resolvePromise({ stdout, stderr });
@@ -256,6 +277,22 @@ function stripAnsi(value: string): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function safeCliDiagnostic(error: unknown, token: string): string | undefined {
+  if (!(error instanceof EasCliExecutionError)) return undefined;
+  const redactedToken = stripAnsi(`${error.stderr}\n${error.stdout}`)
+    .replaceAll(token, '[REDACTED]')
+    .replace(/([?&](?:access_)?token=)[^&\s]+/gi, '$1[REDACTED]');
+  const diagnostic = redactedToken
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-8)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 800);
+  return diagnostic || undefined;
 }
 
 function accountRole(output: string, account: string): string {
@@ -303,7 +340,13 @@ async function runCli(input: {
     });
   } catch (error) {
     if (error instanceof EasProjectError) throw error;
-    throw new EasProjectError({ code: input.code, message: input.message, retryable: true });
+    const diagnostic = safeCliDiagnostic(error, input.token);
+    throw new EasProjectError({
+      code: input.code,
+      message: input.message,
+      retryable: true,
+      ...(diagnostic ? { diagnostic } : {}),
+    });
   }
 }
 
@@ -331,20 +374,22 @@ async function createTemporaryAppConfig(input: {
   temporaryRoot?: string;
 }): Promise<string> {
   const directory = await mkdtemp(join(input.temporaryRoot ?? tmpdir(), 'void-starter-eas-'));
-  const source = JSON.parse(
-    await readFile(join(input.projectRoot, input.plan.application.static_config_path), 'utf8'),
-  ) as { expo: Record<string, unknown> };
-  source.expo['owner'] = input.plan.application.owner;
+  const generated = expoAppConfigSchema.parse(
+    JSON.parse(
+      await readFile(join(input.projectRoot, input.plan.application.static_config_path), 'utf8'),
+    ),
+  );
+  const source: { expo: Record<string, unknown> } = {
+    expo: {
+      name: generated.expo.name,
+      slug: generated.expo.slug,
+      owner: input.plan.application.owner,
+      ios: { bundleIdentifier: input.plan.application.ios_bundle_identifier },
+      android: { package: input.plan.application.android_package },
+    },
+  };
   if (input.link) {
-    const extra =
-      typeof source.expo['extra'] === 'object' && source.expo['extra'] !== null
-        ? (source.expo['extra'] as Record<string, unknown>)
-        : {};
-    const eas =
-      typeof extra['eas'] === 'object' && extra['eas'] !== null
-        ? (extra['eas'] as Record<string, unknown>)
-        : {};
-    source.expo['extra'] = { ...extra, eas: { ...eas, projectId: input.link.project_id } };
+    source.expo['extra'] = { eas: { projectId: input.link.project_id } };
   }
   await Promise.all([
     writeFile(join(directory, 'app.json'), `${JSON.stringify(source, null, 2)}\n`, 'utf8'),
@@ -659,7 +704,10 @@ export async function applyEasProject(input: {
       state.status = 'failed';
       state.error = sanitized;
       await writeState(input.projectRoot, state);
-      throw new EasProjectApplyError(sanitized.code);
+      throw new EasProjectApplyError(
+        sanitized.code,
+        error instanceof EasProjectError ? error.diagnostic : undefined,
+      );
     } finally {
       if (directory) await rm(directory, { force: true, recursive: true });
     }
