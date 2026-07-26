@@ -55,6 +55,12 @@ The starter does not "make you compliant" -- compliance is a per-MVP exercise --
 - **Command-time presence check via `required()`.** For CLI configs (drizzle-kit) where the full schema is overkill, `required(name)` throws `Missing required env var: <NAME>` on absent or empty values. See ADR 13 and the `dbCredentials.url` getter in `packages/db/drizzle.config.ts`.
 - **Never commit secrets.** `gitleaks` runs in `lefthook.yml` as a pre-commit job. `.gitignore` excludes `.env`, `.env.local`, and `.env.*.local`. Allow-listed Next.js build artifacts live in `.gitleaks.toml`.
 - **Vercel "Sensitive" type for production secrets.** Set `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `SENTRY_AUTH_TOKEN`, `STRIPE_SECRET_KEY`, etc. as the Sensitive var type in the Vercel dashboard so they never appear in deploy logs or the Vercel UI after creation.
+- **Factory auth binding is write-only and Production-only.** `auth:live` reads `VERCEL_TOKEN`,
+  `BETTER_AUTH_SECRET` and `RESEND_API_KEY` from process memory, sends the two runtime secrets
+  directly to Vercel Sensitive variables, and persists only opaque environment/email IDs plus a
+  plan digest. Preview deployments intentionally remain auth-unconfigured instead of sharing the
+  production database and credentials. A non-secret ownership marker permits safe resume without
+  reading secret values back.
 - **No raw `process.env` in business code.** `PATTERNS.md` section 7 forbids it. Read through `createAppEnv` or `required()` so the missing-var error message is uniform across packages.
 
 ---

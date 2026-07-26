@@ -9,6 +9,12 @@ import {
   minimalManifest,
   mobileOnlyManifest,
 } from './__fixtures__/manifest.fixture';
+import {
+  authProductionPlanDigest,
+  createAuthProductionPlan,
+  parseAuthProductionContext,
+} from './auth-production.service';
+import { authProductionStateSchema } from './auth-production.types';
 import { createDeliveryPlan, deliveryPlanDigest } from './delivery.service';
 import { deliveryStateSchema } from './delivery.types';
 import { doctorProject } from './doctor.service';
@@ -153,7 +159,7 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
   await writeFile(
     join(sourceRoot, '.gitignore'),
-    '.void-starter/apply-state.json\n.void-starter/source-state.json\n.void-starter/migration-state.json\n.void-starter/delivery-state.json\n',
+    '.void-starter/apply-state.json\n.void-starter/apply.lock\n.void-starter/source-state.json\n.void-starter/source.lock\n.void-starter/migration-state.json\n.void-starter/migration.lock\n.void-starter/delivery-state.json\n.void-starter/delivery.lock\n.void-starter/auth-state.json\n.void-starter/auth.lock\n',
     'utf8',
   );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
@@ -225,6 +231,8 @@ describe('renderProject', () => {
     expect(rootGitignore).toContain('.void-starter/source-state.json');
     expect(rootGitignore).toContain('.void-starter/migration-state.json');
     expect(rootGitignore).toContain('.void-starter/delivery-state.json');
+    expect(rootGitignore).toContain('.void-starter/auth-state.json');
+    expect(rootGitignore).toContain('.void-starter/auth.lock');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
     expect(rootKnip.workspaces).not.toHaveProperty('tooling/*');
@@ -606,6 +614,38 @@ describe('doctorProject', () => {
     });
     const deliveryStatePath = join(targetRoot, '.void-starter/delivery-state.json');
     await writeJson(deliveryStatePath, deliveryState);
+    const authPlan = await createAuthProductionPlan(
+      targetRoot,
+      context,
+      parseAuthProductionContext({
+        schema_version: 1,
+        canonical_url: 'https://example-saas.example.com',
+        email: { from: 'Example SaaS <auth@mail.example.com>' },
+        bootstrap: { administrator_email: 'owner@example.com' },
+      }),
+    );
+    const authState = authProductionStateSchema.parse({
+      schema_version: 1,
+      mode: 'live',
+      status: 'succeeded',
+      plan_sha256: authProductionPlanDigest(authPlan),
+      plan: authPlan,
+      attempts: 1,
+      observation: {
+        project_id: authPlan.application.project_id,
+        binding_marker_id: 'env_auth_marker',
+        bound_keys: authPlan.bindings.map((binding) => binding.key),
+        email_id: 'email_example',
+        sender_domain: authPlan.email.sender_domain,
+        administrator_email: authPlan.bootstrap.administrator_email,
+        bootstrap_strategy: 'exact-email-on-user-create',
+        requires_redeployment: true,
+        configured_at: '2026-07-26T10:05:00.000Z',
+      },
+      error: null,
+    });
+    const authStatePath = join(targetRoot, '.void-starter/auth-state.json');
+    await writeJson(authStatePath, authState);
     await mkdir(join(targetRoot, '.git'));
 
     const healthyReport = await doctorProject(targetRoot);
@@ -634,6 +674,22 @@ describe('doctorProject', () => {
       status: 'pass',
       message: 'Delivery state is structurally valid and succeeded',
     });
+    expect(healthyReport.checks).toContainEqual({
+      id: 'auth-production-state',
+      status: 'pass',
+      message: 'Production auth state is structurally valid and succeeded',
+    });
+
+    await writeFile(authStatePath, '{}\n', 'utf8');
+    const corruptAuthReport = await doctorProject(targetRoot);
+    expect(corruptAuthReport.ok).toBe(false);
+    expect(corruptAuthReport.checks).toContainEqual(
+      expect.objectContaining({
+        id: 'auth-production-state',
+        status: 'fail',
+      }),
+    );
+    await writeJson(authStatePath, authState);
 
     await writeFile(deliveryStatePath, '{}\n', 'utf8');
     const corruptDeliveryReport = await doctorProject(targetRoot);

@@ -19,7 +19,7 @@ vi.mock('@repo/core/logger', () => ({
 }));
 
 import { logger } from '@repo/core/logger';
-import { deliverAuthEmail, resolveGoogleProvider } from './auth.repository';
+import { bootstrapRoleForEmail, deliverAuthEmail, resolveGoogleProvider } from './auth.repository';
 
 describe('resolveGoogleProvider', () => {
   it('returns the google provider when both credentials are present', () => {
@@ -105,5 +105,13 @@ describe('deliverAuthEmail', () => {
     expect(emailMocks.sendVerificationEmail).toHaveBeenCalledOnce();
     expect(emailMocks.sendPasswordResetEmail).toHaveBeenCalledOnce();
     expect(emailMocks.sendMagicLinkEmail).toHaveBeenCalledOnce();
+  });
+});
+
+describe('bootstrapRoleForEmail', () => {
+  it('grants admin only to the exact configured identity, case-insensitively', () => {
+    expect(bootstrapRoleForEmail('OWNER@EXAMPLE.COM', 'owner@example.com')).toBe('admin');
+    expect(bootstrapRoleForEmail('other@example.com', 'owner@example.com')).toBeUndefined();
+    expect(bootstrapRoleForEmail('owner@example.com', undefined)).toBeUndefined();
   });
 });

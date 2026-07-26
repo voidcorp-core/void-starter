@@ -14,6 +14,8 @@ optional Google OAuth, email/password, password reset, magic links, and admin/ro
 
 - `BETTER_AUTH_SECRET` - 32+ char random string. Generate: `openssl rand -base64 32`
 - `BETTER_AUTH_URL` - Base URL of the app (e.g. `http://localhost:3000` in dev, prod URL in prod)
+- `AUTH_BOOTSTRAP_ADMIN_EMAIL` - exact identity promoted to `admin` when that user is first
+  created; mandatory in production
 - `DATABASE_URL` - inherited from `@repo/db`
 - `NEXT_PUBLIC_APP_URL` - base URL exposed to the browser, used by `auth.client.ts` (defaults to `http://localhost:3000`)
 - `RESEND_API_KEY` and `EMAIL_FROM` - required together in production for verification, password
@@ -21,6 +23,11 @@ optional Google OAuth, email/password, password reset, magic links, and admin/ro
 
 `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are an optional pair. `EMAIL_REPLY_TO` and
 `EMAIL_APP_NAME` customize transactional messages.
+
+The bootstrap rule is case-insensitive but otherwise exact. It never creates a user or invents
+credentials: the configured person signs up or uses a magic link, verifies that same address, and
+the Better Auth create hook stores the `admin` role. Changing the variable later does not promote
+an existing user retroactively.
 
 ## Public API
 

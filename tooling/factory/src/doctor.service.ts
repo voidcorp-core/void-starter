@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { readAuthProductionState, validateAuthProductionState } from './auth-production.service';
 import { createProjectFilePlan } from './capability-composition.service';
 import { readDeliveryState, validateDeliveryState } from './delivery.service';
 import { createCompositionPlan, parseBuildManifest } from './factory.service';
@@ -423,6 +424,37 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     checks.push(createCheck('delivery-state', false, `Delivery state is invalid: ${message}`));
+  }
+
+  try {
+    const authState = await readAuthProductionState(projectRoot);
+    if (!authState) {
+      checks.push(
+        createCheck('auth-production-state', true, 'No production auth state is recorded'),
+      );
+    } else if (!sourcePublicationState || sourcePublicationStateError) {
+      checks.push(
+        createCheck(
+          'auth-production-state',
+          false,
+          'Production auth state requires a valid source publication state',
+        ),
+      );
+    } else {
+      await validateAuthProductionState(authState, receipt.manifest_sha256, sourcePublicationState);
+      checks.push(
+        createCheck(
+          'auth-production-state',
+          authState.status === 'succeeded',
+          `Production auth state is structurally valid and ${authState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(
+      createCheck('auth-production-state', false, `Production auth state is invalid: ${message}`),
+    );
   }
 
   return {

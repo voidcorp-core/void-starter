@@ -577,6 +577,69 @@ deployment, crossed Vercel Authentication with the memory-only header, and recei
 response containing the project identity. The resulting receipt passed `doctor`, retained mode
 `0600`, and left the publishable source digest unchanged.
 
+### 10.7 Production authentication binding and administrator bootstrap
+
+Authentication configuration has its own plan, lock and receipt. It requires Better Auth with
+`operations.email: resend`, successful live provisioning, exact source publication and completed
+Neon migrations. Provider coordinates remain in the provisioning context; canonical URL, sender
+and bootstrap identity live in a separate non-secret auth context:
+
+```yaml
+schema_version: 1
+
+canonical_url: https://example-saas.example.com
+
+email:
+  from: Example SaaS <auth@mail.example.com>
+  reply_to: support@example.com
+
+bootstrap:
+  administrator_email: owner@example.com
+```
+
+The runnable example is `tooling/factory/fixtures/auth/production.yaml`. The sender domain must be
+verified in Resend first. The bootstrap email is normalized to lower case and bound into the plan;
+the context contains no API key or authentication secret.
+
+```sh
+bun run auth:plan -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  fixtures/auth/production.yaml
+
+VERCEL_TOKEN=... BETTER_AUTH_SECRET=... RESEND_API_KEY=... \
+  bun run auth:preflight -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  fixtures/auth/production.yaml
+
+VERCEL_TOKEN=... BETTER_AUTH_SECRET=... RESEND_API_KEY=... \
+  bun run auth:live -- \
+  /absolute/path/to/published-project \
+  fixtures/provisioning/eu.yaml \
+  fixtures/auth/production.yaml \
+  --confirm-project web-expo
+```
+
+Preflight performs authenticated Vercel reads only. It rejects any managed variable that is not
+owned by the exact plan. Live writes `BETTER_AUTH_SECRET` and `RESEND_API_KEY` as Production-only
+Vercel Sensitive variables; canonical URLs, sender settings and
+`AUTH_BOOTSTRAP_ADMIN_EMAIL` are encrypted Production variables. Preview is intentionally left
+anonymous rather than sharing production authentication or database credentials. A non-secret
+plan-digest marker permits lookup-before-create reconciliation because Sensitive values cannot be
+read back.
+
+After binding, the lifecycle sends one idempotent configuration email to the exact administrator.
+This proves the Resend sending key and verified sender without creating a user. Better Auth grants
+role `admin` only if that same identity is newly created later; no credentials or placeholder seed
+are invented. `auth:resume` adopts already-owned variables before retrying the email, so a partial
+provider failure does not duplicate the binding.
+
+`.void-starter/auth-state.json` is atomic, mode `0600`, source-excluded and secret-free. It records
+the bound variable IDs, email ID, bootstrap strategy and `requires_redeployment: true`. Vercel
+environment changes apply only to a new deployment: redeploy Production, rerun the delivery smoke,
+then test sign-up/verification or magic link with the exact administrator address.
+
 ## 11. Lifecycle
 
 ```text
@@ -655,11 +718,12 @@ be proven locally.
 7. Apply exact Drizzle migrations to Neon. **Done; empty-to-current live Neon canary passed.**
 8. Observe the exact Production deployment and run a protected HTTP smoke. **Done; protected live
    bypass canary passed.**
-9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Real Resend delivery is
-   locally wired; Vercel binding, canonical URL and administrator bootstrap remain.**
+9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Local lifecycle done:
+   guarded Vercel binding, canonical URL, Resend smoke and exact-email admin bootstrap; live canary
+   and post-binding authenticated smoke remain.**
 10. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
-11. Add R2, Resend, observability and DNS adapters. **Resend local adapter done; remote bindings
-    pending.**
+11. Add R2, Resend, observability and DNS adapters. **Resend adapter and guarded Production
+    binding done locally; live canary pending. R2, observability and DNS remain.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration and delivery
     tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.
@@ -667,7 +731,8 @@ be proven locally.
 ## 15. Open decisions
 
 - CLI/package name and distribution model.
-- Secret binding model across local, Vercel, EAS and GitHub Actions.
+- Secret binding model for EAS and GitHub Actions; Vercel production auth/database binding is
+  defined.
 - Exact provider rollback guarantees.
 - Expo/React version alignment policy in the workspace.
 - Boundary between generated code, overlays and post-generation transformations.

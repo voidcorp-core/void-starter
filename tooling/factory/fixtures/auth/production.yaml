@@ -1,0 +1,10 @@
+schema_version: 1
+
+canonical_url: https://example-saas.example.com
+
+email:
+  from: Example SaaS <auth@mail.example.com>
+  reply_to: support@example.com
+
+bootstrap:
+  administrator_email: owner@example.com

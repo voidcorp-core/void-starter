@@ -1,4 +1,27 @@
 export {
+  AuthProductionApplyError,
+  AuthProductionError,
+  type AuthProductionOptions,
+  applyAuthProduction,
+  authProductionPlanDigest,
+  createAuthProductionPlan,
+  parseAuthProductionContext,
+  parseAuthProductionContextSource,
+  preflightAuthProduction,
+  readAuthProductionState,
+  senderDomain,
+  validateAuthProductionState,
+} from './auth-production.service';
+export {
+  type AuthProductionContext,
+  type AuthProductionObservation,
+  type AuthProductionPlan,
+  type AuthProductionState,
+  authProductionContextSchema,
+  authProductionPlanSchema,
+  authProductionStateSchema,
+} from './auth-production.types';
+export {
   createCapabilityFilePlan,
   createProjectFilePlan,
 } from './capability-composition.service';

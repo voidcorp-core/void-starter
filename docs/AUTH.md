@@ -109,15 +109,16 @@ Client enters email (apps/web/src/app/(auth)/magic-link/page.tsx)
     -> Better-Auth magicLink plugin
       -> insert verifications row { identifier: email, value: token, expiresAt }
       -> sendMagicLink callback fires                      [packages/auth/src/auth.repository.ts]
-        -> dev: logger.warn prints email + URL + token     [pino, no email sent]
-        -> prod: _modules/email-resend wired here          [Resend API call]
+        -> dev without Resend: logger.warn prints email + URL
+        -> configured/prod: @repo/email-resend             [Resend API call]
   -> User clicks link in email
   -> Better-Auth /api/auth/[...all]/magic-link?token=...
     -> verify token, check expiry                          [throws MagicLinkExpiredError if past]
     -> create session row + Set-Cookie + redirect
 ```
 
-The `sendMagicLink` body in `auth.repository.ts` is currently a `logger.warn` stub. Replace it with a Resend call when activating `_modules/email-resend`. See section 7.
+Verification, password reset and magic links share the same server-only Resend adapter. See
+section 8.
 
 ---
 
@@ -154,6 +155,24 @@ Behavior:
 - **No session.** `requireRole` first calls `requireAuth`, which `redirect()`s to `/sign-in?callbackURL=<path>` (ADR 35). The visitor signs in and is returned to the page; no error boundary involved.
 - **Session, wrong role.** `ForbiddenError` (403) -- a genuine authorization failure, surfaced through `error.tsx`. Render a dedicated 403 page if you want a tailored screen.
 - **Session, role match (or admin).** Returns the `SessionUser`. Continue rendering.
+
+### First production administrator
+
+Production requires `AUTH_BOOTSTRAP_ADMIN_EMAIL`. Better Auth's user-create hook compares the new
+user's normalized email to that exact configured identity and stores role `admin` only on a match.
+No seed user, password or invitation token is generated.
+
+Operationally:
+
+1. Configure production authentication through the Factory lifecycle in `docs/FACTORY.md`.
+2. Redeploy after Vercel receives the variables.
+3. Sign up or request a magic link with the exact bootstrap address.
+4. Verify the address, then open `/admin` with the resulting session.
+
+The hook runs only when a user is first created. If that address already exists as `user`, promote
+it deliberately through Better Auth's admin API or a reviewed database operation; changing the
+environment variable does not rewrite existing roles. Remove or rotate the bootstrap identity
+only through a new reviewed Factory auth plan.
 
 The same logic works inside Server Actions via the auth-aware factory:
 
@@ -270,6 +289,10 @@ idempotency key and never includes the provider response body or API key in erro
   `EMAIL_APP_NAME` are optional presentation settings.
 - **Sender domain.** `EMAIL_FROM` may use `Name <address@example.com>`. Its domain must be verified
   in Resend before arbitrary recipients can receive messages.
+- **Factory production binding.** `auth:live` writes `BETTER_AUTH_SECRET` and `RESEND_API_KEY` as
+  Production-only Vercel Sensitive variables, writes canonical URL/sender/bootstrap values as
+  encrypted variables, and sends one idempotent configuration email to the bootstrap identity.
+  The receipt contains provider IDs and digests only; a fresh deployment is required afterward.
 
 After email/password sign-up, the browser opens `/verify-email/pending`. Verification is sent on
 signup and again on an unverified sign-in; password reset and five-minute single-use magic links

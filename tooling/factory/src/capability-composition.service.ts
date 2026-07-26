@@ -499,6 +499,7 @@ function createEnvironmentExample(manifest: BuildManifest): GeneratedFile {
       '# Better Auth',
       'BETTER_AUTH_SECRET=replace-me-with-openssl-rand-base64-32',
       'BETTER_AUTH_URL=http://localhost:3000',
+      'AUTH_BOOTSTRAP_ADMIN_EMAIL=',
       'GOOGLE_CLIENT_ID=',
       'GOOGLE_CLIENT_SECRET=',
     );

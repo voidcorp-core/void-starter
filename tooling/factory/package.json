@@ -9,6 +9,10 @@
   "scripts": {
     "apply": "bun ./src/apply.cli.ts",
     "apply:live": "bun ./src/apply-live.cli.ts",
+    "auth:live": "bun ./src/auth-live.cli.ts",
+    "auth:plan": "bun ./src/auth-plan.cli.ts",
+    "auth:preflight": "bun ./src/auth-preflight.cli.ts",
+    "auth:resume": "bun ./src/auth-resume.cli.ts",
     "delivery:live": "bun ./src/delivery-live.cli.ts",
     "delivery:plan": "bun ./src/delivery-plan.cli.ts",
     "delivery:preflight": "bun ./src/delivery-preflight.cli.ts",

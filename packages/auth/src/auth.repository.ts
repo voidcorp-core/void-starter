@@ -71,6 +71,17 @@ export function resolveGoogleProvider(env: {
   return { google: { clientId, clientSecret } };
 }
 
+/** Exact-email bootstrap rule used by Better Auth's user-create hook. */
+export function bootstrapRoleForEmail(
+  userEmail: string,
+  administratorEmail: string | undefined,
+): 'admin' | undefined {
+  if (!administratorEmail) return undefined;
+  return userEmail.trim().toLowerCase() === administratorEmail.trim().toLowerCase()
+    ? 'admin'
+    : undefined;
+}
+
 type AuthEmail =
   | { kind: 'verification'; email: string; url: string }
   | { kind: 'password-reset'; email: string; url: string }
@@ -130,6 +141,7 @@ function initAuth() {
     server: {
       BETTER_AUTH_SECRET: z.string().min(32),
       BETTER_AUTH_URL: z.url(),
+      AUTH_BOOTSTRAP_ADMIN_EMAIL: z.email().optional(),
       // Optional: Google OAuth is opt-in. When unset, email/password and
       // magic link still work. Both must be present to enable the provider.
       GOOGLE_CLIENT_ID: z.string().min(1).optional(),
@@ -139,12 +151,21 @@ function initAuth() {
     runtimeEnv: {
       BETTER_AUTH_SECRET: process.env['BETTER_AUTH_SECRET'],
       BETTER_AUTH_URL: process.env['BETTER_AUTH_URL'],
+      AUTH_BOOTSTRAP_ADMIN_EMAIL: process.env['AUTH_BOOTSTRAP_ADMIN_EMAIL'],
       GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'],
       GOOGLE_CLIENT_SECRET: process.env['GOOGLE_CLIENT_SECRET'],
     },
   });
 
   const googleProvider = resolveGoogleProvider(env);
+  const bootstrapAdministrator = env['AUTH_BOOTSTRAP_ADMIN_EMAIL'];
+  if (process.env['NODE_ENV'] === 'production' && !bootstrapAdministrator) {
+    throw new AppError({
+      message: 'Production authentication requires an explicit bootstrap administrator email.',
+      code: 'AUTH_BOOTSTRAP_NOT_CONFIGURED',
+      status: 500,
+    });
+  }
 
   return betterAuth({
     secret: env['BETTER_AUTH_SECRET'],
@@ -159,6 +180,16 @@ function initAuth() {
         rateLimit: schema.rateLimits,
       },
     }),
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            const role = bootstrapRoleForEmail(user.email, bootstrapAdministrator);
+            return role ? { data: { ...user, role } } : { data: user };
+          },
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,

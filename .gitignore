@@ -54,5 +54,7 @@ bun-debug.log*
 .void-starter/migration-state.json
 .void-starter/migration.lock
 .void-starter/delivery-state.json
+.void-starter/auth-state.json
+.void-starter/auth.lock
 .void-starter/delivery.lock
 .void-starter/.*.temporary

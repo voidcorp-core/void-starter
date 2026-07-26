@@ -262,6 +262,8 @@ describe('source publication', () => {
     await writeFile(join(root, '.next/output.txt'), 'changed build output\n', 'utf8');
     await writeFile(join(root, '.void-starter/delivery-state.json'), '{"local":"state"}\n', 'utf8');
     await writeFile(join(root, '.void-starter/delivery.lock'), '{"local":"lock"}\n', 'utf8');
+    await writeFile(join(root, '.void-starter/auth-state.json'), '{"local":"state"}\n', 'utf8');
+    await writeFile(join(root, '.void-starter/auth.lock'), '{"local":"lock"}\n', 'utf8');
     await writeFile(
       join(root, '.void-starter/migration-state.json'),
       '{"local":"state"}\n',
@@ -428,6 +430,8 @@ describe('source publication', () => {
     expect(tracked).toContain('.github/workflows/ci.yml');
     expect(tracked).not.toContain('.void-starter/apply-state.json');
     expect(tracked).not.toContain('.void-starter/source-state.json');
+    expect(tracked).not.toContain('.void-starter/auth-state.json');
+    expect(tracked).not.toContain('.void-starter/auth.lock');
     expect(tracked).not.toContain('.env.local');
     expect(tracked).not.toContain('.next/output.txt');
 
