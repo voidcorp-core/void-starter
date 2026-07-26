@@ -22,6 +22,7 @@ describe('createSurfaceFilePlan', () => {
 
     expect(filePlan.writes.map((file) => file.path)).toEqual([
       'apps/mobile/.gitignore',
+      'apps/mobile/app.config.ts',
       'apps/mobile/app.json',
       'apps/mobile/app/_layout.tsx',
       'apps/mobile/app/index.tsx',
@@ -61,9 +62,13 @@ describe('createSurfaceFilePlan', () => {
       'eas:build': 'bunx eas-cli@21.2.0 build --platform all',
     });
     expect(packageJson.devDependencies).toEqual({
+      '@types/node': '^24.13.3',
       '@types/react': '~19.2.2',
       typescript: '~6.0.3',
     });
+    expect(
+      filePlan.writes.find((file) => file.path === 'apps/mobile/app.config.ts')?.content,
+    ).toContain('eas-project.json');
   });
 
   it('removes the web baseline for a mobile-only project', () => {

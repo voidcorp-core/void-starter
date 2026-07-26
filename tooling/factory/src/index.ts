@@ -45,6 +45,33 @@ export {
   type SmokeReceipt,
 } from './delivery.types';
 export { doctorProject } from './doctor.service';
+export {
+  applyEasProject,
+  createEasProjectPlan,
+  type EasCliResult,
+  type EasCliRunner,
+  EasProjectApplyError,
+  EasProjectError,
+  type EasProjectOptions,
+  easProjectPlanDigest,
+  parseEasProjectContext,
+  parseEasProjectContextSource,
+  preflightEasProject,
+  readEasProjectState,
+  validateEasProjectState,
+} from './eas-project.service';
+export {
+  type EasProjectContext,
+  type EasProjectLink,
+  type EasProjectObservation,
+  type EasProjectPlan,
+  type EasProjectState,
+  easProjectContextSchema,
+  easProjectLinkSchema,
+  easProjectObservationSchema,
+  easProjectPlanSchema,
+  easProjectStateSchema,
+} from './eas-project.types';
 export { createCompositionPlan, parseBuildManifest } from './factory.service';
 export {
   type BuildManifest,

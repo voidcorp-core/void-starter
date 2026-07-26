@@ -194,7 +194,8 @@ le rôle `admin`. Aucun lien d'authentification, token fournisseur ou secret n'a
 
 ## Suite globale
 
-1. Ajouter le provisioning Expo/EAS.
+1. Exécuter le canary isolé du provisioning Expo/EAS désormais implémenté, puis publier le lien
+   EAS par un source update gardé.
 2. Ajouter R2, Sentry/PostHog et DNS; Resend est terminé.
 3. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 4. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.

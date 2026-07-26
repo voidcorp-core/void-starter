@@ -22,6 +22,20 @@ const run = (command: string, arguments_: string[], cwd: string) => {
   }
 };
 
+const runOutput = (command: string, arguments_: string[], cwd: string): string => {
+  const result = spawnSync(command, arguments_, {
+    cwd,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr);
+    throw new Error(
+      `${command} ${arguments_.join(' ')} exited with ${result.status ?? 'no status'}`,
+    );
+  }
+  return result.stdout;
+};
+
 try {
   const source = await readFile(fixturePath, 'utf8');
   const manifest = parseManifestSource(source, fixturePath.pathname);
@@ -40,6 +54,30 @@ try {
   const mobileRoot = join(temporaryRoot, 'apps/mobile');
   run('bun', ['install'], mobileRoot);
   run('bun', ['run', 'type-check'], mobileRoot);
+  const projectId = '123e4567-e89b-42d3-a456-426614174000';
+  await writeFile(
+    join(mobileRoot, 'eas-project.json'),
+    `${JSON.stringify(
+      {
+        schema_version: 1,
+        owner: 'void-sandbox',
+        slug: manifest.project.name,
+        project_id: projectId,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+  const resolvedConfig = JSON.parse(
+    runOutput('bunx', ['expo', 'config', '--type', 'public', '--json'], mobileRoot),
+  ) as { owner?: string; extra?: { eas?: { projectId?: string } } };
+  if (
+    resolvedConfig.owner !== 'void-sandbox' ||
+    resolvedConfig.extra?.eas?.projectId !== projectId
+  ) {
+    throw new Error('Expo dynamic config did not materialize the exact EAS project link');
+  }
   run('bun', ['run', 'build'], mobileRoot);
   succeeded = true;
 } finally {

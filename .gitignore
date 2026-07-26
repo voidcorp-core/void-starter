@@ -56,5 +56,7 @@ bun-debug.log*
 .void-starter/delivery-state.json
 .void-starter/auth-state.json
 .void-starter/auth.lock
+.void-starter/eas-state.json
+.void-starter/eas.lock
 .void-starter/delivery.lock
 .void-starter/.*.temporary

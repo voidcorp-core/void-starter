@@ -18,6 +18,12 @@ import { authProductionStateSchema } from './auth-production.types';
 import { createDeliveryPlan, deliveryPlanDigest } from './delivery.service';
 import { deliveryStateSchema } from './delivery.types';
 import { doctorProject } from './doctor.service';
+import {
+  createEasProjectPlan,
+  easProjectPlanDigest,
+  parseEasProjectContext,
+} from './eas-project.service';
+import { easProjectStateSchema } from './eas-project.types';
 import { parseBuildManifest } from './factory.service';
 import { renderProject } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
@@ -159,7 +165,7 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
   await writeFile(
     join(sourceRoot, '.gitignore'),
-    '.void-starter/apply-state.json\n.void-starter/apply.lock\n.void-starter/source-state.json\n.void-starter/source.lock\n.void-starter/migration-state.json\n.void-starter/migration.lock\n.void-starter/delivery-state.json\n.void-starter/delivery.lock\n.void-starter/auth-state.json\n.void-starter/auth.lock\n',
+    '.void-starter/apply-state.json\n.void-starter/apply.lock\n.void-starter/source-state.json\n.void-starter/source.lock\n.void-starter/migration-state.json\n.void-starter/migration.lock\n.void-starter/delivery-state.json\n.void-starter/delivery.lock\n.void-starter/auth-state.json\n.void-starter/auth.lock\n.void-starter/eas-state.json\n.void-starter/eas.lock\n',
     'utf8',
   );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
@@ -197,6 +203,7 @@ describe('renderProject', () => {
     expect(receipt.generated_files.map((file) => file.path)).toEqual(
       expect.arrayContaining([
         '.env.example',
+        'apps/mobile/app.config.ts',
         'apps/mobile/app.json',
         'apps/mobile/package.json',
         'apps/web/next.config.ts',
@@ -233,6 +240,8 @@ describe('renderProject', () => {
     expect(rootGitignore).toContain('.void-starter/delivery-state.json');
     expect(rootGitignore).toContain('.void-starter/auth-state.json');
     expect(rootGitignore).toContain('.void-starter/auth.lock');
+    expect(rootGitignore).toContain('.void-starter/eas-state.json');
+    expect(rootGitignore).toContain('.void-starter/eas.lock');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
     expect(rootKnip.workspaces).not.toHaveProperty('tooling/*');
@@ -503,6 +512,64 @@ describe('doctorProject', () => {
         id: 'generated-files',
         status: 'fail',
       }),
+    );
+  });
+
+  it('accepts a receipt-owned EAS link and rejects an unowned or corrupted link', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    await renderProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+    const link = {
+      schema_version: 1,
+      owner: 'void-sandbox',
+      slug: 'example-saas',
+      project_id: '123e4567-e89b-42d3-a456-426614174000',
+    } as const;
+    const linkSource = serializeCanonicalJson(link);
+    const linkPath = join(targetRoot, 'apps/mobile/eas-project.json');
+    await writeFile(linkPath, linkSource, 'utf8');
+
+    const unownedReport = await doctorProject(targetRoot);
+    expect(unownedReport.checks).toContainEqual(
+      expect.objectContaining({ id: 'eas-project-state', status: 'fail' }),
+    );
+
+    const plan = await createEasProjectPlan(
+      targetRoot,
+      parseEasProjectContext({ schema_version: 1, account: 'void-sandbox' }),
+    );
+    const state = easProjectStateSchema.parse({
+      schema_version: 1,
+      mode: 'live',
+      status: 'succeeded',
+      plan_sha256: easProjectPlanDigest(plan),
+      plan,
+      attempts: 1,
+      observation: {
+        project_id: link.project_id,
+        owner: link.owner,
+        slug: link.slug,
+        full_name: plan.application.full_name,
+        link_sha256: sha256(linkSource),
+        linked_at: '2026-07-26T12:00:00.000Z',
+      },
+      error: null,
+    });
+    await writeJson(join(targetRoot, '.void-starter/eas-state.json'), state);
+    const ownedReport = await doctorProject(targetRoot);
+    expect(ownedReport.checks).toContainEqual({
+      id: 'eas-project-state',
+      status: 'pass',
+      message: 'EAS project state is structurally valid and succeeded',
+    });
+
+    await writeFile(linkPath, '{}\n', 'utf8');
+    const corruptedReport = await doctorProject(targetRoot);
+    expect(corruptedReport.checks).toContainEqual(
+      expect.objectContaining({ id: 'eas-project-state', status: 'fail' }),
     );
   });
 

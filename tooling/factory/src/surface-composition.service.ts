@@ -43,6 +43,7 @@ function createExpoFiles(manifest: BuildManifest): GeneratedFile[] {
       'react-native-web': '~0.21.0',
     },
     devDependencies: {
+      '@types/node': '^24.13.3',
       '@types/react': '~19.2.2',
       typescript: '~6.0.3',
     },
@@ -104,6 +105,58 @@ function createExpoFiles(manifest: BuildManifest): GeneratedFile[] {
     {
       path: `${EXPO_APP_ROOT}/.gitignore`,
       content: '.expo/\ndist/\n',
+    },
+    {
+      path: `${EXPO_APP_ROOT}/app.config.ts`,
+      content: `/// <reference types="node" />
+
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+type EasProjectLink = {
+  schema_version: 1;
+  owner: string;
+  slug: string;
+  project_id: string;
+};
+
+function readEasProjectLink(): EasProjectLink | null {
+  const path = join(__dirname, 'eas-project.json');
+  if (!existsSync(path)) return null;
+  const value = JSON.parse(readFileSync(path, 'utf8')) as Partial<EasProjectLink>;
+  if (
+    value.schema_version !== 1 ||
+    typeof value.owner !== 'string' ||
+    typeof value.slug !== 'string' ||
+    typeof value.project_id !== 'string'
+  ) {
+    throw new Error('apps/mobile/eas-project.json is invalid');
+  }
+  return value as EasProjectLink;
+}
+
+export default ({ config }: ConfigContext): ExpoConfig => {
+  const project = readEasProjectLink();
+  if (!project) return config as ExpoConfig;
+  if (project.slug !== config.slug) {
+    throw new Error('EAS project slug does not match the Expo application slug');
+  }
+  const extra = config.extra ?? {};
+  const eas = typeof extra.eas === 'object' && extra.eas !== null ? extra.eas : {};
+  return {
+    ...config,
+    owner: project.owner,
+    extra: {
+      ...extra,
+      eas: {
+        ...eas,
+        projectId: project.project_id,
+      },
+    },
+  } as ExpoConfig;
+};
+`,
     },
     {
       path: `${EXPO_APP_ROOT}/app.json`,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { readAuthProductionState, validateAuthProductionState } from './auth-production.service';
 import { createProjectFilePlan } from './capability-composition.service';
 import { readDeliveryState, validateDeliveryState } from './delivery.service';
+import { readEasProjectState, validateEasProjectState } from './eas-project.service';
 import { createCompositionPlan, parseBuildManifest } from './factory.service';
 import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
 import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
@@ -318,6 +319,36 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
       'No Void Harness dependency is present',
     ),
   );
+
+  try {
+    const easState = await readEasProjectState(projectRoot);
+    const easLinkExists = await pathExists(join(projectRoot, 'apps/mobile/eas-project.json'));
+    if (!easState) {
+      checks.push(
+        createCheck(
+          'eas-project-state',
+          !easLinkExists,
+          easLinkExists
+            ? 'EAS project link exists without an operational provisioning receipt'
+            : 'No EAS project provisioning state is recorded',
+        ),
+      );
+    } else {
+      await validateEasProjectState(easState, receipt.manifest_sha256, projectRoot);
+      checks.push(
+        createCheck(
+          'eas-project-state',
+          easState.status === 'succeeded',
+          `EAS project state is structurally valid and ${easState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(
+      createCheck('eas-project-state', false, `EAS project state is invalid: ${message}`),
+    );
+  }
 
   try {
     const provisioningState = await readProvisioningState(projectRoot);

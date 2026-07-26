@@ -277,6 +277,8 @@ describe('source publication', () => {
     await writeFile(join(root, '.void-starter/delivery.lock'), '{"local":"lock"}\n', 'utf8');
     await writeFile(join(root, '.void-starter/auth-state.json'), '{"local":"state"}\n', 'utf8');
     await writeFile(join(root, '.void-starter/auth.lock'), '{"local":"lock"}\n', 'utf8');
+    await writeFile(join(root, '.void-starter/eas-state.json'), '{"local":"state"}\n', 'utf8');
+    await writeFile(join(root, '.void-starter/eas.lock'), '{"local":"lock"}\n', 'utf8');
     await writeFile(
       join(root, '.void-starter/migration-state.json'),
       '{"local":"state"}\n',
@@ -286,6 +288,17 @@ describe('source publication', () => {
     const second = await createSourcePublicationPlan(root, context);
     expect(second).toEqual(first);
     expect(first.source.file_count).toBe(4);
+
+    await mkdir(join(root, 'apps/mobile'), { recursive: true });
+    await writeFile(
+      join(root, 'apps/mobile/eas-project.json'),
+      '{"schema_version":1,"owner":"void-sandbox","slug":"factory-project","project_id":"123e4567-e89b-42d3-a456-426614174000"}\n',
+      'utf8',
+    );
+    const linked = await createSourcePublicationPlan(root, context);
+    expect(linked.source.file_count).toBe(5);
+    expect(linked.source.sha256).not.toBe(first.source.sha256);
+    await rm(join(root, 'apps/mobile'), { force: true, recursive: true });
 
     await writeFile(join(root, 'README.md'), '# Changed\n', 'utf8');
     const changed = await createSourcePublicationPlan(root, context);
@@ -445,6 +458,8 @@ describe('source publication', () => {
     expect(tracked).not.toContain('.void-starter/source-state.json');
     expect(tracked).not.toContain('.void-starter/auth-state.json');
     expect(tracked).not.toContain('.void-starter/auth.lock');
+    expect(tracked).not.toContain('.void-starter/eas-state.json');
+    expect(tracked).not.toContain('.void-starter/eas.lock');
     expect(tracked).not.toContain('.env.local');
     expect(tracked).not.toContain('.next/output.txt');
 

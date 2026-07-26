@@ -170,10 +170,11 @@ The implemented factory slice lives in `tooling/factory`. It validates schema v1
 objects, produces a deterministic ordered composition plan, previews a sorted local file plan, and
 can render the selected surfaces into a new directory. The Expo blueprint targets SDK 57, React
 Native 0.86, Expo Router, and EAS. The EAS configuration is generated, while its pinned CLI runs
-on demand through `bun run eas:build` and does not inflate the application lockfile. Rendering
-remains local. A separate provisioning plan can now model the first GitHub, Vercel and Neon
-resource tranche. Dry-run and simulation remain the safe defaults; authenticated execution is
-isolated behind separate live commands.
+on demand and does not inflate the application lockfile. `eas:plan|preflight|live|resume` creates
+or adopts the exact EAS project without starting a native build. Rendering remains local. A
+separate provisioning plan models the first GitHub, Vercel and Neon resource tranche. Dry-run and
+simulation remain the safe defaults; authenticated execution is isolated behind separate live
+commands.
 
 ```yaml
 schema_version: 1
@@ -649,6 +650,54 @@ HTTP smoke. A real magic link then created the planned identity and `/admin` rep
 `admin`. The auth receipt remained mode `0600`, `doctor` stayed green and the publishable source
 digest did not change.
 
+### 10.8 Expo/EAS project provisioning
+
+EAS project creation has its own local plan, lock and receipt. It requires an Expo/EAS mobile
+surface and a strict non-secret context naming the Expo account:
+
+```yaml
+schema_version: 1
+account: void-sandbox
+```
+
+```sh
+bun run eas:plan -- \
+  /absolute/path/to/generated-project \
+  /absolute/path/to/eas-context.yaml
+
+EXPO_TOKEN=... bun run eas:preflight -- \
+  /absolute/path/to/generated-project \
+  /absolute/path/to/eas-context.yaml
+
+EXPO_TOKEN=... bun run eas:live -- \
+  /absolute/path/to/generated-project \
+  /absolute/path/to/eas-context.yaml \
+  --confirm-project web-expo
+```
+
+Preflight invokes the pinned `eas-cli@21.2.0` only for authenticated account reads. It verifies
+that the token can access the requested account with a non-viewer role; an existing local link is
+also read back from EAS. Live execution creates or adopts the unique `@account/project-slug`
+project with `project:init --force --non-interactive` inside an isolated temporary static config,
+then verifies the resulting full name and UUID through `project:info`.
+
+The generated `app.json` remains provider-neutral and covered by the immutable generation
+receipt. A stable generated `app.config.ts` optionally reads
+`apps/mobile/eas-project.json`, a publishable non-secret file containing only schema version,
+owner, slug and EAS project ID. This controlled overlay makes the link available to future EAS
+commands without rewriting generation-owned config. `.void-starter/eas-state.json` records the
+exact plan, link digest and opaque project identity in mode `0600`; the token, CLI output and
+temporary config are never persisted. `doctor` rejects a link without its valid operational
+receipt and source publication excludes the receipt and lock.
+
+If creation succeeds remotely but the CLI result is ambiguous, `eas:resume` repeats the same
+owner/slug initialization. EAS adopts the unique existing project, so the lifecycle can finish the
+receipt without issuing a second logical project. This tranche deliberately does not run
+`eas build`, create signing credentials, enroll an Apple/Google developer account or submit to a
+store. Those are separate cost- and credential-bearing actions. See Expo's
+[programmatic access](https://docs.expo.dev/accounts/programmatic-access/) and
+[EAS project initialization](https://github.com/expo/eas-cli#eas-init) contracts.
+
 ## 11. Lifecycle
 
 ```text
@@ -682,8 +731,9 @@ provider plan, while `apply --simulate` and `resume --simulate` implement its lo
 The separate live commands implement the first GitHub/Vercel/Neon provider boundary. The source
 commands implement guarded initial publication and fast-forward updates. Migration commands bind
 and apply exact Drizzle history to Neon. Delivery commands implement exact-commit Vercel
-observation and protected HTTP smoke verification. Production auth bootstrap/seed remains a
-future action.
+observation and protected HTTP smoke verification. Production auth bootstrap is a separate
+completed lifecycle. EAS commands create/adopt the mobile project and materialize its non-secret
+source link; native builds remain explicit future actions.
 
 ## 12. Cost policy
 
@@ -729,19 +779,20 @@ be proven locally.
    bypass canary passed.**
 9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Done; guarded binding,
    Resend delivery, redeployment, magic-link session and exact-email admin access passed live.**
-10. Add optional Expo/EAS surface. **Local surface done; EAS provisioning pending.**
+10. Add optional Expo/EAS surface. **Local surface and guarded project provisioning done; isolated
+    live canary pending.**
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2,
     observability and DNS remain.**
-12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery and
-    auth tranches.**
+12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
+    auth and EAS project tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
 
 - CLI/package name and distribution model.
-- Secret binding model for EAS and GitHub Actions; Vercel production auth/database binding is
-  defined.
+- Secret binding model for EAS build environments and GitHub Actions; EAS project provisioning
+  needs only process-memory `EXPO_TOKEN`, while Vercel production auth/database binding is defined.
 - Exact provider rollback guarantees.
 - Expo/React version alignment policy in the workspace.
-- Boundary between generated code, overlays and post-generation transformations.
+- Boundary for future post-generation transformations beyond the receipt-owned EAS link overlay.
 - Linear ownership: Forge creates product intent and backlog; Harness should update execution.

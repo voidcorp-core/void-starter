@@ -58,6 +58,8 @@ const EXCLUDED_EXACT_PATHS = new Set([
   '.void-starter/apply.lock',
   '.void-starter/delivery-state.json',
   '.void-starter/delivery.lock',
+  '.void-starter/eas-state.json',
+  '.void-starter/eas.lock',
   '.void-starter/migration-state.json',
   '.void-starter/migration.lock',
   '.void-starter/source-state.json',
@@ -216,6 +218,9 @@ function isExcludedPath(path: string, isDirectory: boolean): boolean {
     return true;
   }
   if (path.startsWith('.void-starter/.delivery-state.json.')) {
+    return true;
+  }
+  if (path.startsWith('.void-starter/.eas-state.json.')) {
     return true;
   }
   if (path.startsWith('.void-starter/.migration-state.json.')) {
