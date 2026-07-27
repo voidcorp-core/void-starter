@@ -1141,11 +1141,16 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
     operational intent and makes the region claim unobservable.
   - Repeat an ambiguous project create on resume: risks duplicating a mutation whose result is
     unknown; resume must reconcile only after an ambiguous create.
-- **Local acceptance evidence:** Provider-mocked contracts cover active-DE identity preflight,
-  project creation and adoption, exact client-key selection, separate-token two-phase resume,
-  Vercel ownership-marker reconciliation, ambiguous-create suppression, wrong-region rejection
-  and absence of credentials/DSN values from persisted state. The isolated Sentry live canary is
-  still required before this adapter is considered live-validated.
+- **Acceptance evidence:** Provider-mocked contracts cover active-DE identity preflight, project
+  creation and adoption, exact client-key selection, separate-token two-phase resume, Vercel
+  ownership-marker reconciliation, ambiguous-create suppression, wrong-region rejection and
+  absence of credentials/DSN values from persisted state. The isolated canary passed on 2026-07-27
+  with plan `7cacd9647fd4dd1188fadb68ee783d0a144753589cedcbafa4e27622b59577e0`. It adopted the six
+  existing provider resources, created DE project `4511807245516880`, paused before binding until
+  the separate build token was available, then adopted Vercel marker `hHSyb6KDUXFU6K7I` on resume.
+  Completed-state resume kept attempts `1,1,1,1,1,1,1,2`; fresh secret-free state adopted all eight
+  IDs with one attempt each. Both receipts passed `doctor`, remained mode `0600`, and a dynamic
+  comparison found none of the eight keyring credentials or the public DSN in either state file.
 - **When to revisit:** Revisit the static build token when Sentry and Vercel expose a recoverable
   workload-identity or short-lived release-upload flow, when multi-key rotation becomes a product
   requirement, or when Sentry's regional API and Vercel secret semantics materially change.

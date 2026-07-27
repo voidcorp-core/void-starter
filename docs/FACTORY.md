@@ -473,16 +473,24 @@ Sensitive for Preview/Production and encrypted for Development. A plain
 `VOID_STARTER_SENTRY_BINDING_ID` marker proves ownership without persisting any secret value.
 
 The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
-identity/privacy/region mismatch tests and ambiguous-create resume tests. Sentry has passed this
-local contract suite, including two-phase resume and secret-persistence checks, but not yet its
-isolated live canary. The original isolated-account
-canary created the GitHub/Vercel/Neon tranche once, kept its IDs on completed-state resume and
-adopted it from a fresh local state without duplication. On 2026-07-27, plan
+identity/privacy/region mismatch tests and ambiguous-create resume tests. The original
+isolated-account canary created the GitHub/Vercel/Neon tranche once, kept its IDs on
+completed-state resume and adopted it from a fresh local state without duplication. On
+2026-07-27, plan
 `7a7be8babbdb8240ca34e7855bff008cf7f4302b85b0dbfd6797cd771afb0770` extended that proof to R2:
 the EU/private bucket `void-starter-canary-20260725` (`f520e89b2e934d96a7b4275140e122b7`)
 passed the object round trip, Vercel adopted binding `ERMGEG72S7cCdvST`, completed-state resume kept
 all attempt counters unchanged, and a fresh state adopted the same six resources with one attempt
 per action. Both state files remained mode `0600` and secret-free.
+
+The Sentry canary then passed with plan
+`7cacd9647fd4dd1188fadb68ee783d0a144753589cedcbafa4e27622b59577e0`. It adopted those same six
+resources, created DE project `4511807245516880`, selected client key
+`55f31207fd9b8307ee94f6a34bd79741`, stopped at the expected missing-build-token boundary, and
+resumed to Vercel binding `hHSyb6KDUXFU6K7I`. A completed-state resume preserved attempt counters
+`1,1,1,1,1,1,1,2`; a fresh local state adopted the same eight IDs with one attempt each. Both
+receipts passed `doctor`, remained mode `0600`, and matched none of the eight provider credentials
+or the public DSN.
 
 ### 10.4 Initial source publication
 
@@ -841,8 +849,8 @@ be proven locally.
     complete CI and protected Production smoke passed.**
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2 is
     implemented, contract-tested and live-validated through creation, resume and stateless
-    adoption; Sentry is implemented and contract-tested with its isolated live canary pending;
-    PostHog and DNS remain.**
+    adoption; Sentry is implemented, contract-tested and live-validated through two-phase resume
+    and stateless adoption; PostHog and DNS remain.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.

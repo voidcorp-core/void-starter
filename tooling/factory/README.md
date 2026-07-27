@@ -69,8 +69,9 @@ that selects one of them without web is rejected instead of producing a misleadi
 integration. Resend is live-validated. R2 has a deterministic provider plan, resumable live
 adapter, private-domain checks, object canary and Vercel secret binding; creation, completed-state
 resume and fresh-state adoption have passed against the isolated sandbox. Sentry project creation,
-DE-region attestation, deterministic client-key selection and Vercel binding are contract-tested;
-the isolated live canary remains pending. DNS remains a planned provider capability.
+DE-region attestation, deterministic client-key selection, two-phase Vercel binding, completed-state
+resume and fresh-state adoption have also passed against the isolated sandbox. DNS remains a
+planned provider capability.
 
 To materialize the Expo blueprint in a temporary directory, install it, type-check it, and export
 the iOS, Android, and web bundles:
@@ -172,9 +173,9 @@ and `SENTRY_PROJECT`.
 
 An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
 that create blindly. Live contract tests use mocked HTTP providers. The GitHub, Vercel and Neon
-tranche and the R2 extension passed creation, completed-state resume and stateless adoption
-against isolated sandbox accounts. Sentry currently has local HTTP-contract proof only. The R2
-canary also proved the two-phase least-privilege flow:
+tranche, the R2 extension and the Sentry extension passed creation, completed-state resume and
+stateless adoption against isolated sandbox accounts. The R2 canary proved the two-phase
+least-privilege flow:
 create and validate the private bucket with the control token, then bind exact-bucket runtime
 credentials on resume.
 
