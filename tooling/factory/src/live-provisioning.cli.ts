@@ -12,7 +12,7 @@ export const liveProvisioningUsage = `Usage:
   bun run resume:live -- <generated-project-directory> <context.yaml|context.json> --confirm-project <project-name>
 
 Credentials are read from GITHUB_TOKEN and, when selected, VERCEL_TOKEN, NEON_API_KEY,
-CLOUDFLARE_API_TOKEN and SENTRY_API_TOKEN. R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are optional
+CLOUDFLARE_API_TOKEN, SENTRY_API_TOKEN and POSTHOG_PERSONAL_API_KEY. R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are optional
 until the R2 runtime binding action; omit both to create the bucket first, then provide a
 bucket-scoped pair on resume. SENTRY_BUILD_AUTH_TOKEN is likewise optional until the Sentry runtime
 binding action; omit it to create the DE project first, then provide a release-upload token on resume.

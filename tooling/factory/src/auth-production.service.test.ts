@@ -47,6 +47,7 @@ const providerContext: ProvisioningContext = {
   neon: { org_id: 'org-example', region_id: 'aws-eu-central-1' },
   cloudflare: { account_id: '0123456789abcdef0123456789abcdef' },
   sentry: { organization_slug: 'void-sandbox', team_slug: 'platform', region: 'de' },
+  posthog: { organization_id: '123e4567-e89b-42d3-a456-426614174000', region: 'eu' },
 };
 
 const authContext = parseAuthProductionContext({
@@ -243,6 +244,28 @@ async function createReadyProject(): Promise<string> {
           'SENTRY_ORG',
           'SENTRY_PROJECT',
         ],
+      },
+    ],
+    [
+      'posthog.project',
+      {
+        provider: 'posthog',
+        resource_kind: 'project',
+        resource_id: '42',
+        display_name: 'example-saas',
+        organization_id: '123e4567-e89b-42d3-a456-426614174000',
+        region: 'eu',
+        project_api_key_sha256: 'c'.repeat(64),
+      },
+    ],
+    [
+      'vercel.posthog-binding',
+      {
+        provider: 'vercel',
+        resource_kind: 'posthog-binding',
+        resource_id: 'env_posthog',
+        display_name: 'PostHog runtime binding',
+        bound_keys: ['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'],
       },
     ],
   ]);

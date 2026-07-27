@@ -314,8 +314,8 @@ Local capability composition currently handles:
 
 The selected capability set also produces a deterministic `.env.example`; it contains placeholders
 only, never secret values. Better Auth, Clerk, PostHog, Sentry and Resend are currently web
-adapters, so selecting them without a Next.js surface is rejected. R2 and Sentry have guarded live
-provider adapters; DNS remains provider-plan intent. Resend's local adapter is materialized while
+adapters, so selecting them without a Next.js surface is rejected. R2, Sentry and PostHog have
+guarded live provider adapters; DNS remains provider-plan intent. Resend's local adapter is materialized while
 its remote account/domain and secret binding remain a later lifecycle.
 
 ### 10.2 Provisioning context
@@ -345,6 +345,10 @@ sentry:
   organization_slug: void-sandbox
   team_slug: platform
   region: de
+
+posthog:
+  organization_id: 019d9316-714e-0000-01c7-e9a08d38242b
+  region: eu
 ```
 
 This strict document accepts no credentials. Owner, team and organization IDs are explicit so the
@@ -394,8 +398,8 @@ persist the returned opaque provider ID before advancing. See the official
 
 The authenticated adapter covers GitHub repository, Vercel project, Neon project, the Vercel
 `DATABASE_URL` binding, a private EU-jurisdiction Cloudflare R2 bucket and its Vercel runtime
-binding, plus a DE Sentry project and its Vercel runtime/build binding. Credentials exist only in
-process memory:
+binding, a DE Sentry project and its Vercel runtime/build binding, plus an EU PostHog project and
+its Vercel runtime binding. Credentials exist only in process memory:
 
 ```sh
 export GITHUB_TOKEN=...
@@ -403,6 +407,7 @@ export VERCEL_TOKEN=...
 export NEON_API_KEY=...
 export CLOUDFLARE_API_TOKEN=...
 export SENTRY_API_TOKEN=...
+export POSTHOG_PERSONAL_API_KEY=...
 
 bun run preflight:live -- \
   /absolute/path/to/new-project \
@@ -411,8 +416,9 @@ bun run preflight:live -- \
 
 The preflight performs only authenticated reads. It verifies the GitHub user or active
 organization membership, exact Vercel team ID, accessible Neon organization ID, accessible
-Cloudflare R2 account/jurisdiction, and an active Sentry organization in `de.sentry.io` with access
-to the exact team. It creates no state and performs no mutation. For an organization owner, the
+Cloudflare R2 account/jurisdiction, an active Sentry organization in `de.sentry.io` with access to
+the exact team, and the exact PostHog organization through `eu.posthog.com`. It creates no state
+and performs no mutation. For an organization owner, the
 fine-grained GitHub token requires
 `Organization permissions > Members: Read-only` so the factory can verify the exact membership
 through `GET /user/memberships/orgs/{org}`. Personal-account owners do not require this permission.
@@ -472,6 +478,17 @@ can complete while `vercel.sentry-binding` records retryable
 Sensitive for Preview/Production and encrypted for Development. A plain
 `VOID_STARTER_SENTRY_BINDING_ID` marker proves ownership without persisting any secret value.
 
+For PostHog, the strict context fixes region `eu` and the exact organization ID. The personal
+control key requires only `organization:read`, `project:read` and `project:write`. Lookup searches
+every result page for one exact project name before any create, and ambiguous creates are never
+repeated. State stores the project ID, organization/name/region attestation and only a SHA-256 of
+the public project key. The key is re-read and matched to that digest before Vercel receives
+encrypted `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST=/ingest` values for all three
+targets. A plain `VOID_STARTER_POSTHOG_BINDING_ID` marker proves binding ownership. PostHog Cloud
+currently returns organization IDs in a UUID-shaped 36-character hexadecimal form that does not
+always carry an RFC UUID version/variant, so validation follows the observed provider contract
+without accepting arbitrary strings.
+
 The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
 identity/privacy/region mismatch tests and ambiguous-create resume tests. The original
 isolated-account canary created the GitHub/Vercel/Neon tranche once, kept its IDs on
@@ -491,6 +508,15 @@ resumed to Vercel binding `hHSyb6KDUXFU6K7I`. A completed-state resume preserved
 `1,1,1,1,1,1,1,2`; a fresh local state adopted the same eight IDs with one attempt each. Both
 receipts passed `doctor`, remained mode `0600`, and matched none of the eight provider credentials
 or the public DSN.
+
+The PostHog canary passed with plan
+`9d7a61823147d36f96447c98243cf0a8cab052f00b4e2b9b4e516b6c0a691617`. It adopted those same eight
+resources, created EU project `233588`, and bound Vercel marker `KHP1Sghuyxh0KK7M`. The first
+reconciliation exposed the non-RFC organization-ID shape described above; after tightening the
+provider-specific validator, resume adopted the already-created project instead of issuing a
+second create. Completed-state resume preserved attempts `1,1,1,1,1,1,1,1,2,1`; a fresh local
+state adopted the same ten IDs with one attempt each. Both receipts passed `doctor`, remained mode
+`0600`, and matched none of the nine provider credentials, Sentry DSN or PostHog project key.
 
 ### 10.4 Initial source publication
 
@@ -850,7 +876,8 @@ be proven locally.
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2 is
     implemented, contract-tested and live-validated through creation, resume and stateless
     adoption; Sentry is implemented, contract-tested and live-validated through two-phase resume
-    and stateless adoption; PostHog and DNS remain.**
+    and stateless adoption; PostHog is implemented, contract-tested and live-validated through
+    guarded resume and stateless adoption; DNS remains.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.

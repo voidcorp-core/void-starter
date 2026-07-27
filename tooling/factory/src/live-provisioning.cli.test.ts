@@ -54,6 +54,9 @@ sentry:
   organization_slug: void-sandbox
   team_slug: platform
   region: de
+posthog:
+  organization_id: 123e4567-e89b-42d3-a456-426614174000
+  region: eu
 `,
       'utf8',
     );
@@ -96,6 +99,9 @@ sentry:
           organization: { slug: 'void-sandbox' },
         });
       }
+      if (url.pathname === '/api/organizations/123e4567-e89b-42d3-a456-426614174000/') {
+        return jsonResponse({ id: '123e4567-e89b-42d3-a456-426614174000' });
+      }
       throw new Error(`Unexpected preflight request: ${url.toString()}`);
     };
     const environment = {
@@ -104,6 +110,7 @@ sentry:
       NEON_API_KEY: 'neon-secret',
       CLOUDFLARE_API_TOKEN: 'cloudflare-secret',
       SENTRY_API_TOKEN: 'sentry-secret',
+      POSTHOG_PERSONAL_API_KEY: 'posthog-secret',
       R2_ACCESS_KEY_ID: 'r2-access-key',
       R2_SECRET_ACCESS_KEY: 'r2-secret-key',
     };
@@ -117,9 +124,9 @@ sentry:
     ).resolves.toMatchObject({
       ok: true,
       mode: 'live-preflight',
-      providers: ['cloudflare', 'github', 'neon', 'sentry', 'vercel'],
+      providers: ['cloudflare', 'github', 'neon', 'posthog', 'sentry', 'vercel'],
     });
-    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'GET']);
+    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'GET']);
     await expect(
       readFile(join(projectRoot, '.void-starter/apply-state.json'), 'utf8'),
     ).rejects.toThrow();

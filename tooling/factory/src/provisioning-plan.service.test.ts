@@ -34,10 +34,14 @@ const fullContext = {
     team_slug: 'platform',
     region: 'de',
   },
+  posthog: {
+    organization_id: '123e4567-e89b-42d3-a456-426614174000',
+    region: 'eu',
+  },
 } as const;
 
 describe('createProvisioningPlan', () => {
-  it('plans GitHub, Vercel, Neon, R2, Sentry, and their bindings deterministically', () => {
+  it('plans GitHub, Vercel, Neon, R2, Sentry, PostHog, and their bindings deterministically', () => {
     const manifest = parseBuildManifest(canonicalManifest);
     const context = parseProvisioningContext(fullContext);
 
@@ -54,6 +58,8 @@ describe('createProvisioningPlan', () => {
       'vercel.r2-binding',
       'sentry.project',
       'vercel.sentry-binding',
+      'posthog.project',
+      'vercel.posthog-binding',
     ]);
     expect(
       first.actions.every((action) => action.idempotency_key.startsWith('void-starter:v1:')),
@@ -73,6 +79,11 @@ describe('createProvisioningPlan', () => {
       input: { region: 'de', platform: 'javascript-nextjs' },
     });
     expect(first.actions[7]?.depends_on).toEqual(['vercel.project', 'sentry.project']);
+    expect(first.actions[8]).toMatchObject({
+      provider: 'posthog',
+      input: { region: 'eu', name: 'example-saas' },
+    });
+    expect(first.actions[9]?.depends_on).toEqual(['vercel.project', 'posthog.project']);
   });
 
   it('plans only resources selected by each surface and capability profile', () => {
@@ -134,6 +145,12 @@ describe('createProvisioningPlan', () => {
     });
     expect(() => createProvisioningPlan(manifest, contextWithoutSentry)).toThrow(/Sentry/);
 
+    const contextWithoutPosthog = parseProvisioningContext({
+      ...fullContext,
+      posthog: undefined,
+    });
+    expect(() => createProvisioningPlan(manifest, contextWithoutPosthog)).toThrow(/PostHog/);
+
     expect(() =>
       parseProvisioningContext({
         ...fullContext,
@@ -173,5 +190,20 @@ vercel:
         sentry: { ...fullContext.sentry, region: 'us' },
       }),
     ).toThrow();
+    expect(() =>
+      parseProvisioningContext({
+        ...fullContext,
+        posthog: { ...fullContext.posthog, region: 'us' },
+      }),
+    ).toThrow();
+    expect(
+      parseProvisioningContext({
+        ...fullContext,
+        posthog: {
+          organization_id: '019d9316-714e-0000-01c7-e9a08d38242b',
+          region: 'eu',
+        },
+      }).posthog?.organization_id,
+    ).toBe('019d9316-714e-0000-01c7-e9a08d38242b');
   });
 });
