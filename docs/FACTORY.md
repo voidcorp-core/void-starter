@@ -831,6 +831,51 @@ copying runtime plugins into that dependency-free directory makes provider initi
 on modules that do not belong to the provisioning boundary. Failed CLI output is now redacted in
 memory for operator diagnosis while persisted failures remain generic and secret-free.
 
+### 10.9 Guarded EAS environments and native builds
+
+Native builds are a separate cost- and credential-bearing lifecycle. Its strict, non-secret
+context selects one generated EAS profile and one or two platforms, declares required variable
+metadata, attests remote signing readiness and store memberships, and freezes an operator-approved
+USD envelope. The reference fixture intentionally keeps signing unready, so it is safe to plan and
+preflight but cannot start a build as-is:
+
+```sh
+bun run eas-build:plan -- \
+  /absolute/path/to/generated-project \
+  fixtures/eas/native-build.yaml
+
+EXPO_TOKEN=... bun run eas-build:preflight -- \
+  /absolute/path/to/generated-project \
+  fixtures/eas/native-build.yaml
+```
+
+The plan requires the exact succeeded EAS-project and source-publication receipts and binds their
+project UUID, source commit and digest to the immutable generated `apps/mobile/eas.json`. Preflight
+reads the account, linked project, selected EAS environment and build history. It compares only
+variable name, visibility and type; values are discarded and never enter output or receipts.
+Signing readiness blocks every selected platform. Production builds additionally require an
+active membership attestation for the corresponding Apple or Google Play store.
+
+Once the non-secret attestations are true and the variables exist, live execution requires three
+exact confirmations:
+
+```sh
+EXPO_TOKEN=... bun run eas-build:live -- \
+  /absolute/path/to/generated-project \
+  /absolute/path/to/eas-build-context.yaml \
+  --confirm-project web-expo \
+  --confirm-build-count 2 \
+  --approve-max-charge-usd 25
+```
+
+The USD value is an explicit human approval boundary, not a provider-enforced spending cap. Each
+platform is started separately with pinned `eas-cli@21.2.0`, `--freeze-credentials`,
+`--non-interactive`, `--no-wait` and a unique plan-digest message. Automatic store submission is
+never enabled. The message lets `eas-build:resume` adopt a build created before an ambiguous CLI
+failure without paying for a duplicate. `.void-starter/eas-build-state.json` is atomic, mode
+`0600`, source-excluded and secret-free; it remains `running` while builds are queued or active,
+becomes `succeeded` only when every exact build is `FINISHED`, and is verified by `doctor`.
+
 ## 11. Lifecycle
 
 ```text
@@ -913,7 +958,9 @@ be proven locally.
 9. Finish Better Auth production onboarding and explicit bootstrap/seed. **Done; guarded binding,
    Resend delivery, redeployment, magic-link session and exact-email admin access passed live.**
 10. Add optional Expo/EAS surface. **Done; isolated project creation, guarded link publication,
-    complete CI and protected Production smoke passed.**
+    deterministic native-build plan/preflight/resume lifecycle, complete CI and protected
+    Production smoke passed. Native execution remains intentionally blocked until signing,
+    memberships and cost are explicitly approved.**
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2 is
     implemented, contract-tested and live-validated through creation, resume and stateless
     adoption; Sentry is implemented, contract-tested and live-validated through two-phase resume
@@ -930,8 +977,8 @@ be proven locally.
 ## 15. Open decisions
 
 - CLI/package name and distribution model.
-- Secret binding model for EAS build environments and GitHub Actions; EAS project provisioning
-  needs only process-memory `EXPO_TOKEN`, while Vercel production auth/database binding is defined.
+- GitHub Actions secret-binding policy for unattended EAS builds; the local lifecycle now reads EAS
+  environment metadata and keeps `EXPO_TOKEN` in process memory only.
 - Exact provider rollback guarantees.
 - Expo/React version alignment policy in the workspace.
 - Boundary for future post-generation transformations beyond the receipt-owned EAS link overlay.

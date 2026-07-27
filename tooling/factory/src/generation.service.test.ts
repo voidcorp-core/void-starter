@@ -165,7 +165,7 @@ async function createBaseline() {
   await writeFile(join(sourceRoot, '.env.example'), 'PUBLIC_VALUE=\n', 'utf8');
   await writeFile(
     join(sourceRoot, '.gitignore'),
-    '.void-starter/apply-state.json\n.void-starter/apply.lock\n.void-starter/source-state.json\n.void-starter/source.lock\n.void-starter/migration-state.json\n.void-starter/migration.lock\n.void-starter/delivery-state.json\n.void-starter/delivery.lock\n.void-starter/auth-state.json\n.void-starter/auth.lock\n.void-starter/eas-state.json\n.void-starter/eas.lock\n',
+    '.void-starter/apply-state.json\n.void-starter/apply.lock\n.void-starter/source-state.json\n.void-starter/source.lock\n.void-starter/migration-state.json\n.void-starter/migration.lock\n.void-starter/delivery-state.json\n.void-starter/delivery.lock\n.void-starter/auth-state.json\n.void-starter/auth.lock\n.void-starter/eas-state.json\n.void-starter/eas.lock\n.void-starter/eas-build-state.json\n.void-starter/eas-build.lock\n',
     'utf8',
   );
   await writeFile(join(sourceRoot, 'bun.lock'), '"@repo/factory"\n', 'utf8');
@@ -242,6 +242,8 @@ describe('renderProject', () => {
     expect(rootGitignore).toContain('.void-starter/auth.lock');
     expect(rootGitignore).toContain('.void-starter/eas-state.json');
     expect(rootGitignore).toContain('.void-starter/eas.lock');
+    expect(rootGitignore).toContain('.void-starter/eas-build-state.json');
+    expect(rootGitignore).toContain('.void-starter/eas-build.lock');
 
     const rootKnip = JSON.parse(await readFile(join(targetRoot, 'knip.json'), 'utf8'));
     expect(rootKnip.workspaces).not.toHaveProperty('tooling/*');

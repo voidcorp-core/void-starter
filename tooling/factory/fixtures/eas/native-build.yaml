@@ -1,0 +1,32 @@
+schema_version: 1
+profile: preview
+platforms:
+  - android
+  - ios
+environment:
+  required:
+    - name: EXPO_PUBLIC_API_URL
+      visibility: plaintext
+      type: string
+signing:
+  android:
+    owner: void-sandbox
+    credentials_source: remote
+    credentials_ready: false
+  ios:
+    owner: void-sandbox
+    credentials_source: remote
+    credentials_ready: false
+    apple_team_id: null
+store_memberships:
+  apple:
+    status: missing
+    team_id: null
+    role: none
+  google_play:
+    status: missing
+    role: none
+cost:
+  maximum_builds: 2
+  maximum_provider_charge_usd: 25
+  paid_builds: explicit-approval-required

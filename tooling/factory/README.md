@@ -236,10 +236,14 @@ short-lived askpass helper with credential storage disabled; neither the token n
 remote URL is persisted. Existing `main` is adopted only when both its source marker and exact Git
 tree match. `source:resume` safely reconciles an ambiguous push.
 
-Generated Expo projects keep their EAS profiles but invoke the pinned operational CLI on demand
-with `bun run eas:build`; `eas-cli` is not installed in the application dependency graph. After
-source publication, `doctor` accepts the lifecycle-owned `.git` metadata only while the source
-receipt remains structurally valid and matches the current snapshot.
+Generated Expo projects keep their EAS profiles but invoke the pinned operational CLI on demand;
+`eas-cli` is not installed in the application dependency graph. Project creation uses
+`eas:plan|preflight|live|resume`. Native execution uses the separate
+`eas-build:plan|preflight|live|resume` lifecycle, which binds the exact published source and EAS
+project, reads variable metadata without persisting values, freezes remote credentials, requires
+an exact cost confirmation, disables auto-submit and reconciles builds by a plan-digest message.
+After source publication, `doctor` accepts lifecycle-owned metadata only while the source receipt
+remains structurally valid and matches the current snapshot.
 
 Factory-managed revisions use a fresh generated target that has adopted the existing provider
 resources. The update preflight requires the current remote HEAD to carry a Void Starter source

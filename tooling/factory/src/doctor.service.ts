@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { readAuthProductionState, validateAuthProductionState } from './auth-production.service';
 import { createProjectFilePlan } from './capability-composition.service';
 import { readDeliveryState, validateDeliveryState } from './delivery.service';
+import { readEasNativeBuildState, validateEasNativeBuildState } from './eas-native-build.service';
 import { readEasProjectState, validateEasProjectState } from './eas-project.service';
 import { createCompositionPlan, parseBuildManifest } from './factory.service';
 import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
@@ -347,6 +348,29 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
     const message = error instanceof Error ? error.message : String(error);
     checks.push(
       createCheck('eas-project-state', false, `EAS project state is invalid: ${message}`),
+    );
+  }
+
+  try {
+    const easBuildState = await readEasNativeBuildState(projectRoot);
+    if (!easBuildState) {
+      checks.push(
+        createCheck('eas-native-build-state', true, 'No EAS native build state is recorded'),
+      );
+    } else {
+      await validateEasNativeBuildState(easBuildState, receipt.manifest_sha256, projectRoot);
+      checks.push(
+        createCheck(
+          'eas-native-build-state',
+          easBuildState.status === 'succeeded',
+          `EAS native build state is structurally valid and ${easBuildState.status}`,
+        ),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push(
+      createCheck('eas-native-build-state', false, `EAS native build state is invalid: ${message}`),
     );
   }
 
