@@ -194,6 +194,9 @@ describe('createCompositionPlan', () => {
           errors: 'sentry',
         },
       },
+      {
+        dns: { provider: 'cloudflare' },
+      },
     ]) {
       expect(() =>
         parseBuildManifest({

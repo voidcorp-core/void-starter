@@ -286,7 +286,13 @@ runtime uniquement si le sandbox doit continuer à accéder au bucket.
 
 ## Suite globale
 
-1. Ajouter DNS; R2, Resend, Sentry, PostHog et le projet EAS sont terminés.
+L’adaptateur Cloudflare DNS est désormais implémenté et contract-testé sur la branche dédiée. Il
+ajoute le domaine projet Vercel puis un CNAME DNS-only possédé par commentaire, matérialise les
+challenges TXT Vercel, attend `verified=true` et `misconfigured=false`, reprend la propagation sans
+recréation et refuse les enregistrements étrangers, les upgrades payants et tout changement de
+nameserver. Le canari live sur une zone isolée reste à exécuter avant de clore `DEV-469`.
+
+1. Valider DNS en live; R2, Resend, Sentry, PostHog et le projet EAS sont terminés.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du

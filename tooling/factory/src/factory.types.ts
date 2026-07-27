@@ -172,6 +172,14 @@ export const buildManifestSchema = z
         message: 'The current error-reporting adapter requires the Next.js web surface',
       });
     }
+
+    if (!hasWeb && manifest.dns.provider !== 'none') {
+      context.addIssue({
+        code: 'custom',
+        path: ['dns', 'provider'],
+        message: 'The current DNS adapter requires the Next.js web surface',
+      });
+    }
   });
 
 export type BuildManifest = z.infer<typeof buildManifestSchema>;

@@ -22,6 +22,9 @@ const connectionUri =
 const sentryDsn = 'https://public-key@o123.ingest.de.sentry.io/456';
 const posthogProjectKey = 'phc_posthog-project-public-key';
 const posthogOrganizationId = '019d9316-714e-0000-01c7-e9a08d38242b';
+const cloudflareZoneId = 'fedcba9876543210fedcba9876543210';
+const projectHostname = 'example-saas.example.com';
+const vercelDnsTarget = 'example.vercel-dns-017.com';
 
 type RecordedRequest = {
   method: string;
@@ -63,6 +66,22 @@ class MockProviderApi {
   posthogOrganizationAccessible = true;
   failPosthogCreateWithNetwork = false;
   failPosthogBindingWithNetwork = false;
+  vercelDomainExists = false;
+  vercelDomainVerified = true;
+  dnsPropagationPending = false;
+  failVercelDomainCreateWithNetwork = false;
+  vercelDomainNeedsUpgrade = false;
+  failDnsCreateWithNetwork = false;
+  cloudflareZoneAccessible = true;
+  readonly dnsRecords: Array<{
+    id: string;
+    type: 'CNAME' | 'TXT';
+    name: string;
+    content: string;
+    ttl: number;
+    proxied: boolean;
+    comment: string | null;
+  }> = [];
   readonly requests: RecordedRequest[] = [];
 
   readonly fetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -138,6 +157,79 @@ class MockProviderApi {
     ) {
       this.vercelProjectExists = true;
       return jsonResponse({}, 201);
+    }
+    if (
+      url.hostname === 'api.vercel.com' &&
+      url.pathname === `/v9/projects/prj_example/domains/${projectHostname}` &&
+      method === 'GET'
+    ) {
+      return this.vercelDomainExists
+        ? jsonResponse({
+            name: projectHostname,
+            apexName: 'example.com',
+            projectId: 'prj_example',
+            verified: this.vercelDomainVerified,
+            verification: this.vercelDomainVerified
+              ? []
+              : [
+                  {
+                    type: 'TXT',
+                    domain: `_vercel.${projectHostname}`,
+                    value: 'vc-domain-verify=example-saas.example.com,mock-token',
+                  },
+                ],
+          })
+        : jsonResponse({}, 404);
+    }
+    if (
+      url.hostname === 'api.vercel.com' &&
+      url.pathname === '/v10/projects/prj_example/domains' &&
+      method === 'POST'
+    ) {
+      if (this.vercelDomainNeedsUpgrade) {
+        return jsonResponse({ error: { code: 'custom_domain_needs_upgrade' } }, 403);
+      }
+      if (this.failVercelDomainCreateWithNetwork) {
+        throw new Error('mocked ambiguous Vercel domain network failure');
+      }
+      this.vercelDomainExists = true;
+      return jsonResponse({}, 200);
+    }
+    if (
+      url.hostname === 'api.vercel.com' &&
+      url.pathname === `/v6/domains/${projectHostname}/config` &&
+      method === 'GET'
+    ) {
+      const routingRecord = this.dnsRecords.find(
+        (record) =>
+          record.type === 'CNAME' &&
+          record.name === projectHostname &&
+          record.content === vercelDnsTarget,
+      );
+      return jsonResponse({
+        configuredBy: routingRecord ? 'CNAME' : null,
+        recommendedCNAME: [
+          { rank: 1, value: `${vercelDnsTarget}.` },
+          { rank: 2, value: 'cname.vercel-dns.com.' },
+        ],
+        misconfigured: this.dnsPropagationPending || !routingRecord,
+      });
+    }
+    if (
+      url.hostname === 'api.vercel.com' &&
+      url.pathname === `/v9/projects/prj_example/domains/${projectHostname}/verify` &&
+      method === 'POST'
+    ) {
+      const verificationRecord = this.dnsRecords.find(
+        (record) =>
+          record.type === 'TXT' &&
+          record.name === `_vercel.${projectHostname}` &&
+          record.content === 'vc-domain-verify=example-saas.example.com,mock-token',
+      );
+      if (verificationRecord) {
+        this.vercelDomainVerified = true;
+      }
+      return this.vercelDomainVerified ? jsonResponse({}, 200) : jsonResponse({}, 400);
     }
     if (url.hostname === 'api.vercel.com' && url.pathname === '/v9/projects/prj_example/env') {
       const envs = [
@@ -311,6 +403,76 @@ class MockProviderApi {
       url.pathname === '/api/v2/projects/neon-example/connection_uri'
     ) {
       return jsonResponse({ uri: connectionUri });
+    }
+
+    const dnsBase = `/client/v4/zones/${cloudflareZoneId}`;
+    if (url.hostname === 'api.cloudflare.com' && url.pathname === dnsBase && method === 'GET') {
+      return this.cloudflareZoneAccessible
+        ? jsonResponse({
+            success: true,
+            result: {
+              id: cloudflareZoneId,
+              name: 'example.com',
+              account: { id: '0123456789abcdef0123456789abcdef' },
+              status: 'active',
+              type: 'full',
+              paused: false,
+            },
+          })
+        : jsonResponse({}, 404);
+    }
+    if (
+      url.hostname === 'api.cloudflare.com' &&
+      url.pathname === `${dnsBase}/dns_records` &&
+      method === 'GET'
+    ) {
+      const type = url.searchParams.get('type');
+      const name = url.searchParams.get('name');
+      return jsonResponse({
+        success: true,
+        result: this.dnsRecords
+          .filter((record) => record.type === type && record.name === name)
+          .map((record) => ({
+            ...record,
+            zone_id: cloudflareZoneId,
+            zone_name: 'example.com',
+          })),
+      });
+    }
+    if (
+      url.hostname === 'api.cloudflare.com' &&
+      url.pathname === `${dnsBase}/dns_records` &&
+      method === 'POST'
+    ) {
+      if (this.failDnsCreateWithNetwork) {
+        throw new Error('mocked ambiguous DNS network failure');
+      }
+      const input = body as {
+        type: 'CNAME' | 'TXT';
+        name: string;
+        content: string;
+        ttl: number;
+        proxied: boolean;
+        comment: string;
+      };
+      const record = {
+        id: `dns_${this.dnsRecords.length + 1}`,
+        type: input.type,
+        name: input.name,
+        content: input.content.replace(/\.$/, ''),
+        ttl: input.ttl,
+        proxied: input.proxied,
+        comment: input.comment,
+      };
+      this.dnsRecords.push(record);
+      return jsonResponse({
+        success: true,
+        result: {
+          ...record,
+          zone_id: cloudflareZoneId,
+          zone_name: 'example.com',
+        },
+      });
     }
 
     const r2Base = '/client/v4/accounts/0123456789abcdef0123456789abcdef/r2/buckets';
@@ -549,6 +711,13 @@ const context = parseProvisioningContext({
     organization_id: posthogOrganizationId,
     region: 'eu',
   },
+  dns: {
+    provider: 'cloudflare',
+    account_id: '0123456789abcdef0123456789abcdef',
+    zone_id: cloudflareZoneId,
+    zone_name: 'example.com',
+    hostname: projectHostname,
+  },
 });
 
 const credentials = {
@@ -612,8 +781,10 @@ describe('LiveProvisioningAdapter', () => {
       'env_sentry_marker',
       '42',
       'env_posthog_marker',
+      `prj_example:${projectHostname}`,
+      'dns_1',
     ]);
-    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(10);
+    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(12);
     expect(provider.requests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
       true,
     );
@@ -716,6 +887,26 @@ describe('LiveProvisioningAdapter', () => {
         request.url.pathname === `/api/organizations/${posthogOrganizationId}/projects/`,
     );
     expect(posthogCreateRequest?.body).toEqual({ name: 'example-saas' });
+
+    const projectDomainRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' && request.url.pathname === '/v10/projects/prj_example/domains',
+    );
+    expect(projectDomainRequest?.body).toEqual({ name: projectHostname });
+
+    const dnsRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' &&
+        request.url.pathname === `/client/v4/zones/${cloudflareZoneId}/dns_records`,
+    );
+    expect(dnsRequest?.body).toEqual({
+      type: 'CNAME',
+      name: projectHostname,
+      content: vercelDnsTarget,
+      ttl: 60,
+      proxied: false,
+      comment: expect.stringMatching(/^void-starter:v1:[a-f0-9]{64}$/),
+    });
 
     const r2EnvironmentRequest = provider.requests.find(
       (request) =>
@@ -848,6 +1039,18 @@ describe('LiveProvisioningAdapter', () => {
     );
     if (!posthogBindingAction) throw new Error('Expected PostHog binding action');
     provider.posthogBindingMarker = posthogBindingAction.idempotency_key;
+    provider.vercelDomainExists = true;
+    const dnsAction = project.plan.actions.find((action) => action.id === 'cloudflare.dns-record');
+    if (!dnsAction) throw new Error('Expected DNS record action');
+    provider.dnsRecords.push({
+      id: 'dns_existing',
+      type: 'CNAME',
+      name: projectHostname,
+      content: vercelDnsTarget,
+      ttl: 60,
+      proxied: false,
+      comment: dnsAction.idempotency_key,
+    });
 
     const state = await applyProvisioning({
       projectRoot: project.root,
@@ -860,6 +1063,210 @@ describe('LiveProvisioningAdapter', () => {
 
     expect(state.status).toBe('succeeded');
     expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
+  });
+
+  it('publishes Vercel ownership verification and the routing CNAME with owned comments', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.vercelDomainVerified = false;
+
+    const state = await applyProvisioning({
+      projectRoot: project.root,
+      plan: project.plan,
+      adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+    });
+
+    expect(state.status).toBe('succeeded');
+    expect(provider.vercelDomainVerified).toBe(true);
+    expect(provider.dnsRecords).toHaveLength(2);
+    expect(provider.dnsRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'CNAME',
+          name: projectHostname,
+          content: vercelDnsTarget,
+          ttl: 60,
+          proxied: false,
+          comment: expect.stringMatching(/^void-starter:v1:[a-f0-9]{64}$/),
+        }),
+        expect.objectContaining({
+          type: 'TXT',
+          name: `_vercel.${projectHostname}`,
+          content: 'vc-domain-verify=example-saas.example.com,mock-token',
+          comment: expect.stringMatching(/:verification:1$/),
+        }),
+      ]),
+    );
+    expect(
+      state.actions.find((action) => action.action_id === 'cloudflare.dns-record')?.resource,
+    ).toMatchObject({
+      propagation: 'verified',
+      project_domain_verified: true,
+      verification_record_ids: ['dns_2'],
+      nameserver_change: false,
+      estimated_monthly_cost_eur: 0,
+      rollback_boundary: 'manual-owned-record-then-project-domain',
+    });
+    expect(provider.requests.some((request) => request.url.pathname.includes('nameserver'))).toBe(
+      false,
+    );
+  });
+
+  it('resumes propagation without recreating the Vercel domain or Cloudflare record', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.dnsPropagationPending = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(project.root))?.actions.find(
+        (action) => action.action_id === 'cloudflare.dns-record',
+      ),
+    ).toMatchObject({
+      attempts: 1,
+      status: 'failed',
+      error: { code: 'VERCEL_DNS_PROPAGATION_PENDING', retryable: true },
+    });
+
+    provider.dnsPropagationPending = false;
+    const resumed = await applyProvisioning({
+      projectRoot: project.root,
+      plan: project.plan,
+      adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      requireExistingState: true,
+    });
+    expect(resumed.status).toBe('succeeded');
+    expect(
+      resumed.actions.find((action) => action.action_id === 'cloudflare.dns-record'),
+    ).toMatchObject({ attempts: 2, status: 'succeeded' });
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' && request.url.pathname === '/v10/projects/prj_example/domains',
+      ),
+    ).toHaveLength(1);
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.pathname === `/client/v4/zones/${cloudflareZoneId}/dns_records`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('never repeats ambiguous domain or DNS creates and rejects foreign DNS ownership', async () => {
+    const domainProject = await createGeneratedProject();
+    const domainProvider = new MockProviderApi();
+    domainProvider.failVercelDomainCreateWithNetwork = true;
+    await expect(
+      applyProvisioning({
+        projectRoot: domainProject.root,
+        plan: domainProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: domainProvider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    await expect(
+      applyProvisioning({
+        projectRoot: domainProject.root,
+        plan: domainProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: domainProvider.fetch }),
+        requireExistingState: true,
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      domainProvider.requests.filter(
+        (request) =>
+          request.method === 'POST' && request.url.pathname === '/v10/projects/prj_example/domains',
+      ),
+    ).toHaveLength(1);
+
+    const dnsProject = await createGeneratedProject();
+    const dnsProvider = new MockProviderApi();
+    dnsProvider.failDnsCreateWithNetwork = true;
+    await expect(
+      applyProvisioning({
+        projectRoot: dnsProject.root,
+        plan: dnsProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: dnsProvider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    await expect(
+      applyProvisioning({
+        projectRoot: dnsProject.root,
+        plan: dnsProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: dnsProvider.fetch }),
+        requireExistingState: true,
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      dnsProvider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.pathname === `/client/v4/zones/${cloudflareZoneId}/dns_records`,
+      ),
+    ).toHaveLength(1);
+
+    const conflictProject = await createGeneratedProject();
+    const conflictProvider = new MockProviderApi();
+    conflictProvider.dnsRecords.push({
+      id: 'dns_foreign',
+      type: 'CNAME',
+      name: projectHostname,
+      content: vercelDnsTarget,
+      ttl: 60,
+      proxied: false,
+      comment: 'managed-by-someone-else',
+    });
+    await expect(
+      applyProvisioning({
+        projectRoot: conflictProject.root,
+        plan: conflictProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: conflictProvider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(conflictProject.root))?.actions.find(
+        (action) => action.action_id === 'cloudflare.dns-record',
+      )?.error?.code,
+    ).toBe('CLOUDFLARE_DNS_RECORD_CONFLICT');
+  });
+
+  it('stops at the paid-upgrade gate and fails DNS zone preflight before mutation', async () => {
+    const paidProject = await createGeneratedProject();
+    const paidProvider = new MockProviderApi();
+    paidProvider.vercelDomainNeedsUpgrade = true;
+    await expect(
+      applyProvisioning({
+        projectRoot: paidProject.root,
+        plan: paidProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: paidProvider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(paidProject.root))?.actions.find(
+        (action) => action.action_id === 'vercel.project-domain',
+      )?.error?.code,
+    ).toBe('VERCEL_PAID_UPGRADE_APPROVAL_REQUIRED');
+    expect(paidProvider.dnsRecords).toHaveLength(0);
+
+    const zoneProject = await createGeneratedProject();
+    const zoneProvider = new MockProviderApi();
+    zoneProvider.cloudflareZoneAccessible = false;
+    await expect(
+      applyProvisioning({
+        projectRoot: zoneProject.root,
+        plan: zoneProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: zoneProvider.fetch }),
+      }),
+    ).rejects.toThrow(/cloudflare request returned HTTP 404/);
+    expect(await readProvisioningState(zoneProject.root)).toBeNull();
+    expect(zoneProvider.requests.some((request) => request.method === 'POST')).toBe(false);
   });
 
   it('resumes the R2 binding with bucket-scoped runtime credentials without recreating the bucket', async () => {

@@ -38,10 +38,17 @@ const fullContext = {
     organization_id: '123e4567-e89b-42d3-a456-426614174000',
     region: 'eu',
   },
+  dns: {
+    provider: 'cloudflare',
+    account_id: '0123456789abcdef0123456789abcdef',
+    zone_id: 'fedcba9876543210fedcba9876543210',
+    zone_name: 'example.com',
+    hostname: 'example-saas.example.com',
+  },
 } as const;
 
 describe('createProvisioningPlan', () => {
-  it('plans GitHub, Vercel, Neon, R2, Sentry, PostHog, and their bindings deterministically', () => {
+  it('plans provider resources, bindings, and owned DNS deterministically', () => {
     const manifest = parseBuildManifest(canonicalManifest);
     const context = parseProvisioningContext(fullContext);
 
@@ -60,6 +67,8 @@ describe('createProvisioningPlan', () => {
       'vercel.sentry-binding',
       'posthog.project',
       'vercel.posthog-binding',
+      'vercel.project-domain',
+      'cloudflare.dns-record',
     ]);
     expect(
       first.actions.every((action) => action.idempotency_key.startsWith('void-starter:v1:')),
@@ -84,6 +93,24 @@ describe('createProvisioningPlan', () => {
       input: { region: 'eu', name: 'example-saas' },
     });
     expect(first.actions[9]?.depends_on).toEqual(['vercel.project', 'posthog.project']);
+    expect(first.actions[10]).toMatchObject({
+      provider: 'vercel',
+      input: {
+        name: 'example-saas.example.com',
+        nameserver_change: false,
+        estimated_monthly_cost_eur: 0,
+      },
+    });
+    expect(first.actions[11]).toMatchObject({
+      provider: 'cloudflare',
+      depends_on: ['vercel.project-domain'],
+      input: {
+        record_type: 'CNAME',
+        ttl: 60,
+        proxied: false,
+        ownership_marker: 'comment',
+      },
+    });
   });
 
   it('plans only resources selected by each surface and capability profile', () => {
@@ -152,6 +179,13 @@ describe('createProvisioningPlan', () => {
     expect(() => createProvisioningPlan(manifest, contextWithoutPosthog)).toThrow(/PostHog/);
 
     expect(() =>
+      createProvisioningPlan(
+        parseBuildManifest({ ...canonicalManifest, dns: { provider: 'cloudflare' } }),
+        parseProvisioningContext({ ...fullContext, dns: undefined }),
+      ),
+    ).toThrow(/DNS zone/);
+
+    expect(() =>
       parseProvisioningContext({
         ...fullContext,
         github_token: 'must-never-be-accepted',
@@ -205,5 +239,20 @@ vercel:
         },
       }).posthog?.organization_id,
     ).toBe('019d9316-714e-0000-01c7-e9a08d38242b');
+    expect(() =>
+      parseProvisioningContext({
+        ...fullContext,
+        dns: { ...fullContext.dns, hostname: 'example.com' },
+      }),
+    ).toThrow(/strict subdomain/);
+    expect(() =>
+      parseProvisioningContext({
+        ...fullContext,
+        dns: {
+          ...fullContext.dns,
+          account_id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      }),
+    ).toThrow(/same explicit Cloudflare account/);
   });
 });

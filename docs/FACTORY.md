@@ -313,10 +313,11 @@ Local capability composition currently handles:
 - mobile-only pruning of every Next.js-only package.
 
 The selected capability set also produces a deterministic `.env.example`; it contains placeholders
-only, never secret values. Better Auth, Clerk, PostHog, Sentry and Resend are currently web
-adapters, so selecting them without a Next.js surface is rejected. R2, Sentry and PostHog have
-guarded live provider adapters; DNS remains provider-plan intent. Resend's local adapter is materialized while
-its remote account/domain and secret binding remain a later lifecycle.
+only, never secret values. Better Auth, Clerk, PostHog, Sentry, Resend and DNS are currently web
+adapters, so selecting them without a Next.js surface is rejected. R2, Sentry, PostHog and an
+explicit Cloudflare DNS context have guarded live provider adapters. DNS remains non-mutating
+provider intent when `auto-detect` has no explicit context. Resend's local adapter is materialized
+while its remote account/domain and secret binding remain a later lifecycle.
 
 ### 10.2 Provisioning context
 
@@ -349,12 +350,21 @@ sentry:
 posthog:
   organization_id: 019d9316-714e-0000-01c7-e9a08d38242b
   region: eu
+
+dns:
+  provider: cloudflare
+  account_id: 0123456789abcdef0123456789abcdef
+  zone_id: fedcba9876543210fedcba9876543210
+  zone_name: example.com
+  hostname: example-saas.example.com
 ```
 
 This strict document accepts no credentials. Owner, team and organization IDs are explicit so the
 factory never derives or invents opaque provider identity. The first live contract fixes Vercel
 to `fra1` and Neon to `aws-eu-central-1`. Generated web projects contain
-`apps/web/vercel.json`, so Vercel Functions do not silently fall back to the `iad1` default.
+`apps/web/vercel.json`, so Vercel Functions do not silently fall back to the `iad1` default. The
+optional DNS block resolves manifest `auto-detect` intent to one exact Cloudflare zone and a strict
+subdomain; without it, auto-detect performs no DNS mutation.
 
 After generating a project:
 
@@ -399,7 +409,8 @@ persist the returned opaque provider ID before advancing. See the official
 The authenticated adapter covers GitHub repository, Vercel project, Neon project, the Vercel
 `DATABASE_URL` binding, a private EU-jurisdiction Cloudflare R2 bucket and its Vercel runtime
 binding, a DE Sentry project and its Vercel runtime/build binding, plus an EU PostHog project and
-its Vercel runtime binding. Credentials exist only in process memory:
+its Vercel runtime binding. An explicit DNS context also adds the exact Vercel project domain and
+one owned Cloudflare CNAME. Credentials exist only in process memory:
 
 ```sh
 export GITHUB_TOKEN=...
@@ -418,7 +429,8 @@ The preflight performs only authenticated reads. It verifies the GitHub user or 
 organization membership, exact Vercel team ID, accessible Neon organization ID, accessible
 Cloudflare R2 account/jurisdiction, an active Sentry organization in `de.sentry.io` with access to
 the exact team, and the exact PostHog organization through `eu.posthog.com`. It creates no state
-and performs no mutation. For an organization owner, the
+and performs no mutation. DNS preflight reads the exact Cloudflare zone and requires the account,
+name, active status and primary/partial setup to match. For an organization owner, the
 fine-grained GitHub token requires
 `Organization permissions > Members: Read-only` so the factory can verify the exact membership
 through `GET /user/memberships/orgs/{org}`. Personal-account owners do not require this permission.
@@ -488,6 +500,19 @@ targets. A plain `VOID_STARTER_POSTHOG_BINDING_ID` marker proves binding ownersh
 currently returns organization IDs in a UUID-shaped 36-character hexadecimal form that does not
 always carry an RFC UUID version/variant, so validation follows the observed provider contract
 without accepting arbitrary strings.
+
+For DNS, the context must name a strict subdomain of the explicit Cloudflare zone. The plan fixes
+the record to CNAME, DNS-only, TTL 60, zero estimated monthly cost and no nameserver change. It
+first attaches the hostname to the exact Vercel project, reads the current rank-1 recommended
+CNAME through Vercel's domain-configuration API, then creates the Cloudflare record with the
+action idempotency key in its comment. Any Vercel TXT ownership challenge is created with its own
+owned comment before verification. Success requires an exact owned Cloudflare readback, a verified
+Vercel project domain and `misconfigured=false`. Propagation pending is retryable and resume never
+repeats a domain or DNS create whose result was ambiguous. Unmarked or drifted records fail
+closed. A known paid-upgrade response becomes `VERCEL_PAID_UPGRADE_APPROVAL_REQUIRED`; the adapter
+never buys a domain, changes a subscription or mutates nameservers. Automated rollback stops at
+the provider boundary: the documented manual order is owned DNS records first, project-domain
+attachment second.
 
 The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
 identity/privacy/region mismatch tests and ambiguous-create resume tests. The original
@@ -877,7 +902,8 @@ be proven locally.
     implemented, contract-tested and live-validated through creation, resume and stateless
     adoption; Sentry is implemented, contract-tested and live-validated through two-phase resume
     and stateless adoption; PostHog is implemented, contract-tested and live-validated through
-    guarded resume and stateless adoption; DNS remains.**
+    guarded resume and stateless adoption; Cloudflare DNS is implemented and contract-tested with
+    guarded propagation resume, with its live canary pending.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.
