@@ -270,7 +270,7 @@ runtime uniquement si le sandbox doit continuer à accéder au bucket.
 
 ## PostHog validé
 
-`DEV-468` est prêt à être terminé dans Linear. Le canari isolé a validé le plan
+`DEV-468` est terminé dans Linear. Le canari isolé a validé le plan
 `9d7a61823147d36f96447c98243cf0a8cab052f00b4e2b9b4e516b6c0a691617` le 2026-07-27 :
 
 - préflight vert sur les six fournisseurs et l'organisation PostHog EU `Void Corp`
@@ -323,9 +323,39 @@ le même projet `@void-sandbox/void-starter-canary-20260725`, UUID
 strictement identique, donc aucune nouvelle publication source n'était nécessaire. `doctor` passe
 désormais tous ses contrôles, dont EAS, provisioning, source, migrations et delivery.
 
+## Point de reprise après intégration GitHub
+
+Le 2026-07-27, la pile fournisseur a été intégrée dans l'ordre avec des merge commits afin de
+préserver son ascendance exacte : R2 (#8), Sentry (#9), PostHog (#10), DNS (#11), matrice
+transverse (#12) et cycle natif EAS (#13). La PR de dépendances hebdomadaire #7 a ensuite été
+rebasée sur ce `main` sans régression de TypeScript 7 ni suppression des nouveaux modules, puis
+fusionnée au commit `3c4faf456a75775c42ff90790c48e5a4caf9f1f7`.
+
+Le workflow GitHub Actions `30289825987` est vert sur le HEAD rebasé de #7 : audit, lint,
+type-check, migrations, tests, build, Knip, gitleaks et E2E passent. Les PR obsolètes #2 à #6 ont
+été fermées au profit de #7; toutes les branches distantes de #7 à #13 ont été supprimées après
+fusion. Il ne reste aucune PR ouverte au moment de ce point de reprise.
+
+État Linear `Void Starter` au même instant :
+
+- terminés : `DEV-466`, `DEV-467`, `DEV-468`, `DEV-470` et `DEV-471`;
+- en cours : `DEV-469`; son code DNS est fusionné et contract-testé, mais la preuve live reste
+  volontairement différée au premier dogfood possédant une zone Cloudflare explicitement
+  autorisée;
+- backlog : `DEV-472` à `DEV-482` (profils distants, orchestration Forge/Linear, puis
+  productisation et gouvernance).
+
+La prochaine action non bloquée est `DEV-472`, validation d'un profil durable-jobs. `DEV-469` ne
+doit reprendre que lorsqu'une vraie zone DNS est fournie sans achat artificiel, déplacement de
+nameservers ni exposition d'une zone de production. Les états sous `/tmp` sont des artefacts de
+canari et ne sont pas la source de vérité; les preuves sans secret sont dans ce document, le code
+est sur `main` et l'exécution produit reste suivie dans Linear. Les identifiants sensibles restent
+hors du dépôt et de Linear. L'authentification GitHub persistante utilise le trousseau macOS et le
+transport SSH.
+
 ## Suite globale
 
-L’adaptateur Cloudflare DNS est désormais implémenté et contract-testé sur la branche dédiée. Il
+L’adaptateur Cloudflare DNS est désormais implémenté, contract-testé et fusionné sur `main`. Il
 ajoute le domaine projet Vercel puis un CNAME DNS-only possédé par commentaire, matérialise les
 challenges TXT Vercel, attend `verified=true` et `misconfigured=false`, reprend la propagation sans
 recréation et refuse les enregistrements étrangers, les upgrades payants et tout changement de
