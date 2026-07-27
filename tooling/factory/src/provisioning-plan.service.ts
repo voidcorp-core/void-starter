@@ -50,6 +50,9 @@ export function createProvisioningPlan(
   const hasR2 = manifest.data.files === 'cloudflare-r2-eu';
   const hasSentry = hasWeb && manifest.operations.errors === 'sentry';
   const hasPosthog = hasWeb && manifest.operations.analytics === 'posthog';
+  const selectedDnsProvider =
+    manifest.dns.provider === 'auto-detect' ? context.dns?.provider : manifest.dns.provider;
+  const hasDns = selectedDnsProvider !== undefined && selectedDnsProvider !== 'none';
 
   if (hasWeb && !context.vercel) {
     throw new Error('Provisioning context requires Vercel settings for the selected web surface');
@@ -69,6 +72,23 @@ export function createProvisioningPlan(
     throw new Error(
       'Provisioning context requires PostHog settings for the selected analytics adapter',
     );
+  }
+  if (hasDns && !hasWeb) {
+    throw new Error('The current DNS adapter requires the selected Vercel web surface');
+  }
+  if (hasDns && selectedDnsProvider !== 'cloudflare') {
+    throw new Error(`Live DNS provisioning does not support ${selectedDnsProvider}`);
+  }
+  if (hasDns && !context.dns) {
+    throw new Error('Provisioning context requires DNS zone settings for the selected DNS adapter');
+  }
+  if (
+    hasDns &&
+    context.dns &&
+    manifest.dns.provider !== 'auto-detect' &&
+    manifest.dns.provider !== context.dns.provider
+  ) {
+    throw new Error('Provisioning context DNS provider does not match the manifest');
   }
 
   const actions: ProvisioningAction[] = [
@@ -252,6 +272,46 @@ export function createProvisioningPlan(
           posthog_action_id: 'posthog.project',
           bindings: ['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'],
           targets: ['development', 'preview', 'production'],
+        },
+      }),
+    );
+  }
+
+  if (hasDns && context.dns) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'vercel.project-domain',
+        provider: 'vercel',
+        kind: 'ensure-project-domain',
+        depends_on: ['vercel.project'],
+        permissions: ['project-domain:read', 'project-domain:write'],
+        input: {
+          project_action_id: 'vercel.project',
+          name: context.dns.hostname,
+          zone_name: context.dns.zone_name,
+          dns_provider: 'cloudflare',
+          nameserver_change: false,
+          estimated_monthly_cost_eur: 0,
+        },
+      }),
+      withIdempotencyKey({
+        id: 'cloudflare.dns-record',
+        provider: 'cloudflare',
+        kind: 'ensure-dns-record',
+        depends_on: ['vercel.project-domain'],
+        permissions: ['zone:read', 'dns-record:read', 'dns-record:write'],
+        input: {
+          account_id: context.dns.account_id,
+          zone_id: context.dns.zone_id,
+          zone_name: context.dns.zone_name,
+          hostname: context.dns.hostname,
+          record_type: 'CNAME',
+          ttl: 60,
+          proxied: false,
+          project_domain_action_id: 'vercel.project-domain',
+          ownership_marker: 'comment',
+          nameserver_change: false,
+          estimated_monthly_cost_eur: 0,
         },
       }),
     );

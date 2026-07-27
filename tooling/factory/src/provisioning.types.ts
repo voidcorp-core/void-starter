@@ -3,6 +3,24 @@ import { z } from 'zod';
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const idempotencyKeySchema = z.string().regex(/^void-starter:v1:[a-f0-9]{64}$/);
 
+const dnsNameSchema = z
+  .string()
+  .trim()
+  .min(4)
+  .max(253)
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  );
+
+const dnsRecordNameSchema = z
+  .string()
+  .trim()
+  .min(4)
+  .max(253)
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  );
+
 const githubContextSchema = z.strictObject({
   owner: z.string().trim().min(1),
   owner_kind: z.enum(['organization', 'user']),
@@ -52,15 +70,48 @@ const posthogContextSchema = z.strictObject({
   region: z.literal('eu'),
 });
 
-export const provisioningContextSchema = z.strictObject({
-  schema_version: z.literal(1),
-  github: githubContextSchema,
-  vercel: vercelContextSchema.optional(),
-  neon: neonContextSchema.optional(),
-  cloudflare: cloudflareContextSchema.optional(),
-  sentry: sentryContextSchema.optional(),
-  posthog: posthogContextSchema.optional(),
-});
+const cloudflareDnsContextSchema = z
+  .strictObject({
+    provider: z.literal('cloudflare'),
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_name: dnsNameSchema,
+    hostname: dnsNameSchema,
+  })
+  .superRefine((dns, context) => {
+    if (dns.hostname === dns.zone_name || !dns.hostname.endsWith(`.${dns.zone_name}`)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['hostname'],
+        message: 'DNS hostname must be a strict subdomain of the selected zone',
+      });
+    }
+  });
+
+export const provisioningContextSchema = z
+  .strictObject({
+    schema_version: z.literal(1),
+    github: githubContextSchema,
+    vercel: vercelContextSchema.optional(),
+    neon: neonContextSchema.optional(),
+    cloudflare: cloudflareContextSchema.optional(),
+    sentry: sentryContextSchema.optional(),
+    posthog: posthogContextSchema.optional(),
+    dns: cloudflareDnsContextSchema.optional(),
+  })
+  .superRefine((context, refinement) => {
+    if (
+      context.cloudflare &&
+      context.dns &&
+      context.cloudflare.account_id !== context.dns.account_id
+    ) {
+      refinement.addIssue({
+        code: 'custom',
+        path: ['dns', 'account_id'],
+        message: 'DNS and R2 must target the same explicit Cloudflare account',
+      });
+    }
+  });
 
 export type ProvisioningContext = z.infer<typeof provisioningContextSchema>;
 
@@ -256,6 +307,49 @@ const vercelPosthogBindingActionSchema = z.strictObject({
   idempotency_key: idempotencyKeySchema,
 });
 
+const vercelProjectDomainActionSchema = z.strictObject({
+  id: z.literal('vercel.project-domain'),
+  provider: z.literal('vercel'),
+  kind: z.literal('ensure-project-domain'),
+  depends_on: z.tuple([z.literal('vercel.project')]),
+  permissions: z.tuple([z.literal('project-domain:read'), z.literal('project-domain:write')]),
+  input: z.strictObject({
+    project_action_id: z.literal('vercel.project'),
+    name: dnsNameSchema,
+    zone_name: dnsNameSchema,
+    dns_provider: z.literal('cloudflare'),
+    nameserver_change: z.literal(false),
+    estimated_monthly_cost_eur: z.literal(0),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
+const cloudflareDnsRecordActionSchema = z.strictObject({
+  id: z.literal('cloudflare.dns-record'),
+  provider: z.literal('cloudflare'),
+  kind: z.literal('ensure-dns-record'),
+  depends_on: z.tuple([z.literal('vercel.project-domain')]),
+  permissions: z.tuple([
+    z.literal('zone:read'),
+    z.literal('dns-record:read'),
+    z.literal('dns-record:write'),
+  ]),
+  input: z.strictObject({
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_name: dnsNameSchema,
+    hostname: dnsNameSchema,
+    record_type: z.literal('CNAME'),
+    ttl: z.literal(60),
+    proxied: z.literal(false),
+    project_domain_action_id: z.literal('vercel.project-domain'),
+    ownership_marker: z.literal('comment'),
+    nameserver_change: z.literal(false),
+    estimated_monthly_cost_eur: z.literal(0),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
 const provisioningActionSchema = z.discriminatedUnion('id', [
   githubRepositoryActionSchema,
   vercelProjectActionSchema,
@@ -267,6 +361,8 @@ const provisioningActionSchema = z.discriminatedUnion('id', [
   vercelSentryBindingActionSchema,
   posthogProjectActionSchema,
   vercelPosthogBindingActionSchema,
+  vercelProjectDomainActionSchema,
+  cloudflareDnsRecordActionSchema,
 ]);
 
 export type ProvisioningAction = z.infer<typeof provisioningActionSchema>;
@@ -373,6 +469,41 @@ export const provisionedResourceSchema = z.union([
       z.literal('NEXT_PUBLIC_POSTHOG_HOST'),
     ]),
   }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('project-domain'),
+    ...resourceIdentitySchema,
+    project_id: z.string().trim().min(1),
+    apex_name: dnsNameSchema,
+    verified: z.boolean(),
+    dns_target: dnsNameSchema,
+    verification_records: z.array(
+      z.strictObject({
+        type: z.literal('TXT'),
+        name: dnsRecordNameSchema,
+        value: z.string().trim().min(1),
+      }),
+    ),
+  }),
+  z.strictObject({
+    provider: z.literal('cloudflare'),
+    resource_kind: z.literal('dns-record'),
+    ...resourceIdentitySchema,
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_id: z.string().regex(/^[a-f0-9]{32}$/),
+    zone_name: dnsNameSchema,
+    record_type: z.literal('CNAME'),
+    content: dnsNameSchema,
+    ttl: z.literal(60),
+    proxied: z.literal(false),
+    ownership_marker: idempotencyKeySchema,
+    verification_record_ids: z.array(z.string().trim().min(1)),
+    propagation: z.literal('verified'),
+    project_domain_verified: z.literal(true),
+    nameserver_change: z.literal(false),
+    estimated_monthly_cost_eur: z.literal(0),
+    rollback_boundary: z.literal('manual-owned-record-then-project-domain'),
+  }),
 ]);
 
 export type ProvisionedResource = z.infer<typeof provisionedResourceSchema>;
@@ -395,6 +526,8 @@ const provisioningActionStateSchema = z.strictObject({
     'vercel.sentry-binding',
     'posthog.project',
     'vercel.posthog-binding',
+    'vercel.project-domain',
+    'cloudflare.dns-record',
   ]),
   idempotency_key: idempotencyKeySchema,
   status: z.enum(['pending', 'running', 'failed', 'succeeded']),

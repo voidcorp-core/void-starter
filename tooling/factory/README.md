@@ -71,7 +71,9 @@ adapter, private-domain checks, object canary and Vercel secret binding; creatio
 resume and fresh-state adoption have passed against the isolated sandbox. Sentry project creation,
 DE-region attestation, deterministic client-key selection, two-phase Vercel binding, completed-state
 resume and fresh-state adoption have also passed against the isolated sandbox. DNS remains a
-planned provider capability.
+planned provider capability unless the strict provisioning context supplies an explicit
+Cloudflare zone and project hostname; that selection now materializes a guarded Vercel-domain and
+Cloudflare-DNS flow.
 
 To materialize the Expo blueprint in a temporary directory, install it, type-check it, and export
 the iOS, Android, and web bundles:
@@ -95,9 +97,10 @@ bun run apply -- \
 `--dry-run` is the default and writes nothing. It produces an ordered GitHub repository, Vercel
 project, Neon project, database binding, EU-jurisdiction R2 bucket, R2 runtime binding, DE Sentry
 project, Sentry runtime binding, EU PostHog project and PostHog runtime-binding plan according to
-the selected manifest. The separate provisioning context contains account coordinates such as
-owner, team, organization, Sentry slugs, PostHog organization ID and Cloudflare account IDs, never
-tokens or secret values.
+the selected manifest. When DNS coordinates are present it also plans the Vercel project domain
+and one DNS-only Cloudflare CNAME. The separate provisioning context contains account coordinates
+such as owner, team, organization, Sentry slugs, PostHog organization ID, Cloudflare account/zone
+IDs and the exact subdomain, never tokens or secret values.
 
 The resumable engine can currently be exercised without provider calls:
 
@@ -134,6 +137,8 @@ exact authenticated membership endpoint and requires `Organization permissions >
 Read-only`. Sentry preflight verifies that the exact active organization belongs to the
 `de.sentry.io` region and that the token can access the selected team. PostHog preflight reads the
 exact organization through `eu.posthog.com`.
+For DNS it also reads the exact Cloudflare zone and requires the selected account, zone name,
+active status and primary/partial setup to match before any mutation.
 
 Live apply is deliberately a separate command and requires the exact generated project name. R2
 runtime credentials may be omitted on the first apply: the engine creates and validates the EU
@@ -180,6 +185,17 @@ PostHog uses one control-plane `POSTHOG_PERSONAL_API_KEY` with only `organizatio
 SHA-256. Before binding, the adapter re-reads the exact project and verifies that digest. Vercel
 receives encrypted `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST=/ingest` variables for
 all targets, plus a plain `VOID_STARTER_POSTHOG_BINDING_ID` ownership marker.
+
+DNS accepts only a strict subdomain of the explicit Cloudflare zone. It first attaches that name
+to the exact Vercel project and reads Vercel's current rank-1 recommended CNAME instead of
+hard-coding a legacy target. Cloudflare receives a DNS-only CNAME with TTL 60 and the action
+idempotency key in the record comment. Any Vercel TXT ownership challenge is materialized with a
+separate owned comment, then the adapter asks Vercel to verify and re-reads both project-domain and
+domain-configuration state. A pending propagation check is retryable and resume only re-reads the
+already-owned records. Foreign/unmarked records fail closed. The plan fixes nameserver changes to
+`false` and estimated monthly cost to `0`; a Vercel paid-upgrade response stops with
+`VERCEL_PAID_UPGRADE_APPROVAL_REQUIRED`. Rollback remains an explicit manual boundary: remove the
+owned DNS records before detaching the project domain.
 
 An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
 that create blindly. Live contract tests use mocked HTTP providers. The GitHub, Vercel and Neon

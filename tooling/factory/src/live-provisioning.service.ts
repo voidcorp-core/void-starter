@@ -47,9 +47,16 @@ const SENTRY_NON_SECRET_KEYS = [
   'SENTRY_PROJECT',
 ] as const;
 const POSTHOG_BINDING_KEYS = ['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'] as const;
+const DNS_TTL = 60 as const;
 
 type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare' | 'sentry' | 'posthog';
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+type DesiredDnsRecord = {
+  type: 'CNAME' | 'TXT';
+  name: string;
+  content: string;
+  comment: string;
+};
 
 export type LiveProvisioningCredentials = {
   githubToken: string;
@@ -162,6 +169,40 @@ const vercelEnvironmentVariablesSchema = z.object({
   envs: z.array(vercelEnvironmentVariableSchema),
 });
 
+const vercelProjectDomainSchema = z.object({
+  name: z.string().min(1),
+  apexName: z.string().min(1),
+  projectId: z.string().min(1),
+  verified: z.boolean(),
+  verification: z
+    .array(
+      z.object({
+        type: z.literal('TXT'),
+        domain: z.string().min(1),
+        value: z.string().min(1),
+      }),
+    )
+    .optional()
+    .default([]),
+});
+
+const vercelDomainConfigurationSchema = z.object({
+  configuredBy: z.string().nullable().optional(),
+  recommendedCNAME: z.array(
+    z.object({
+      rank: z.number().int().positive(),
+      value: z.string().min(1),
+    }),
+  ),
+  misconfigured: z.boolean(),
+});
+
+const vercelErrorSchema = z.object({
+  error: z.object({
+    code: z.string(),
+  }),
+});
+
 const cloudflareBucketSchema = z.object({
   name: z.string().min(3),
   jurisdiction: z.enum(['default', 'eu', 'fedramp']).optional(),
@@ -207,6 +248,40 @@ const cloudflareObjectUploadResponseSchema = z.object({
     key: z.string().min(1),
     etag: z.string().min(1),
   }),
+});
+
+const cloudflareZoneResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    id: z.string().regex(/^[a-f0-9]{32}$/),
+    name: z.string().min(1),
+    account: z.object({ id: z.string().regex(/^[a-f0-9]{32}$/) }),
+    status: z.string().min(1),
+    type: z.string().min(1),
+    paused: z.boolean(),
+  }),
+});
+
+const cloudflareDnsRecordSchema = z.object({
+  id: z.string().min(1),
+  zone_id: z.string().regex(/^[a-f0-9]{32}$/),
+  zone_name: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['CNAME', 'TXT']),
+  content: z.string().min(1),
+  proxied: z.boolean().optional().default(false),
+  ttl: z.number().int().positive(),
+  comment: z.string().nullable().optional(),
+});
+
+const cloudflareDnsRecordResponseSchema = z.object({
+  success: z.literal(true),
+  result: cloudflareDnsRecordSchema,
+});
+
+const cloudflareDnsRecordsResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.array(cloudflareDnsRecordSchema),
 });
 
 const sentryOrganizationSchema = z.object({
@@ -341,6 +416,10 @@ function encodedObjectKey(value: string): string {
   return value.split('/').map(encoded).join('/');
 }
 
+function normalizeDnsName(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
 function sentryApi(region: 'de'): string {
   return `https://${region}.sentry.io/api/0`;
 }
@@ -449,6 +528,23 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     }
 
     if (!input.acceptedStatuses.includes(response.status)) {
+      if (input.provider === 'vercel' && (response.status === 402 || response.status === 403)) {
+        try {
+          const providerError = vercelErrorSchema.parse(await response.clone().json());
+          if (providerError.error.code === 'custom_domain_needs_upgrade') {
+            throw new ProviderHttpFailure({
+              code: 'VERCEL_PAID_UPGRADE_APPROVAL_REQUIRED',
+              message: 'Vercel custom domain requires a paid upgrade and explicit approval',
+              retryable: false,
+              ambiguousMutation: false,
+            });
+          }
+        } catch (error) {
+          if (error instanceof ProviderHttpFailure) {
+            throw error;
+          }
+        }
+      }
       throw new ProviderHttpFailure({
         code: providerCode(input.provider, `HTTP_${response.status}`),
         message: `${input.provider} request returned HTTP ${response.status}`,
@@ -476,6 +572,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     const vercelAction = plan.actions.find((action) => action.id === 'vercel.project');
     const neonAction = plan.actions.find((action) => action.id === 'neon.project');
     const cloudflareAction = plan.actions.find((action) => action.id === 'cloudflare.r2-bucket');
+    const dnsAction = plan.actions.find((action) => action.id === 'cloudflare.dns-record');
     const sentryAction = plan.actions.find((action) => action.id === 'sentry.project');
     const posthogAction = plan.actions.find((action) => action.id === 'posthog.project');
 
@@ -484,6 +581,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       vercelAction ? this.#preflightVercel(vercelAction) : Promise.resolve(),
       neonAction ? this.#preflightNeon(neonAction) : Promise.resolve(),
       cloudflareAction ? this.#preflightCloudflare(cloudflareAction) : Promise.resolve(),
+      dnsAction ? this.#preflightCloudflareDns(dnsAction) : Promise.resolve(),
       sentryAction ? this.#preflightSentry(sentryAction) : Promise.resolve(),
       posthogAction ? this.#preflightPosthog(posthogAction) : Promise.resolve(),
     ]);
@@ -589,6 +687,31 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     await this.#json('cloudflare', response, cloudflareBucketListResponseSchema);
   }
 
+  async #preflightCloudflareDns(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+  ): Promise<void> {
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: `${CLOUDFLARE_API}/zones/${encoded(action.input.zone_id)}`,
+      acceptedStatuses: [200],
+    });
+    const zone = (await this.#json('cloudflare', response, cloudflareZoneResponseSchema)).result;
+    if (
+      zone.id !== action.input.zone_id ||
+      zone.account.id !== action.input.account_id ||
+      normalizeDnsName(zone.name) !== normalizeDnsName(action.input.zone_name) ||
+      zone.status !== 'active' ||
+      zone.paused ||
+      !['full', 'partial'].includes(zone.type)
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_ZONE_MISMATCH',
+        'Cloudflare DNS zone does not match the requested active account zone',
+      );
+    }
+  }
+
   async #preflightSentry(
     action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
   ): Promise<void> {
@@ -676,6 +799,10 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensurePosthogProject(action, context);
       case 'vercel.posthog-binding':
         return this.#ensurePosthogBinding(action, context);
+      case 'vercel.project-domain':
+        return this.#ensureVercelProjectDomain(action, context);
+      case 'cloudflare.dns-record':
+        return this.#ensureCloudflareDnsRecord(action, context);
     }
   }
 
@@ -2180,5 +2307,432 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       'Vercel accepted the PostHog binding but its ownership marker is not yet observable',
       true,
     );
+  }
+
+  async #readVercelProjectDomain(
+    projectId: string,
+    name: string,
+  ): Promise<z.infer<typeof vercelProjectDomainSchema> | null> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    const response = await this.#request({
+      provider: 'vercel',
+      url: withQuery(`${VERCEL_API}/v9/projects/${encoded(projectId)}/domains/${encoded(name)}`, {
+        teamId,
+      }),
+      acceptedStatuses: [200, 404],
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    return this.#json('vercel', response, vercelProjectDomainSchema);
+  }
+
+  async #vercelDomainConfiguration(
+    projectId: string,
+    name: string,
+  ): Promise<z.infer<typeof vercelDomainConfigurationSchema>> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    const response = await this.#request({
+      provider: 'vercel',
+      url: withQuery(`${VERCEL_API}/v6/domains/${encoded(name)}/config`, {
+        teamId,
+        projectIdOrName: projectId,
+        strict: 'true',
+      }),
+      acceptedStatuses: [200],
+    });
+    return this.#json('vercel', response, vercelDomainConfigurationSchema);
+  }
+
+  #preferredVercelCname(configuration: z.infer<typeof vercelDomainConfigurationSchema>): string {
+    const preferred = [...configuration.recommendedCNAME].sort(
+      (left, right) => left.rank - right.rank,
+    )[0]?.value;
+    if (!preferred) {
+      throw adapterFailure(
+        'vercel',
+        'DNS_TARGET_MISSING',
+        'Vercel did not return a recommended CNAME target for the project domain',
+      );
+    }
+    return normalizeDnsName(preferred);
+  }
+
+  async #vercelProjectDomainResource(
+    action: Extract<ProvisioningAction, { id: 'vercel.project-domain' }>,
+    project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
+    domain: z.infer<typeof vercelProjectDomainSchema>,
+  ): Promise<ProvisionedResource> {
+    if (
+      normalizeDnsName(domain.name) !== normalizeDnsName(action.input.name) ||
+      normalizeDnsName(domain.apexName) !== normalizeDnsName(action.input.zone_name) ||
+      domain.projectId !== project.resource_id
+    ) {
+      throw adapterFailure(
+        'vercel',
+        'PROJECT_DOMAIN_CONFLICT',
+        'Existing Vercel project domain does not match the requested project and zone',
+      );
+    }
+    const configuration = await this.#vercelDomainConfiguration(
+      project.resource_id,
+      action.input.name,
+    );
+    const verificationRecords = domain.verification.map((record) => ({
+      type: record.type,
+      name: normalizeDnsName(record.domain),
+      value: record.value,
+    }));
+    if (
+      verificationRecords.some(
+        (record) => !record.name.endsWith(`.${normalizeDnsName(action.input.zone_name)}`),
+      )
+    ) {
+      throw adapterFailure(
+        'vercel',
+        'DOMAIN_VERIFICATION_CONFLICT',
+        'Vercel requested a verification record outside the selected DNS zone',
+      );
+    }
+    return {
+      provider: 'vercel',
+      resource_kind: 'project-domain',
+      resource_id: `${project.resource_id}:${normalizeDnsName(domain.name)}`,
+      display_name: normalizeDnsName(domain.name),
+      project_id: project.resource_id,
+      apex_name: normalizeDnsName(domain.apexName),
+      verified: domain.verified,
+      dns_target: this.#preferredVercelCname(configuration),
+      verification_records: verificationRecords,
+    };
+  }
+
+  async #ensureVercelProjectDomain(
+    action: Extract<ProvisioningAction, { id: 'vercel.project-domain' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const project = requireDependency(context, 'vercel.project');
+    if (project.provider !== 'vercel' || project.resource_kind !== 'project') {
+      throw new Error('Project domain dependency is not a Vercel project');
+    }
+
+    const existing = await this.#readVercelProjectDomain(project.resource_id, action.input.name);
+    if (existing) {
+      return this.#vercelProjectDomainResource(action, project, existing);
+    }
+    if (context.previousError?.code === 'VERCEL_PROJECT_DOMAIN_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'vercel',
+        'PROJECT_DOMAIN_CREATE_AMBIGUOUS',
+        'Vercel project domain creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'vercel',
+        url: withQuery(`${VERCEL_API}/v10/projects/${encoded(project.resource_id)}/domains`, {
+          teamId,
+        }),
+        method: 'POST',
+        body: { name: action.input.name },
+        acceptedStatuses: [200, 201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#readVercelProjectDomain(project.resource_id, action.input.name);
+    if (reconciled) {
+      return this.#vercelProjectDomainResource(action, project, reconciled);
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'vercel',
+        'PROJECT_DOMAIN_CREATE_AMBIGUOUS',
+        'Vercel project domain creation is ambiguous; resume will only reconcile',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'vercel',
+      'PROJECT_DOMAIN_CREATE_AMBIGUOUS',
+      'Vercel accepted the project domain but it is not yet observable',
+      true,
+    );
+  }
+
+  async #cloudflareDnsRecordCandidates(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+    desired: DesiredDnsRecord,
+  ): Promise<Array<z.infer<typeof cloudflareDnsRecordSchema>>> {
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: withQuery(`${CLOUDFLARE_API}/zones/${encoded(action.input.zone_id)}/dns_records`, {
+        type: desired.type,
+        name: desired.name,
+        per_page: '100',
+      }),
+      acceptedStatuses: [200],
+    });
+    return (await this.#json('cloudflare', response, cloudflareDnsRecordsResponseSchema)).result;
+  }
+
+  #dnsRecordContentMatches(
+    record: z.infer<typeof cloudflareDnsRecordSchema>,
+    desired: DesiredDnsRecord,
+  ): boolean {
+    return desired.type === 'CNAME'
+      ? normalizeDnsName(record.content) === normalizeDnsName(desired.content)
+      : record.content === desired.content;
+  }
+
+  async #ownedCloudflareDnsRecord(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+    desired: DesiredDnsRecord,
+  ): Promise<z.infer<typeof cloudflareDnsRecordSchema> | null> {
+    const candidates = await this.#cloudflareDnsRecordCandidates(action, desired);
+    const owned = candidates.filter((record) => record.comment === desired.comment);
+    const unownedExact = candidates.filter(
+      (record) =>
+        record.comment !== desired.comment && this.#dnsRecordContentMatches(record, desired),
+    );
+    if (
+      owned.length > 1 ||
+      unownedExact.length > 0 ||
+      (desired.type === 'CNAME' && candidates.length > 0 && owned.length !== 1)
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_RECORD_CONFLICT',
+        'Existing Cloudflare DNS record is not exclusively owned by this plan',
+      );
+    }
+    const record = owned[0];
+    if (!record) {
+      return null;
+    }
+    if (
+      record.zone_id !== action.input.zone_id ||
+      normalizeDnsName(record.zone_name) !== normalizeDnsName(action.input.zone_name) ||
+      normalizeDnsName(record.name) !== normalizeDnsName(desired.name) ||
+      record.type !== desired.type ||
+      !this.#dnsRecordContentMatches(record, desired) ||
+      record.ttl !== DNS_TTL ||
+      record.proxied
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_RECORD_CONFLICT',
+        'Owned Cloudflare DNS record drifted from the exact planned value',
+      );
+    }
+    return record;
+  }
+
+  #desiredCloudflareDnsRecords(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+    domain: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project-domain' }>,
+  ): DesiredDnsRecord[] {
+    const verification = domain.verification_records.map((record, index) => ({
+      type: record.type,
+      name: record.name,
+      content: record.value,
+      comment: `${action.idempotency_key}:verification:${index + 1}`,
+    }));
+    return [
+      {
+        type: 'CNAME',
+        name: action.input.hostname,
+        content: domain.dns_target,
+        comment: action.idempotency_key,
+      },
+      ...verification,
+    ];
+  }
+
+  async #createCloudflareDnsRecord(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+    desired: DesiredDnsRecord,
+  ): Promise<z.infer<typeof cloudflareDnsRecordSchema>> {
+    let createError: unknown;
+    try {
+      const response = await this.#request({
+        provider: 'cloudflare',
+        url: `${CLOUDFLARE_API}/zones/${encoded(action.input.zone_id)}/dns_records`,
+        method: 'POST',
+        body: {
+          type: desired.type,
+          name: desired.name,
+          content: desired.content,
+          ttl: DNS_TTL,
+          proxied: false,
+          comment: desired.comment,
+        },
+        acceptedStatuses: [200],
+      });
+      await this.#json('cloudflare', response, cloudflareDnsRecordResponseSchema);
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#ownedCloudflareDnsRecord(action, desired);
+    if (reconciled) {
+      return reconciled;
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_RECORD_CREATE_AMBIGUOUS',
+        'Cloudflare DNS creation is ambiguous; resume will only reconcile',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'cloudflare',
+      'DNS_RECORD_CREATE_AMBIGUOUS',
+      'Cloudflare accepted the DNS record but its ownership marker is not observable',
+      true,
+    );
+  }
+
+  async #verifyVercelDomainPropagation(
+    domain: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project-domain' }>,
+  ): Promise<void> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    if (!domain.verified || domain.verification_records.length > 0) {
+      try {
+        await this.#request({
+          provider: 'vercel',
+          url: withQuery(
+            `${VERCEL_API}/v9/projects/${encoded(domain.project_id)}/domains/${encoded(domain.display_name)}/verify`,
+            { teamId },
+          ),
+          method: 'POST',
+          acceptedStatuses: [200, 400],
+        });
+      } catch {
+        // The authoritative reads below decide whether propagation is complete.
+      }
+    }
+
+    const [current, configuration] = await Promise.all([
+      this.#readVercelProjectDomain(domain.project_id, domain.display_name),
+      this.#vercelDomainConfiguration(domain.project_id, domain.display_name),
+    ]);
+    const currentTarget = this.#preferredVercelCname(configuration);
+    if (normalizeDnsName(currentTarget) !== normalizeDnsName(domain.dns_target)) {
+      throw adapterFailure(
+        'vercel',
+        'DNS_TARGET_CHANGED',
+        'Vercel recommended CNAME changed after the DNS plan was materialized',
+      );
+    }
+    if (!current?.verified || configuration.misconfigured) {
+      throw adapterFailure(
+        'vercel',
+        'DNS_PROPAGATION_PENDING',
+        'Vercel has not yet verified the project domain and propagated CNAME',
+        true,
+      );
+    }
+  }
+
+  async #ensureCloudflareDnsRecord(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.dns-record' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const domain = requireDependency(context, 'vercel.project-domain');
+    if (domain.provider !== 'vercel' || domain.resource_kind !== 'project-domain') {
+      throw new Error('DNS record dependency is not a Vercel project domain');
+    }
+    if (
+      normalizeDnsName(domain.display_name) !== normalizeDnsName(action.input.hostname) ||
+      normalizeDnsName(domain.apex_name) !== normalizeDnsName(action.input.zone_name)
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_DOMAIN_CONFLICT',
+        'Vercel project domain does not match the planned Cloudflare hostname',
+      );
+    }
+
+    const desired = this.#desiredCloudflareDnsRecords(action, domain);
+    const existing = await Promise.all(
+      desired.map((record) => this.#ownedCloudflareDnsRecord(action, record)),
+    );
+    if (
+      existing.some((record) => !record) &&
+      context.previousError?.code === 'CLOUDFLARE_DNS_RECORD_CREATE_AMBIGUOUS'
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_RECORD_CREATE_AMBIGUOUS',
+        'Cloudflare DNS creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+    if (
+      existing.some((record) => !record) &&
+      context.previousError?.code === 'VERCEL_DNS_PROPAGATION_PENDING'
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'DNS_RECORD_MISSING',
+        'An owned DNS record disappeared while propagation was pending',
+      );
+    }
+
+    const records: Array<z.infer<typeof cloudflareDnsRecordSchema>> = [];
+    for (const [index, record] of desired.entries()) {
+      records.push(existing[index] ?? (await this.#createCloudflareDnsRecord(action, record)));
+    }
+    await this.#verifyVercelDomainPropagation(domain);
+
+    const routingRecord = records[0];
+    if (!routingRecord) {
+      throw new Error('DNS reconciliation did not return the routing record');
+    }
+    return {
+      provider: 'cloudflare',
+      resource_kind: 'dns-record',
+      resource_id: routingRecord.id,
+      display_name: normalizeDnsName(routingRecord.name),
+      account_id: action.input.account_id,
+      zone_id: action.input.zone_id,
+      zone_name: normalizeDnsName(action.input.zone_name),
+      record_type: 'CNAME',
+      content: normalizeDnsName(routingRecord.content),
+      ttl: DNS_TTL,
+      proxied: false,
+      ownership_marker: action.idempotency_key,
+      verification_record_ids: records.slice(1).map((record) => record.id),
+      propagation: 'verified',
+      project_domain_verified: true,
+      nameserver_change: false,
+      estimated_monthly_cost_eur: 0,
+      rollback_boundary: 'manual-owned-record-then-project-domain',
+    };
   }
 }

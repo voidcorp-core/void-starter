@@ -24,3 +24,10 @@ sentry:
 posthog:
   organization_id: 123e4567-e89b-42d3-a456-426614174000
   region: eu
+
+dns:
+  provider: cloudflare
+  account_id: 0123456789abcdef0123456789abcdef
+  zone_id: fedcba9876543210fedcba9876543210
+  zone_name: example.com
+  hostname: example-saas.example.com

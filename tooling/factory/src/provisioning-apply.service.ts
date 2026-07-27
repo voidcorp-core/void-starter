@@ -367,7 +367,7 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
 
   async ensure(
     action: ProvisioningAction,
-    _context: ProvisioningExecutionContext,
+    context: ProvisioningExecutionContext,
   ): Promise<ProvisionedResource> {
     if (action.id === this.#failActionId) {
       throw new ProvisioningAdapterError({
@@ -468,6 +468,49 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         bound_keys: action.input.bindings,
       };
     }
+    if (action.id === 'vercel.project-domain') {
+      const project = context.resources.get('vercel.project');
+      if (project?.provider !== 'vercel' || project.resource_kind !== 'project') {
+        throw new Error('Simulated project domain is missing its Vercel project');
+      }
+      return {
+        provider: 'vercel',
+        resource_kind: 'project-domain',
+        resource_id: resourceId,
+        display_name: action.input.name,
+        project_id: project.resource_id,
+        apex_name: action.input.zone_name,
+        verified: true,
+        dns_target: 'simulated.vercel-dns-000.com',
+        verification_records: [],
+      };
+    }
+    if (action.id === 'cloudflare.dns-record') {
+      const domain = context.resources.get('vercel.project-domain');
+      if (domain?.provider !== 'vercel' || domain.resource_kind !== 'project-domain') {
+        throw new Error('Simulated DNS record is missing its Vercel project domain');
+      }
+      return {
+        provider: 'cloudflare',
+        resource_kind: 'dns-record',
+        resource_id: resourceId,
+        display_name: action.input.hostname,
+        account_id: action.input.account_id,
+        zone_id: action.input.zone_id,
+        zone_name: action.input.zone_name,
+        record_type: 'CNAME',
+        content: domain.dns_target,
+        ttl: 60,
+        proxied: false,
+        ownership_marker: action.idempotency_key,
+        verification_record_ids: [],
+        propagation: 'verified',
+        project_domain_verified: true,
+        nameserver_change: false,
+        estimated_monthly_cost_eur: 0,
+        rollback_boundary: 'manual-owned-record-then-project-domain',
+      };
+    }
     return {
       provider: 'vercel',
       resource_kind: 'database-binding',
@@ -501,7 +544,11 @@ export function validateProvisioningState(
                 ? 'sentry-binding'
                 : action.id === 'vercel.posthog-binding'
                   ? 'posthog-binding'
-                  : 'project';
+                  : action.id === 'vercel.project-domain'
+                    ? 'project-domain'
+                    : action.id === 'cloudflare.dns-record'
+                      ? 'dns-record'
+                      : 'project';
     if (
       actionState.status === 'succeeded' &&
       (!actionState.resource ||
@@ -515,6 +562,7 @@ export function validateProvisioningState(
       action.id === 'cloudflare.r2-bucket' &&
       actionState.status === 'succeeded' &&
       actionState.resource?.provider === 'cloudflare' &&
+      actionState.resource.resource_kind === 'r2-bucket' &&
       (actionState.resource.display_name !== action.input.name ||
         actionState.resource.account_id !== action.input.account_id ||
         actionState.resource.jurisdiction !== action.input.jurisdiction ||
@@ -575,6 +623,36 @@ export function validateProvisioningState(
         serializeCanonicalJson(action.input.bindings)
     ) {
       throw new Error('Succeeded PostHog binding action does not attest the exact runtime keys');
+    }
+    if (
+      action.id === 'vercel.project-domain' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'vercel' &&
+      (actionState.resource.resource_kind !== 'project-domain' ||
+        actionState.resource.display_name !== action.input.name ||
+        actionState.resource.apex_name !== action.input.zone_name)
+    ) {
+      throw new Error('Succeeded Vercel domain action does not attest the exact project hostname');
+    }
+    if (
+      action.id === 'cloudflare.dns-record' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'cloudflare' &&
+      (actionState.resource.resource_kind !== 'dns-record' ||
+        actionState.resource.display_name !== action.input.hostname ||
+        actionState.resource.account_id !== action.input.account_id ||
+        actionState.resource.zone_id !== action.input.zone_id ||
+        actionState.resource.zone_name !== action.input.zone_name ||
+        actionState.resource.record_type !== action.input.record_type ||
+        actionState.resource.ttl !== action.input.ttl ||
+        actionState.resource.proxied !== action.input.proxied ||
+        actionState.resource.ownership_marker !== action.idempotency_key ||
+        actionState.resource.propagation !== 'verified' ||
+        !actionState.resource.project_domain_verified ||
+        actionState.resource.nameserver_change ||
+        actionState.resource.estimated_monthly_cost_eur !== 0)
+    ) {
+      throw new Error('Succeeded DNS action does not attest the exact owned propagated record');
     }
     if (actionState.status === 'failed' && (!actionState.error || actionState.resource !== null)) {
       throw new Error(`Failed provisioning action ${action.id} has inconsistent diagnostics`);
