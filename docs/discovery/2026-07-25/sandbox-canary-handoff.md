@@ -248,9 +248,27 @@ forme pour prévenir la régression. Les deux tokens Cloudflare créés pour ce 
 sept jours : révoquer le token de contrôle après validation et conserver/faire tourner le token
 runtime uniquement si le sandbox doit continuer à accéder au bucket.
 
+## Sentry validé
+
+`DEV-466` est terminé dans Linear. Le canari isolé a validé le plan
+`7cacd9647fd4dd1188fadb68ee783d0a144753589cedcbafa4e27622b59577e0` le 2026-07-27 :
+
+- préflight vert sur GitHub, Vercel, Neon, Cloudflare et l'organisation Sentry active
+  `void-corp-md` en région `de`, équipe `void-corp`;
+- adoption des six ressources historiques sans changement d'ID;
+- création du projet Next.js Sentry `void-starter-canary-20260725`, ID `4511807245516880`, clé
+  client `55f31207fd9b8307ee94f6a34bd79741`;
+- premier apply arrêté volontairement sur `SENTRY_BUILD_AUTH_TOKEN_MISSING`, puis reprise avec le
+  token build séparé et liaison Vercel `hHSyb6KDUXFU6K7I` pour les cinq clés attendues;
+- reprise d'un état terminé sans changement des compteurs `1,1,1,1,1,1,1,2`;
+- adoption depuis `/tmp/void-starter-canary-sentry-adoption-20260727` : mêmes huit IDs et une
+  tentative par action, donc aucun doublon;
+- deux `doctor` verts, états en mode `0600`, aucun des huit credentials du trousseau ni DSN public
+  présent dans les reçus.
+
 ## Suite globale
 
-1. Ajouter Sentry/PostHog et DNS; R2, Resend et le projet EAS sont terminés.
+1. Ajouter PostHog et DNS; R2, Resend, Sentry et le projet EAS sont terminés.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du

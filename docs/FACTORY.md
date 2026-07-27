@@ -314,9 +314,9 @@ Local capability composition currently handles:
 
 The selected capability set also produces a deterministic `.env.example`; it contains placeholders
 only, never secret values. Better Auth, Clerk, PostHog, Sentry and Resend are currently web
-adapters, so selecting them without a Next.js surface is rejected. R2 and DNS remain provider-plan
-intent; Resend's local adapter is materialized while its remote account/domain and secret binding
-remain a later lifecycle.
+adapters, so selecting them without a Next.js surface is rejected. R2 and Sentry have guarded live
+provider adapters; DNS remains provider-plan intent. Resend's local adapter is materialized while
+its remote account/domain and secret binding remain a later lifecycle.
 
 ### 10.2 Provisioning context
 
@@ -337,6 +337,14 @@ vercel:
 neon:
   org_id: org-example
   region_id: aws-eu-central-1
+
+cloudflare:
+  account_id: 0123456789abcdef0123456789abcdef
+
+sentry:
+  organization_slug: void-sandbox
+  team_slug: platform
+  region: de
 ```
 
 This strict document accepts no credentials. Owner, team and organization IDs are explicit so the
@@ -386,13 +394,15 @@ persist the returned opaque provider ID before advancing. See the official
 
 The authenticated adapter covers GitHub repository, Vercel project, Neon project, the Vercel
 `DATABASE_URL` binding, a private EU-jurisdiction Cloudflare R2 bucket and its Vercel runtime
-binding. Credentials exist only in process memory:
+binding, plus a DE Sentry project and its Vercel runtime/build binding. Credentials exist only in
+process memory:
 
 ```sh
 export GITHUB_TOKEN=...
 export VERCEL_TOKEN=...
 export NEON_API_KEY=...
 export CLOUDFLARE_API_TOKEN=...
+export SENTRY_API_TOKEN=...
 
 bun run preflight:live -- \
   /absolute/path/to/new-project \
@@ -400,9 +410,10 @@ bun run preflight:live -- \
 ```
 
 The preflight performs only authenticated reads. It verifies the GitHub user or active
-organization membership, exact Vercel team ID, accessible Neon organization ID and accessible
-Cloudflare R2 account/jurisdiction. It creates no state and performs no mutation. For an
-organization owner, the fine-grained GitHub token requires
+organization membership, exact Vercel team ID, accessible Neon organization ID, accessible
+Cloudflare R2 account/jurisdiction, and an active Sentry organization in `de.sentry.io` with access
+to the exact team. It creates no state and performs no mutation. For an organization owner, the
+fine-grained GitHub token requires
 `Organization permissions > Members: Read-only` so the factory can verify the exact membership
 through `GET /user/memberships/orgs/{org}`. Personal-account owners do not require this permission.
 
@@ -448,15 +459,38 @@ existing bucket and provide `R2_ACCESS_KEY_ID` plus `R2_SECRET_ACCESS_KEY` to `r
 Resume skips the completed bucket action and binds only the least-privilege runtime credentials;
 providing one value without the other fails before provider calls.
 
+For Sentry, the plan fixes region `de`, platform `javascript-nextjs`, exact organization/team slugs
+and default issue-alert rules. `SENTRY_API_TOKEN` is the control credential used for authenticated
+preflight and lookup-before-create. Adoption requires the exact active project, platform and team,
+plus exactly one active client key. Local state keeps only the project/key IDs and a SHA-256 of the
+public DSN. The DSN itself is re-fetched into memory when binding and must still match that digest.
+
+`SENTRY_BUILD_AUTH_TOKEN` is a separate optional release-upload credential. If absent, the project
+can complete while `vercel.sentry-binding` records retryable
+`SENTRY_BUILD_AUTH_TOKEN_MISSING`; `resume:live` then binds `SENTRY_DSN`,
+`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`. The auth token is
+Sensitive for Preview/Production and encrypted for Development. A plain
+`VOID_STARTER_SENTRY_BINDING_ID` marker proves ownership without persisting any secret value.
+
 The live adapter is covered by HTTP contract mocks, secret-persistence assertions, adoption tests,
-identity/privacy mismatch tests and ambiguous-create resume tests. The original isolated-account
-canary created the GitHub/Vercel/Neon tranche once, kept its IDs on completed-state resume and
-adopted it from a fresh local state without duplication. On 2026-07-27, plan
+identity/privacy/region mismatch tests and ambiguous-create resume tests. The original
+isolated-account canary created the GitHub/Vercel/Neon tranche once, kept its IDs on
+completed-state resume and adopted it from a fresh local state without duplication. On
+2026-07-27, plan
 `7a7be8babbdb8240ca34e7855bff008cf7f4302b85b0dbfd6797cd771afb0770` extended that proof to R2:
 the EU/private bucket `void-starter-canary-20260725` (`f520e89b2e934d96a7b4275140e122b7`)
 passed the object round trip, Vercel adopted binding `ERMGEG72S7cCdvST`, completed-state resume kept
 all attempt counters unchanged, and a fresh state adopted the same six resources with one attempt
 per action. Both state files remained mode `0600` and secret-free.
+
+The Sentry canary then passed with plan
+`7cacd9647fd4dd1188fadb68ee783d0a144753589cedcbafa4e27622b59577e0`. It adopted those same six
+resources, created DE project `4511807245516880`, selected client key
+`55f31207fd9b8307ee94f6a34bd79741`, stopped at the expected missing-build-token boundary, and
+resumed to Vercel binding `hHSyb6KDUXFU6K7I`. A completed-state resume preserved attempt counters
+`1,1,1,1,1,1,1,2`; a fresh local state adopted the same eight IDs with one attempt each. Both
+receipts passed `doctor`, remained mode `0600`, and matched none of the eight provider credentials
+or the public DSN.
 
 ### 10.4 Initial source publication
 
@@ -815,7 +849,8 @@ be proven locally.
     complete CI and protected Production smoke passed.**
 11. Add R2, Resend, observability and DNS adapters. **Resend done and live-validated; R2 is
     implemented, contract-tested and live-validated through creation, resume and stateless
-    adoption; observability and DNS remain.**
+    adoption; Sentry is implemented, contract-tested and live-validated through two-phase resume
+    and stateless adoption; PostHog and DNS remain.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
 13. Connect Forge as manifest producer and Linear as project bootstrap.

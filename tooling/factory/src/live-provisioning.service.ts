@@ -17,6 +17,7 @@ const NEON_API = 'https://console.neon.tech/api/v2';
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
 const DATABASE_BINDING_MARKER = 'VOID_STARTER_DATABASE_BINDING_ID';
 const R2_BINDING_MARKER = 'VOID_STARTER_R2_BINDING_ID';
+const SENTRY_BINDING_MARKER = 'VOID_STARTER_SENTRY_BINDING_ID';
 const DATABASE_SENSITIVE_TARGETS = ['preview', 'production'] as const;
 const DATABASE_DEVELOPMENT_TARGETS = ['development'] as const;
 const DATABASE_MARKER_TARGETS = ['development', 'preview', 'production'] as const;
@@ -29,8 +30,22 @@ const R2_BINDING_KEYS = [
 ] as const;
 const R2_SECRET_KEYS = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const;
 const R2_NON_SECRET_KEYS = ['CLOUDFLARE_ACCOUNT_ID', 'R2_BUCKET_NAME', 'R2_ENDPOINT'] as const;
+const SENTRY_BINDING_KEYS = [
+  'SENTRY_DSN',
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'SENTRY_AUTH_TOKEN',
+  'SENTRY_ORG',
+  'SENTRY_PROJECT',
+] as const;
+const SENTRY_SECRET_KEYS = ['SENTRY_AUTH_TOKEN'] as const;
+const SENTRY_NON_SECRET_KEYS = [
+  'SENTRY_DSN',
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'SENTRY_ORG',
+  'SENTRY_PROJECT',
+] as const;
 
-type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare';
+type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare' | 'sentry';
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export type LiveProvisioningCredentials = {
@@ -40,6 +55,8 @@ export type LiveProvisioningCredentials = {
   cloudflareApiToken?: string;
   r2AccessKeyId?: string;
   r2SecretAccessKey?: string;
+  sentryApiToken?: string;
+  sentryBuildAuthToken?: string;
 };
 
 export type LiveProvisioningAdapterOptions = {
@@ -188,6 +205,36 @@ const cloudflareObjectUploadResponseSchema = z.object({
   }),
 });
 
+const sentryOrganizationSchema = z.object({
+  slug: z.string().min(1),
+  status: z.object({ id: z.string().min(1) }),
+  links: z.object({ regionUrl: z.string().url() }),
+});
+
+const sentryTeamSchema = z.object({
+  slug: z.string().min(1),
+  hasAccess: z.boolean(),
+  organization: z.object({ slug: z.string().min(1) }).optional(),
+});
+
+const sentryProjectSchema = z.object({
+  id: z.union([z.string().min(1), z.number().int().positive()]).transform(String),
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  platform: z.string().nullable().optional(),
+  status: z.string().optional(),
+  teams: z.array(z.object({ slug: z.string().min(1) })),
+});
+
+const sentryClientKeySchema = z.object({
+  id: z.string().min(1),
+  projectId: z.union([z.string().min(1), z.number().int().positive()]).transform(String),
+  isActive: z.boolean(),
+  dsn: z.object({ public: z.string().url() }),
+});
+
+const sentryClientKeysSchema = z.array(sentryClientKeySchema);
+
 function requiredCredential(
   environment: Record<string, string | undefined>,
   name:
@@ -196,7 +243,9 @@ function requiredCredential(
     | 'NEON_API_KEY'
     | 'CLOUDFLARE_API_TOKEN'
     | 'R2_ACCESS_KEY_ID'
-    | 'R2_SECRET_ACCESS_KEY',
+    | 'R2_SECRET_ACCESS_KEY'
+    | 'SENTRY_API_TOKEN'
+    | 'SENTRY_BUILD_AUTH_TOKEN',
 ): string {
   const value = environment[name]?.trim();
   if (!value) {
@@ -213,6 +262,8 @@ export function loadLiveProvisioningCredentials(
   const usesNeon = plan.actions.some((action) => action.provider === 'neon');
   const usesCloudflare = plan.actions.some((action) => action.provider === 'cloudflare');
   const usesR2Binding = plan.actions.some((action) => action.id === 'vercel.r2-binding');
+  const usesSentry = plan.actions.some((action) => action.provider === 'sentry');
+  const usesSentryBinding = plan.actions.some((action) => action.id === 'vercel.sentry-binding');
   const r2AccessKeyId = usesR2Binding ? environment['R2_ACCESS_KEY_ID']?.trim() : undefined;
   const r2SecretAccessKey = usesR2Binding ? environment['R2_SECRET_ACCESS_KEY']?.trim() : undefined;
   if (Boolean(r2AccessKeyId) !== Boolean(r2SecretAccessKey)) {
@@ -226,6 +277,10 @@ export function loadLiveProvisioningCredentials(
     ...(usesNeon ? { neonApiKey: requiredCredential(environment, 'NEON_API_KEY') } : {}),
     ...(usesCloudflare
       ? { cloudflareApiToken: requiredCredential(environment, 'CLOUDFLARE_API_TOKEN') }
+      : {}),
+    ...(usesSentry ? { sentryApiToken: requiredCredential(environment, 'SENTRY_API_TOKEN') } : {}),
+    ...(usesSentryBinding && environment['SENTRY_BUILD_AUTH_TOKEN']?.trim()
+      ? { sentryBuildAuthToken: environment['SENTRY_BUILD_AUTH_TOKEN'].trim() }
       : {}),
     ...(r2AccessKeyId && r2SecretAccessKey
       ? {
@@ -259,6 +314,10 @@ function encoded(value: string): string {
 
 function encodedObjectKey(value: string): string {
   return value.split('/').map(encoded).join('/');
+}
+
+function sentryApi(region: 'de'): string {
+  return `https://${region}.sentry.io/api/0`;
 }
 
 function withQuery(base: string, parameters: Record<string, string>): string {
@@ -315,7 +374,9 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
           ? this.#credentials.vercelToken
           : input.provider === 'neon'
             ? this.#credentials.neonApiKey
-            : this.#credentials.cloudflareApiToken;
+            : input.provider === 'cloudflare'
+              ? this.#credentials.cloudflareApiToken
+              : this.#credentials.sentryApiToken;
     if (!token) {
       throw adapterFailure(
         input.provider,
@@ -388,12 +449,14 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     const vercelAction = plan.actions.find((action) => action.id === 'vercel.project');
     const neonAction = plan.actions.find((action) => action.id === 'neon.project');
     const cloudflareAction = plan.actions.find((action) => action.id === 'cloudflare.r2-bucket');
+    const sentryAction = plan.actions.find((action) => action.id === 'sentry.project');
 
     await Promise.all([
       githubAction ? this.#preflightGithub(githubAction) : Promise.resolve(),
       vercelAction ? this.#preflightVercel(vercelAction) : Promise.resolve(),
       neonAction ? this.#preflightNeon(neonAction) : Promise.resolve(),
       cloudflareAction ? this.#preflightCloudflare(cloudflareAction) : Promise.resolve(),
+      sentryAction ? this.#preflightSentry(sentryAction) : Promise.resolve(),
     ]);
   }
 
@@ -497,6 +560,50 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     await this.#json('cloudflare', response, cloudflareBucketListResponseSchema);
   }
 
+  async #preflightSentry(
+    action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
+  ): Promise<void> {
+    const api = sentryApi(action.input.region);
+    const [organizationResponse, teamResponse] = await Promise.all([
+      this.#request({
+        provider: 'sentry',
+        url: withQuery(`${api}/organizations/${encoded(action.input.organization_slug)}/`, {
+          detailed: '0',
+        }),
+        acceptedStatuses: [200],
+      }),
+      this.#request({
+        provider: 'sentry',
+        url: `${api}/teams/${encoded(action.input.organization_slug)}/${encoded(action.input.team_slug)}/`,
+        acceptedStatuses: [200],
+      }),
+    ]);
+    const organization = await this.#json('sentry', organizationResponse, sentryOrganizationSchema);
+    const team = await this.#json('sentry', teamResponse, sentryTeamSchema);
+    if (
+      organization.slug !== action.input.organization_slug ||
+      organization.status.id !== 'active' ||
+      new URL(organization.links.regionUrl).hostname !== `${action.input.region}.sentry.io`
+    ) {
+      throw adapterFailure(
+        'sentry',
+        'ORGANIZATION_MISMATCH',
+        'Authenticated Sentry token does not target the requested active DE organization',
+      );
+    }
+    if (
+      team.slug !== action.input.team_slug ||
+      !team.hasAccess ||
+      (team.organization && team.organization.slug !== action.input.organization_slug)
+    ) {
+      throw adapterFailure(
+        'sentry',
+        'TEAM_MISMATCH',
+        'Authenticated Sentry token cannot access the requested team',
+      );
+    }
+  }
+
   async ensure(
     action: ProvisioningAction,
     context: ProvisioningExecutionContext,
@@ -514,6 +621,10 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensureR2Bucket(action, context);
       case 'vercel.r2-binding':
         return this.#ensureR2Binding(action, context);
+      case 'sentry.project':
+        return this.#ensureSentryProject(action, context);
+      case 'vercel.sentry-binding':
+        return this.#ensureSentryBinding(action, context);
     }
   }
 
@@ -1021,6 +1132,135 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     );
   }
 
+  async #lookupSentryProject(
+    action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
+  ): Promise<z.infer<typeof sentryProjectSchema> | null> {
+    const response = await this.#request({
+      provider: 'sentry',
+      url: `${sentryApi(action.input.region)}/projects/${encoded(action.input.organization_slug)}/${encoded(action.input.slug)}/`,
+      acceptedStatuses: [200, 404],
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    return this.#json('sentry', response, sentryProjectSchema);
+  }
+
+  async #sentryClientKey(
+    action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
+    project: z.infer<typeof sentryProjectSchema>,
+  ): Promise<z.infer<typeof sentryClientKeySchema>> {
+    const response = await this.#request({
+      provider: 'sentry',
+      url: withQuery(
+        `${sentryApi(action.input.region)}/projects/${encoded(action.input.organization_slug)}/${encoded(action.input.slug)}/keys/`,
+        { status: 'active' },
+      ),
+      acceptedStatuses: [200],
+    });
+    const keys = (await this.#json('sentry', response, sentryClientKeysSchema)).filter(
+      (key) => key.isActive && key.projectId === project.id,
+    );
+    if (keys.length !== 1 || !keys[0]) {
+      throw adapterFailure(
+        'sentry',
+        'CLIENT_KEY_CONFLICT',
+        'Sentry project must expose exactly one active client key for deterministic binding',
+      );
+    }
+    return keys[0];
+  }
+
+  async #sentryProjectResource(
+    action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
+    project: z.infer<typeof sentryProjectSchema>,
+  ): Promise<ProvisionedResource> {
+    if (
+      project.slug !== action.input.slug ||
+      project.name !== action.input.name ||
+      project.platform !== action.input.platform ||
+      (project.status !== undefined && project.status !== 'active') ||
+      !project.teams.some((team) => team.slug === action.input.team_slug)
+    ) {
+      throw adapterFailure(
+        'sentry',
+        'PROJECT_CONFLICT',
+        'Existing Sentry project does not match the requested name, platform, team or status',
+      );
+    }
+    const clientKey = await this.#sentryClientKey(action, project);
+    return {
+      provider: 'sentry',
+      resource_kind: 'project',
+      resource_id: project.id,
+      display_name: project.slug,
+      organization_slug: action.input.organization_slug,
+      team_slug: action.input.team_slug,
+      region: action.input.region,
+      platform: action.input.platform,
+      client_key_id: clientKey.id,
+      dsn_sha256: sha256(clientKey.dsn.public),
+    };
+  }
+
+  async #ensureSentryProject(
+    action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const existing = await this.#lookupSentryProject(action);
+    if (existing) {
+      return this.#sentryProjectResource(action, existing);
+    }
+    if (context.previousError?.code === 'SENTRY_PROJECT_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'sentry',
+        'PROJECT_CREATE_AMBIGUOUS',
+        'Sentry project creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'sentry',
+        url: `${sentryApi(action.input.region)}/teams/${encoded(action.input.organization_slug)}/${encoded(action.input.team_slug)}/projects/`,
+        method: 'POST',
+        body: {
+          name: action.input.name,
+          slug: action.input.slug,
+          platform: action.input.platform,
+          default_rules: action.input.default_rules,
+        },
+        acceptedStatuses: [201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupSentryProject(action);
+    if (reconciled) {
+      return this.#sentryProjectResource(action, reconciled);
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'sentry',
+        'PROJECT_CREATE_AMBIGUOUS',
+        'Sentry project creation is ambiguous; resume will reconcile without creating again',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'sentry',
+      'PROJECT_CREATE_AMBIGUOUS',
+      'Sentry accepted project creation but the project is not yet observable',
+      true,
+    );
+  }
+
   async #lookupDatabaseBinding(
     action: Extract<ProvisioningAction, { id: 'vercel.database-binding' }>,
     project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
@@ -1381,6 +1621,226 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       'vercel',
       'R2_BINDING_CREATE_AMBIGUOUS',
       'Vercel accepted the R2 binding but its ownership marker is not yet observable',
+      true,
+    );
+  }
+
+  async #lookupSentryBinding(
+    action: Extract<ProvisioningAction, { id: 'vercel.sentry-binding' }>,
+    project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
+  ): Promise<ProvisionedResource | null> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    const response = await this.#request({
+      provider: 'vercel',
+      url: withQuery(`${VERCEL_API}/v9/projects/${encoded(project.resource_id)}/env`, {
+        teamId,
+      }),
+      acceptedStatuses: [200],
+    });
+    const environment = (await this.#json('vercel', response, vercelEnvironmentVariablesSchema))
+      .envs;
+    const managedKeys = new Set<string>([...SENTRY_BINDING_KEYS, SENTRY_BINDING_MARKER]);
+    const managed = environment.filter((variable) => managedKeys.has(variable.key));
+    if (managed.length === 0) {
+      return null;
+    }
+
+    const nonSecretBindingsMatch = SENTRY_NON_SECRET_KEYS.every((key) => {
+      const variables = managed.filter((variable) => variable.key === key);
+      return (
+        variables.length === 1 &&
+        variables[0]?.type === 'encrypted' &&
+        hasExactTargets(variables[0].target, DATABASE_MARKER_TARGETS)
+      );
+    });
+    const secretBindingsMatch = SENTRY_SECRET_KEYS.every((key) => {
+      const variables = managed.filter((variable) => variable.key === key);
+      return (
+        variables.length === 2 &&
+        variables.some(
+          (variable) =>
+            variable.type === 'sensitive' &&
+            hasExactTargets(variable.target, DATABASE_SENSITIVE_TARGETS),
+        ) &&
+        variables.some(
+          (variable) =>
+            variable.type === 'encrypted' &&
+            hasExactTargets(variable.target, DATABASE_DEVELOPMENT_TARGETS),
+        )
+      );
+    });
+    const markers = managed.filter((variable) => variable.key === SENTRY_BINDING_MARKER);
+    const marker = markers[0];
+    if (
+      managed.length !== 7 ||
+      !nonSecretBindingsMatch ||
+      !secretBindingsMatch ||
+      markers.length !== 1 ||
+      !marker ||
+      marker.type !== 'plain' ||
+      marker.value !== action.idempotency_key ||
+      !hasExactTargets(marker.target, DATABASE_MARKER_TARGETS)
+    ) {
+      throw adapterFailure(
+        'vercel',
+        'SENTRY_BINDING_CONFLICT',
+        'Existing Vercel Sentry variables are not owned by this plan',
+      );
+    }
+    return {
+      provider: 'vercel',
+      resource_kind: 'sentry-binding',
+      resource_id: marker.id,
+      display_name: 'Sentry runtime binding',
+      bound_keys: action.input.bindings,
+    };
+  }
+
+  async #sentryPublicDsn(
+    project: Extract<ProvisionedResource, { provider: 'sentry'; resource_kind: 'project' }>,
+  ): Promise<string> {
+    const response = await this.#request({
+      provider: 'sentry',
+      url: withQuery(
+        `${sentryApi(project.region)}/projects/${encoded(project.organization_slug)}/${encoded(project.display_name)}/keys/`,
+        { status: 'active' },
+      ),
+      acceptedStatuses: [200],
+    });
+    const keys = await this.#json('sentry', response, sentryClientKeysSchema);
+    const key = keys.find(
+      (candidate) =>
+        candidate.id === project.client_key_id &&
+        candidate.projectId === project.resource_id &&
+        candidate.isActive,
+    );
+    if (!key || sha256(key.dsn.public) !== project.dsn_sha256) {
+      throw adapterFailure(
+        'sentry',
+        'CLIENT_KEY_CONFLICT',
+        'Sentry client key changed after project provisioning',
+      );
+    }
+    return key.dsn.public;
+  }
+
+  async #ensureSentryBinding(
+    action: Extract<ProvisioningAction, { id: 'vercel.sentry-binding' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const project = requireDependency(context, 'vercel.project');
+    const sentryProject = requireDependency(context, 'sentry.project');
+    if (project.provider !== 'vercel' || project.resource_kind !== 'project') {
+      throw new Error('Sentry binding dependency is not a Vercel project');
+    }
+    if (sentryProject.provider !== 'sentry' || sentryProject.resource_kind !== 'project') {
+      throw new Error('Sentry binding dependency is not a Sentry project');
+    }
+
+    const existing = await this.#lookupSentryBinding(action, project);
+    if (existing) {
+      return existing;
+    }
+    if (context.previousError?.code === 'VERCEL_SENTRY_BINDING_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'vercel',
+        'SENTRY_BINDING_CREATE_AMBIGUOUS',
+        'Vercel Sentry binding creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    const buildAuthToken = this.#credentials.sentryBuildAuthToken;
+    if (!buildAuthToken) {
+      throw adapterFailure(
+        'sentry',
+        'BUILD_AUTH_TOKEN_MISSING',
+        'Sentry build token is missing; create a release-upload token and resume',
+        true,
+      );
+    }
+    const dsn = await this.#sentryPublicDsn(sentryProject);
+    const values: Record<(typeof SENTRY_BINDING_KEYS)[number], string> = {
+      SENTRY_DSN: dsn,
+      NEXT_PUBLIC_SENTRY_DSN: dsn,
+      SENTRY_AUTH_TOKEN: buildAuthToken,
+      SENTRY_ORG: sentryProject.organization_slug,
+      SENTRY_PROJECT: sentryProject.display_name,
+    };
+    const variables = SENTRY_BINDING_KEYS.flatMap((key) =>
+      SENTRY_SECRET_KEYS.includes(key as (typeof SENTRY_SECRET_KEYS)[number])
+        ? [
+            {
+              key,
+              value: values[key],
+              type: 'sensitive',
+              target: [...DATABASE_SENSITIVE_TARGETS],
+            },
+            {
+              key,
+              value: values[key],
+              type: 'encrypted',
+              target: [...DATABASE_DEVELOPMENT_TARGETS],
+            },
+          ]
+        : [
+            {
+              key,
+              value: values[key],
+              type: 'encrypted',
+              target: [...DATABASE_MARKER_TARGETS],
+            },
+          ],
+    );
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'vercel',
+        url: withQuery(`${VERCEL_API}/v10/projects/${encoded(project.resource_id)}/env`, {
+          teamId,
+        }),
+        method: 'POST',
+        body: [
+          ...variables,
+          {
+            key: SENTRY_BINDING_MARKER,
+            value: action.idempotency_key,
+            type: 'plain',
+            target: [...DATABASE_MARKER_TARGETS],
+          },
+        ],
+        acceptedStatuses: [200, 201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupSentryBinding(action, project);
+    if (reconciled) {
+      return reconciled;
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'vercel',
+        'SENTRY_BINDING_CREATE_AMBIGUOUS',
+        'Vercel Sentry binding creation is ambiguous; resume will only reconcile',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'vercel',
+      'SENTRY_BINDING_CREATE_AMBIGUOUS',
+      'Vercel accepted the Sentry binding but its ownership marker is not yet observable',
       true,
     );
   }

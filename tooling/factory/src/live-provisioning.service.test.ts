@@ -19,6 +19,7 @@ import { createProvisioningPlan, parseProvisioningContext } from './provisioning
 const temporaryRoots: string[] = [];
 const connectionUri =
   'postgresql://neondb_owner:provider-secret@ep-example-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require';
+const sentryDsn = 'https://public-key@o123.ingest.de.sentry.io/456';
 
 type RecordedRequest = {
   method: string;
@@ -51,6 +52,10 @@ class MockProviderApi {
   neonOrganizationAccessible = true;
   failNeonCreateWithNetwork = false;
   failR2CreateWithNetwork = false;
+  sentryProjectExists = false;
+  sentryBindingMarker: string | null = null;
+  sentryRegionUrl = 'https://de.sentry.io';
+  failSentryCreateWithNetwork = false;
   readonly requests: RecordedRequest[] = [];
 
   readonly fetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -183,6 +188,37 @@ class MockProviderApi {
               },
             ]
           : []),
+        ...(this.sentryBindingMarker
+          ? [
+              ...['SENTRY_DSN', 'NEXT_PUBLIC_SENTRY_DSN', 'SENTRY_ORG', 'SENTRY_PROJECT'].map(
+                (key) => ({
+                  id: `env_${key.toLowerCase()}`,
+                  key,
+                  type: 'encrypted',
+                  target: ['development', 'preview', 'production'],
+                }),
+              ),
+              {
+                id: 'env_sentry_auth_sensitive',
+                key: 'SENTRY_AUTH_TOKEN',
+                type: 'sensitive',
+                target: ['preview', 'production'],
+              },
+              {
+                id: 'env_sentry_auth_development',
+                key: 'SENTRY_AUTH_TOKEN',
+                type: 'encrypted',
+                target: ['development'],
+              },
+              {
+                id: 'env_sentry_marker',
+                key: 'VOID_STARTER_SENTRY_BINDING_ID',
+                type: 'plain',
+                value: this.sentryBindingMarker,
+                target: ['development', 'preview', 'production'],
+              },
+            ]
+          : []),
       ];
       return jsonResponse({ envs });
     }
@@ -198,6 +234,9 @@ class MockProviderApi {
       this.r2BindingMarker =
         variables.find((variable) => variable.key === 'VOID_STARTER_R2_BINDING_ID')?.value ??
         this.r2BindingMarker;
+      this.sentryBindingMarker =
+        variables.find((variable) => variable.key === 'VOID_STARTER_SENTRY_BINDING_ID')?.value ??
+        this.sentryBindingMarker;
       return jsonResponse({}, 201);
     }
 
@@ -327,6 +366,74 @@ class MockProviderApi {
       }
     }
 
+    if (
+      url.hostname === 'de.sentry.io' &&
+      url.pathname === '/api/0/organizations/void-sandbox/' &&
+      method === 'GET'
+    ) {
+      return jsonResponse({
+        slug: 'void-sandbox',
+        status: { id: 'active' },
+        links: { regionUrl: this.sentryRegionUrl },
+      });
+    }
+    if (
+      url.hostname === 'de.sentry.io' &&
+      url.pathname === '/api/0/teams/void-sandbox/platform/' &&
+      method === 'GET'
+    ) {
+      return jsonResponse({
+        slug: 'platform',
+        hasAccess: true,
+        organization: { slug: 'void-sandbox' },
+      });
+    }
+    if (
+      url.hostname === 'de.sentry.io' &&
+      url.pathname === '/api/0/projects/void-sandbox/example-saas/' &&
+      method === 'GET'
+    ) {
+      return this.sentryProjectExists
+        ? jsonResponse({
+            id: 'sentry_project_example',
+            slug: 'example-saas',
+            name: 'example-saas',
+            platform: 'javascript-nextjs',
+            status: 'active',
+            teams: [{ slug: 'platform' }],
+          })
+        : jsonResponse({}, 404);
+    }
+    if (
+      url.hostname === 'de.sentry.io' &&
+      url.pathname === '/api/0/teams/void-sandbox/platform/projects/' &&
+      method === 'POST'
+    ) {
+      if (this.failSentryCreateWithNetwork) {
+        throw new Error('mocked ambiguous Sentry network failure');
+      }
+      this.sentryProjectExists = true;
+      return jsonResponse({}, 201);
+    }
+    if (
+      url.hostname === 'de.sentry.io' &&
+      url.pathname === '/api/0/projects/void-sandbox/example-saas/keys/' &&
+      method === 'GET'
+    ) {
+      return jsonResponse(
+        this.sentryProjectExists
+          ? [
+              {
+                id: 'sentry_key_example',
+                projectId: 'sentry_project_example',
+                isActive: true,
+                dsn: { public: sentryDsn },
+              },
+            ]
+          : [],
+      );
+    }
+
     throw new Error(`Unexpected provider request: ${method} ${url.toString()}`);
   };
 }
@@ -349,6 +456,11 @@ const context = parseProvisioningContext({
   cloudflare: {
     account_id: '0123456789abcdef0123456789abcdef',
   },
+  sentry: {
+    organization_slug: 'void-sandbox',
+    team_slug: 'platform',
+    region: 'de',
+  },
 });
 
 const credentials = {
@@ -358,6 +470,8 @@ const credentials = {
   cloudflareApiToken: 'cloudflare-provider-secret',
   r2AccessKeyId: 'r2-access-provider-secret',
   r2SecretAccessKey: 'r2-secret-provider-secret',
+  sentryApiToken: 'sentry-control-provider-secret',
+  sentryBuildAuthToken: 'sentry-build-provider-secret',
 };
 
 async function createGeneratedProject() {
@@ -405,8 +519,10 @@ describe('LiveProvisioningAdapter', () => {
       'env_marker',
       'r2_bucket_example',
       'env_r2_marker',
+      'sentry_project_example',
+      'env_sentry_marker',
     ]);
-    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(6);
+    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(8);
     expect(provider.requests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
       true,
     );
@@ -418,7 +534,9 @@ describe('LiveProvisioningAdapter', () => {
             ? `Bearer ${credentials.vercelToken}`
             : request.url.hostname === 'console.neon.tech'
               ? `Bearer ${credentials.neonApiKey}`
-              : `Bearer ${credentials.cloudflareApiToken}`;
+              : request.url.hostname === 'api.cloudflare.com'
+                ? `Bearer ${credentials.cloudflareApiToken}`
+                : `Bearer ${credentials.sentryApiToken}`;
       expect(request.authorization).toBe(expectedAuthorization);
     }
 
@@ -485,6 +603,19 @@ describe('LiveProvisioningAdapter', () => {
     });
     expect(provider.r2CanaryPayload).toBeNull();
 
+    const sentryCreateRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' &&
+        request.url.hostname === 'de.sentry.io' &&
+        request.url.pathname.endsWith('/platform/projects/'),
+    );
+    expect(sentryCreateRequest?.body).toEqual({
+      name: 'example-saas',
+      slug: 'example-saas',
+      platform: 'javascript-nextjs',
+      default_rules: true,
+    });
+
     const r2EnvironmentRequest = provider.requests.find(
       (request) =>
         request.method === 'POST' &&
@@ -512,6 +643,37 @@ describe('LiveProvisioningAdapter', () => {
           type: 'encrypted',
           target: ['development', 'preview', 'production'],
           value: 'https://0123456789abcdef0123456789abcdef.eu.r2.cloudflarestorage.com',
+        },
+      ]),
+    );
+
+    const sentryEnvironmentRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' &&
+        Array.isArray(request.body) &&
+        request.body.some(
+          (variable: { key?: string }) => variable.key === 'VOID_STARTER_SENTRY_BINDING_ID',
+        ),
+    );
+    expect(sentryEnvironmentRequest?.body).toEqual(
+      expect.arrayContaining([
+        {
+          key: 'SENTRY_DSN',
+          type: 'encrypted',
+          target: ['development', 'preview', 'production'],
+          value: sentryDsn,
+        },
+        {
+          key: 'NEXT_PUBLIC_SENTRY_DSN',
+          type: 'encrypted',
+          target: ['development', 'preview', 'production'],
+          value: sentryDsn,
+        },
+        {
+          key: 'SENTRY_AUTH_TOKEN',
+          type: 'sensitive',
+          target: ['preview', 'production'],
+          value: credentials.sentryBuildAuthToken,
         },
       ]),
     );
@@ -544,6 +706,12 @@ describe('LiveProvisioningAdapter', () => {
     );
     if (!r2BindingAction) throw new Error('Expected R2 binding action');
     provider.r2BindingMarker = r2BindingAction.idempotency_key;
+    provider.sentryProjectExists = true;
+    const sentryBindingAction = project.plan.actions.find(
+      (action) => action.id === 'vercel.sentry-binding',
+    );
+    if (!sentryBindingAction) throw new Error('Expected Sentry binding action');
+    provider.sentryBindingMarker = sentryBindingAction.idempotency_key;
 
     const state = await applyProvisioning({
       projectRoot: project.root,
@@ -566,6 +734,7 @@ describe('LiveProvisioningAdapter', () => {
       vercelToken: credentials.vercelToken,
       neonApiKey: credentials.neonApiKey,
       cloudflareApiToken: credentials.cloudflareApiToken,
+      sentryApiToken: credentials.sentryApiToken,
     };
 
     await expect(
@@ -611,6 +780,66 @@ describe('LiveProvisioningAdapter', () => {
           request.method === 'POST' &&
           request.url.hostname === 'api.cloudflare.com' &&
           request.url.pathname.endsWith('/r2/buckets'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('resumes the Sentry binding with a separate build token without recreating the project', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    const controlCredentials = {
+      githubToken: credentials.githubToken,
+      vercelToken: credentials.vercelToken,
+      neonApiKey: credentials.neonApiKey,
+      cloudflareApiToken: credentials.cloudflareApiToken,
+      r2AccessKeyId: credentials.r2AccessKeyId,
+      r2SecretAccessKey: credentials.r2SecretAccessKey,
+      sentryApiToken: credentials.sentryApiToken,
+    };
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({
+          credentials: controlCredentials,
+          fetch: provider.fetch,
+        }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+
+    const partialState = await readProvisioningState(project.root);
+    expect(
+      partialState?.actions.find((action) => action.action_id === 'sentry.project'),
+    ).toMatchObject({ attempts: 1, status: 'succeeded' });
+    expect(
+      partialState?.actions.find((action) => action.action_id === 'vercel.sentry-binding'),
+    ).toMatchObject({
+      attempts: 1,
+      error: { code: 'SENTRY_BUILD_AUTH_TOKEN_MISSING', retryable: true },
+      status: 'failed',
+    });
+
+    const resumedState = await applyProvisioning({
+      projectRoot: project.root,
+      plan: project.plan,
+      adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      requireExistingState: true,
+    });
+
+    expect(resumedState.status).toBe('succeeded');
+    expect(
+      resumedState.actions.find((action) => action.action_id === 'sentry.project'),
+    ).toMatchObject({ attempts: 1, status: 'succeeded' });
+    expect(
+      resumedState.actions.find((action) => action.action_id === 'vercel.sentry-binding'),
+    ).toMatchObject({ attempts: 2, status: 'succeeded' });
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.hostname === 'de.sentry.io' &&
+          request.url.pathname.endsWith('/platform/projects/'),
       ),
     ).toHaveLength(1);
   });
@@ -692,6 +921,42 @@ describe('LiveProvisioningAdapter', () => {
     ).toHaveLength(1);
   });
 
+  it('never repeats an ambiguous Sentry create while resume can only reconcile it', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.failSentryCreateWithNetwork = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(project.root))?.actions.find(
+        (action) => action.action_id === 'sentry.project',
+      )?.error?.code,
+    ).toBe('SENTRY_PROJECT_CREATE_AMBIGUOUS');
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+        requireExistingState: true,
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.hostname === 'de.sentry.io' &&
+          request.url.pathname.endsWith('/platform/projects/'),
+      ),
+    ).toHaveLength(1);
+  });
+
   it('rejects an R2 bucket exposed through a public domain before the object canary or binding', async () => {
     const project = await createGeneratedProject();
     const provider = new MockProviderApi();
@@ -729,6 +994,22 @@ describe('LiveProvisioningAdapter', () => {
         }),
       }),
     ).rejects.toThrow(/organization/i);
+    expect(await readProvisioningState(project.root)).toBeNull();
+    expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
+  });
+
+  it('fails preflight before state or mutation when Sentry is outside the DE region', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.sentryRegionUrl = 'https://us.sentry.io';
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toThrow(/requested active DE organization/);
     expect(await readProvisioningState(project.root)).toBeNull();
     expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
   });
@@ -803,6 +1084,18 @@ describe('loadLiveProvisioningCredentials', () => {
         },
         canonicalPlan,
       ),
+    ).toThrow(/SENTRY_API_TOKEN/);
+    expect(() =>
+      loadLiveProvisioningCredentials(
+        {
+          GITHUB_TOKEN: 'github',
+          VERCEL_TOKEN: 'vercel',
+          NEON_API_KEY: 'neon',
+          CLOUDFLARE_API_TOKEN: 'cloudflare',
+          SENTRY_API_TOKEN: 'sentry-control',
+        },
+        canonicalPlan,
+      ),
     ).not.toThrow();
     expect(() =>
       loadLiveProvisioningCredentials(
@@ -811,6 +1104,7 @@ describe('loadLiveProvisioningCredentials', () => {
           VERCEL_TOKEN: 'vercel',
           NEON_API_KEY: 'neon',
           CLOUDFLARE_API_TOKEN: 'cloudflare',
+          SENTRY_API_TOKEN: 'sentry-control',
           R2_ACCESS_KEY_ID: 'partial-r2-credential',
         },
         canonicalPlan,

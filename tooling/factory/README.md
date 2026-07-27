@@ -15,12 +15,13 @@ The current slice exposes:
   dry runs;
 - `renderProject(input)` to copy the baseline into a new target, apply selected surfaces, exclude
   secrets and development-only artifacts, and emit deterministic metadata;
-- `createProvisioningPlan(manifest, context)` to plan non-secret GitHub, Vercel, Neon and
-  Cloudflare R2 reconciliation actions with stable idempotency keys;
+- `createProvisioningPlan(manifest, context)` to plan non-secret GitHub, Vercel, Neon,
+  Cloudflare R2 and Sentry reconciliation actions with stable idempotency keys;
 - `applyProvisioning(input)` and the simulated adapter to exercise atomic state, locking,
   interruption recovery and resume without making remote changes;
 - `LiveProvisioningAdapter` plus separate live CLIs for authenticated provider preflight,
-  lookup-before-create reconciliation, private-EU R2 validation and in-memory secret transport;
+  lookup-before-create reconciliation, private-EU R2 and DE Sentry validation, and in-memory
+  secret transport;
 - `createDeliveryPlan`, `preflightDelivery`, and `observeDelivery` to bind a Vercel Production
   deployment and HTTP smoke receipt to the exact published source commit;
 - `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
@@ -67,8 +68,10 @@ The current Better Auth, Clerk, PostHog and Sentry adapters target the Next.js s
 that selects one of them without web is rejected instead of producing a misleading mobile
 integration. Resend is live-validated. R2 has a deterministic provider plan, resumable live
 adapter, private-domain checks, object canary and Vercel secret binding; creation, completed-state
-resume and fresh-state adoption have passed against the isolated sandbox. DNS remains a planned
-provider capability.
+resume and fresh-state adoption have passed against the isolated sandbox. Sentry project creation,
+DE-region attestation, deterministic client-key selection, two-phase Vercel binding, completed-state
+resume and fresh-state adoption have also passed against the isolated sandbox. DNS remains a
+planned provider capability.
 
 To materialize the Expo blueprint in a temporary directory, install it, type-check it, and export
 the iOS, Android, and web bundles:
@@ -90,10 +93,10 @@ bun run apply -- \
 ```
 
 `--dry-run` is the default and writes nothing. It produces an ordered GitHub repository, Vercel
-project, Neon project, database binding, EU-jurisdiction R2 bucket and R2 runtime-binding plan
-according to the selected manifest. The separate provisioning context contains account
-coordinates such as owner, team, organization and Cloudflare account IDs, never tokens or secret
-values.
+project, Neon project, database binding, EU-jurisdiction R2 bucket, R2 runtime binding, DE Sentry
+project and Sentry runtime-binding plan according to the selected manifest. The separate
+provisioning context contains account coordinates such as owner, team, organization, Sentry slugs
+and Cloudflare account IDs, never tokens or secret values.
 
 The resumable engine can currently be exercised without provider calls:
 
@@ -118,7 +121,7 @@ Before allowing mutations, validate that each token targets the intended account
 
 ```sh
 GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
-CLOUDFLARE_API_TOKEN=... \
+CLOUDFLARE_API_TOKEN=... SENTRY_API_TOKEN=... \
   bun run preflight:live -- \
   /absolute/path/to/new-project \
   fixtures/provisioning/eu.yaml
@@ -127,7 +130,8 @@ CLOUDFLARE_API_TOKEN=... \
 Preflight uses authenticated `GET` requests only. Tokens are read from the process environment and
 are never accepted by the manifest or provisioning context. GitHub organization identity uses the
 exact authenticated membership endpoint and requires `Organization permissions > Members:
-Read-only`.
+Read-only`. Sentry preflight verifies that the exact active organization belongs to the
+`de.sentry.io` region and that the token can access the selected team.
 
 Live apply is deliberately a separate command and requires the exact generated project name. R2
 runtime credentials may be omitted on the first apply: the engine creates and validates the EU
@@ -139,6 +143,7 @@ remains supported when an already-scoped token exists:
 ```sh
 GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
 CLOUDFLARE_API_TOKEN=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+SENTRY_API_TOKEN=... SENTRY_BUILD_AUTH_TOKEN=... \
   bun run apply:live -- \
   /absolute/path/to/new-project \
   fixtures/provisioning/eu.yaml \
@@ -146,21 +151,31 @@ CLOUDFLARE_API_TOKEN=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
 ```
 
 It reconciles before creating and again after every create response. GitHub visibility, Vercel
-framework/root directory, Neon region and the R2 bucket's `eu` jurisdiction must match before an
-existing resource is adopted. R2 adoption also rejects any enabled managed or custom public
-domain and runs a deterministic upload/read/delete object canary. Database and R2 runtime secrets
-are posted to Vercel as `sensitive` for Preview/Production and `encrypted` for Development, where
-Vercel does not support sensitive variables. They are never written to factory state or read back.
-Separate non-secret ownership markers make both bindings recoverable.
+framework/root directory, Neon region, the R2 bucket's `eu` jurisdiction and the Sentry project's
+DE region/platform/team must match before an existing resource is adopted. R2 adoption also
+rejects any enabled managed or custom public domain and runs a deterministic upload/read/delete
+object canary. Database, R2 and Sentry build secrets are posted to Vercel as `sensitive` for
+Preview/Production and `encrypted` for Development, where Vercel does not support sensitive
+variables. They are never written to factory state or read back. Separate non-secret ownership
+markers make every binding recoverable.
 
 After a bucket-scoped runtime token exists, load `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`
 together and run `resume:live`; it skips the completed bucket action and finishes only the Vercel
 binding. Supplying just one credential fails before provider calls.
 
+Sentry follows the same two-phase least-privilege boundary. `SENTRY_API_TOKEN` controls active-DE
+organization/team preflight plus project lookup/create. `SENTRY_BUILD_AUTH_TOKEN` is optional
+until the Vercel binding action; when absent, apply records the retryable
+`SENTRY_BUILD_AUTH_TOKEN_MISSING` failure. Provide a separate release-upload token and run
+`resume:live`. The public DSN is fetched in memory and persisted only as its client-key ID and
+SHA-256; Vercel receives `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`
+and `SENTRY_PROJECT`.
+
 An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
 that create blindly. Live contract tests use mocked HTTP providers. The GitHub, Vercel and Neon
-tranche and the R2 extension passed creation, completed-state resume and stateless adoption
-against isolated sandbox accounts. The R2 canary also proved the two-phase least-privilege flow:
+tranche, the R2 extension and the Sentry extension passed creation, completed-state resume and
+stateless adoption against isolated sandbox accounts. The R2 canary proved the two-phase
+least-privilege flow:
 create and validate the private bucket with the control token, then bind exact-bucket runtime
 credentials on resume.
 

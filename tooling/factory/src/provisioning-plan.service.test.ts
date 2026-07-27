@@ -29,10 +29,15 @@ const fullContext = {
   cloudflare: {
     account_id: '0123456789abcdef0123456789abcdef',
   },
+  sentry: {
+    organization_slug: 'void-sandbox',
+    team_slug: 'platform',
+    region: 'de',
+  },
 } as const;
 
 describe('createProvisioningPlan', () => {
-  it('plans GitHub, Vercel, Neon, R2, and their bindings deterministically', () => {
+  it('plans GitHub, Vercel, Neon, R2, Sentry, and their bindings deterministically', () => {
     const manifest = parseBuildManifest(canonicalManifest);
     const context = parseProvisioningContext(fullContext);
 
@@ -47,6 +52,8 @@ describe('createProvisioningPlan', () => {
       'vercel.database-binding',
       'cloudflare.r2-bucket',
       'vercel.r2-binding',
+      'sentry.project',
+      'vercel.sentry-binding',
     ]);
     expect(
       first.actions.every((action) => action.idempotency_key.startsWith('void-starter:v1:')),
@@ -61,6 +68,11 @@ describe('createProvisioningPlan', () => {
       input: { jurisdiction: 'eu', storage_class: 'Standard' },
     });
     expect(first.actions[5]?.depends_on).toEqual(['vercel.project', 'cloudflare.r2-bucket']);
+    expect(first.actions[6]).toMatchObject({
+      provider: 'sentry',
+      input: { region: 'de', platform: 'javascript-nextjs' },
+    });
+    expect(first.actions[7]?.depends_on).toEqual(['vercel.project', 'sentry.project']);
   });
 
   it('plans only resources selected by each surface and capability profile', () => {
@@ -113,6 +125,15 @@ describe('createProvisioningPlan', () => {
     });
     expect(() => createProvisioningPlan(manifest, contextWithoutCloudflare)).toThrow(/Cloudflare/);
 
+    const contextWithoutSentry = parseProvisioningContext({
+      schema_version: 1,
+      github: fullContext.github,
+      vercel: fullContext.vercel,
+      neon: fullContext.neon,
+      cloudflare: fullContext.cloudflare,
+    });
+    expect(() => createProvisioningPlan(manifest, contextWithoutSentry)).toThrow(/Sentry/);
+
     expect(() =>
       parseProvisioningContext({
         ...fullContext,
@@ -144,6 +165,12 @@ vercel:
           ...fullContext.vercel,
           region: 'iad1',
         },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseProvisioningContext({
+        ...fullContext,
+        sentry: { ...fullContext.sentry, region: 'us' },
       }),
     ).toThrow();
   });

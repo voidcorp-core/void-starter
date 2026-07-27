@@ -29,12 +29,26 @@ const cloudflareContextSchema = z.strictObject({
     .regex(/^[a-f0-9]{32}$/),
 });
 
+const sentrySlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+const sentryContextSchema = z.strictObject({
+  organization_slug: sentrySlugSchema,
+  team_slug: sentrySlugSchema,
+  region: z.literal('de'),
+});
+
 export const provisioningContextSchema = z.strictObject({
   schema_version: z.literal(1),
   github: githubContextSchema,
   vercel: vercelContextSchema.optional(),
   neon: neonContextSchema.optional(),
   cloudflare: cloudflareContextSchema.optional(),
+  sentry: sentryContextSchema.optional(),
 });
 
 export type ProvisioningContext = z.infer<typeof provisioningContextSchema>;
@@ -151,6 +165,50 @@ const vercelR2BindingActionSchema = z.strictObject({
   idempotency_key: idempotencyKeySchema,
 });
 
+const sentryProjectActionSchema = z.strictObject({
+  id: z.literal('sentry.project'),
+  provider: z.literal('sentry'),
+  kind: z.literal('ensure-project'),
+  depends_on: z.tuple([]),
+  permissions: z.tuple([
+    z.literal('organization:read'),
+    z.literal('team:read'),
+    z.literal('project:read'),
+    z.literal('project:write'),
+  ]),
+  input: z.strictObject({
+    organization_slug: sentrySlugSchema,
+    team_slug: sentrySlugSchema,
+    name: z.string().trim().min(1),
+    slug: sentrySlugSchema,
+    region: z.literal('de'),
+    platform: z.literal('javascript-nextjs'),
+    default_rules: z.literal(true),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
+const vercelSentryBindingActionSchema = z.strictObject({
+  id: z.literal('vercel.sentry-binding'),
+  provider: z.literal('vercel'),
+  kind: z.literal('ensure-sentry-binding'),
+  depends_on: z.tuple([z.literal('vercel.project'), z.literal('sentry.project')]),
+  permissions: z.tuple([z.literal('project-environment:write')]),
+  input: z.strictObject({
+    project_action_id: z.literal('vercel.project'),
+    sentry_action_id: z.literal('sentry.project'),
+    bindings: z.tuple([
+      z.literal('SENTRY_DSN'),
+      z.literal('NEXT_PUBLIC_SENTRY_DSN'),
+      z.literal('SENTRY_AUTH_TOKEN'),
+      z.literal('SENTRY_ORG'),
+      z.literal('SENTRY_PROJECT'),
+    ]),
+    targets: z.tuple([z.literal('development'), z.literal('preview'), z.literal('production')]),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
 const provisioningActionSchema = z.discriminatedUnion('id', [
   githubRepositoryActionSchema,
   vercelProjectActionSchema,
@@ -158,6 +216,8 @@ const provisioningActionSchema = z.discriminatedUnion('id', [
   vercelDatabaseBindingActionSchema,
   cloudflareR2BucketActionSchema,
   vercelR2BindingActionSchema,
+  sentryProjectActionSchema,
+  vercelSentryBindingActionSchema,
 ]);
 
 export type ProvisioningAction = z.infer<typeof provisioningActionSchema>;
@@ -224,6 +284,29 @@ export const provisionedResourceSchema = z.union([
       z.literal('R2_SECRET_ACCESS_KEY'),
     ]),
   }),
+  z.strictObject({
+    provider: z.literal('sentry'),
+    resource_kind: z.literal('project'),
+    ...resourceIdentitySchema,
+    organization_slug: sentrySlugSchema,
+    team_slug: sentrySlugSchema,
+    region: z.literal('de'),
+    platform: z.literal('javascript-nextjs'),
+    client_key_id: z.string().trim().min(1),
+    dsn_sha256: sha256Schema,
+  }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('sentry-binding'),
+    ...resourceIdentitySchema,
+    bound_keys: z.tuple([
+      z.literal('SENTRY_DSN'),
+      z.literal('NEXT_PUBLIC_SENTRY_DSN'),
+      z.literal('SENTRY_AUTH_TOKEN'),
+      z.literal('SENTRY_ORG'),
+      z.literal('SENTRY_PROJECT'),
+    ]),
+  }),
 ]);
 
 export type ProvisionedResource = z.infer<typeof provisionedResourceSchema>;
@@ -242,6 +325,8 @@ const provisioningActionStateSchema = z.strictObject({
     'vercel.database-binding',
     'cloudflare.r2-bucket',
     'vercel.r2-binding',
+    'sentry.project',
+    'vercel.sentry-binding',
   ]),
   idempotency_key: idempotencyKeySchema,
   status: z.enum(['pending', 'running', 'failed', 'succeeded']),

@@ -50,6 +50,10 @@ neon:
   region_id: aws-eu-central-1
 cloudflare:
   account_id: 0123456789abcdef0123456789abcdef
+sentry:
+  organization_slug: void-sandbox
+  team_slug: platform
+  region: de
 `,
       'utf8',
     );
@@ -78,6 +82,20 @@ cloudflare:
       if (url.pathname === '/client/v4/accounts/0123456789abcdef0123456789abcdef/r2/buckets') {
         return jsonResponse({ success: true, result: { buckets: [] } });
       }
+      if (url.pathname === '/api/0/organizations/void-sandbox/') {
+        return jsonResponse({
+          slug: 'void-sandbox',
+          status: { id: 'active' },
+          links: { regionUrl: 'https://de.sentry.io' },
+        });
+      }
+      if (url.pathname === '/api/0/teams/void-sandbox/platform/') {
+        return jsonResponse({
+          slug: 'platform',
+          hasAccess: true,
+          organization: { slug: 'void-sandbox' },
+        });
+      }
       throw new Error(`Unexpected preflight request: ${url.toString()}`);
     };
     const environment = {
@@ -85,6 +103,7 @@ cloudflare:
       VERCEL_TOKEN: 'vercel-secret',
       NEON_API_KEY: 'neon-secret',
       CLOUDFLARE_API_TOKEN: 'cloudflare-secret',
+      SENTRY_API_TOKEN: 'sentry-secret',
       R2_ACCESS_KEY_ID: 'r2-access-key',
       R2_SECRET_ACCESS_KEY: 'r2-secret-key',
     };
@@ -98,9 +117,9 @@ cloudflare:
     ).resolves.toMatchObject({
       ok: true,
       mode: 'live-preflight',
-      providers: ['cloudflare', 'github', 'neon', 'vercel'],
+      providers: ['cloudflare', 'github', 'neon', 'sentry', 'vercel'],
     });
-    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET', 'GET']);
+    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'GET']);
     await expect(
       readFile(join(projectRoot, '.void-starter/apply-state.json'), 'utf8'),
     ).rejects.toThrow();

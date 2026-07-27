@@ -48,6 +48,7 @@ export function createProvisioningPlan(
   const hasWeb = manifest.surfaces.web === 'next-vercel';
   const hasDatabase = manifest.data.database === 'neon-eu';
   const hasR2 = manifest.data.files === 'cloudflare-r2-eu';
+  const hasSentry = hasWeb && manifest.operations.errors === 'sentry';
 
   if (hasWeb && !context.vercel) {
     throw new Error('Provisioning context requires Vercel settings for the selected web surface');
@@ -59,6 +60,9 @@ export function createProvisioningPlan(
     throw new Error(
       'Provisioning context requires Cloudflare settings for the selected R2 storage',
     );
+  }
+  if (hasSentry && !context.sentry) {
+    throw new Error('Provisioning context requires Sentry settings for the selected error adapter');
   }
 
   const actions: ProvisioningAction[] = [
@@ -170,6 +174,46 @@ export function createProvisioningPlan(
             'R2_BUCKET_NAME',
             'R2_ENDPOINT',
             'R2_SECRET_ACCESS_KEY',
+          ],
+          targets: ['development', 'preview', 'production'],
+        },
+      }),
+    );
+  }
+
+  if (hasSentry && context.sentry) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'sentry.project',
+        provider: 'sentry',
+        kind: 'ensure-project',
+        depends_on: [],
+        permissions: ['organization:read', 'team:read', 'project:read', 'project:write'],
+        input: {
+          organization_slug: context.sentry.organization_slug,
+          team_slug: context.sentry.team_slug,
+          name: manifest.project.name,
+          slug: manifest.project.name,
+          region: context.sentry.region,
+          platform: 'javascript-nextjs',
+          default_rules: true,
+        },
+      }),
+      withIdempotencyKey({
+        id: 'vercel.sentry-binding',
+        provider: 'vercel',
+        kind: 'ensure-sentry-binding',
+        depends_on: ['vercel.project', 'sentry.project'],
+        permissions: ['project-environment:write'],
+        input: {
+          project_action_id: 'vercel.project',
+          sentry_action_id: 'sentry.project',
+          bindings: [
+            'SENTRY_DSN',
+            'NEXT_PUBLIC_SENTRY_DSN',
+            'SENTRY_AUTH_TOKEN',
+            'SENTRY_ORG',
+            'SENTRY_PROJECT',
           ],
           targets: ['development', 'preview', 'production'],
         },

@@ -34,6 +34,11 @@ const context = parseProvisioningContext({
   cloudflare: {
     account_id: '0123456789abcdef0123456789abcdef',
   },
+  sentry: {
+    organization_slug: 'void-sandbox',
+    team_slug: 'platform',
+    region: 'de',
+  },
 });
 
 async function createGeneratedProject() {
@@ -105,6 +110,8 @@ describe('applyProvisioning', () => {
       ['vercel.database-binding', 'pending', 0],
       ['cloudflare.r2-bucket', 'pending', 0],
       ['vercel.r2-binding', 'pending', 0],
+      ['sentry.project', 'pending', 0],
+      ['vercel.sentry-binding', 'pending', 0],
     ]);
     expect(serializeCanonicalJson(failedState)).not.toContain('Simulated failure for');
 
@@ -115,7 +122,7 @@ describe('applyProvisioning', () => {
       requireExistingState: true,
     });
     expect(resumedState.status).toBe('succeeded');
-    expect(resumedState.actions.map((action) => action.attempts)).toEqual([1, 1, 2, 1, 1, 1]);
+    expect(resumedState.actions.map((action) => action.attempts)).toEqual([1, 1, 2, 1, 1, 1, 1, 1]);
   });
 
   it('refuses a mismatched plan, concurrent apply, and resume without state', async () => {
