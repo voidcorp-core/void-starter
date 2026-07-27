@@ -1,0 +1,49 @@
+schema_version: 1
+
+project:
+  name: web-only
+  profile: saas
+
+surfaces:
+  web: next-vercel
+  mobile:
+    adapter: none
+  worker: none
+
+workloads:
+  http: vercel-functions
+  durable_jobs: none
+  realtime_audio: none
+  persistent_service: none
+
+data:
+  database: neon-eu
+  orm: drizzle
+  files: none
+
+auth:
+  provider: better-auth
+  access_mode: public_verified
+  passkeys: optional
+  mfa: optional
+
+operations:
+  errors: none
+  analytics: none
+  email: resend
+
+data_residency:
+  policy: eu_primary
+  personal_data: eu_required
+  public_assets: global_allowed
+  non_eu_processor:
+    requires_approval: true
+    requires_dpa: true
+    requires_transfer_assessment: true
+
+dns:
+  provider: auto-detect
+
+cost_policy:
+  automatic_monthly_limit_eur: 10
+  paid_upgrade_requires_approval: true

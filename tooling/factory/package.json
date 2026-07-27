@@ -1,0 +1,60 @@
+{
+  "name": "@repo/factory",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "apply": "bun ./src/apply.cli.ts",
+    "apply:live": "bun ./src/apply-live.cli.ts",
+    "auth:live": "bun ./src/auth-live.cli.ts",
+    "auth:plan": "bun ./src/auth-plan.cli.ts",
+    "auth:preflight": "bun ./src/auth-preflight.cli.ts",
+    "auth:resume": "bun ./src/auth-resume.cli.ts",
+    "delivery:live": "bun ./src/delivery-live.cli.ts",
+    "delivery:plan": "bun ./src/delivery-plan.cli.ts",
+    "delivery:preflight": "bun ./src/delivery-preflight.cli.ts",
+    "delivery:resume": "bun ./src/delivery-resume.cli.ts",
+    "doctor": "bun ./src/doctor.cli.ts",
+    "eas:live": "bun ./src/eas-live.cli.ts",
+    "eas:plan": "bun ./src/eas-plan.cli.ts",
+    "eas:preflight": "bun ./src/eas-preflight.cli.ts",
+    "eas:resume": "bun ./src/eas-resume.cli.ts",
+    "foundation": "bun ./src/foundation.cli.ts",
+    "generate": "bun ./src/generate.cli.ts",
+    "lint": "biome check .",
+    "migration:live": "bun ./src/migration-live.cli.ts",
+    "migration:plan": "bun ./src/migration-plan.cli.ts",
+    "migration:preflight": "bun ./src/migration-preflight.cli.ts",
+    "migration:resume": "bun ./src/migration-resume.cli.ts",
+    "plan": "bun ./src/cli.ts",
+    "preflight:live": "bun ./src/preflight-live.cli.ts",
+    "resume": "bun ./src/resume.cli.ts",
+    "resume:live": "bun ./src/resume-live.cli.ts",
+    "source:live": "bun ./src/source-live.cli.ts",
+    "source:plan": "bun ./src/source-plan.cli.ts",
+    "source:preflight": "bun ./src/source-preflight.cli.ts",
+    "source:resume": "bun ./src/source-resume.cli.ts",
+    "source:update:live": "bun ./src/source-update-live.cli.ts",
+    "source:update:preflight": "bun ./src/source-update-preflight.cli.ts",
+    "source:update:resume": "bun ./src/source-update-resume.cli.ts",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "validate:expo": "bun ./scripts/validate-expo-blueprint.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

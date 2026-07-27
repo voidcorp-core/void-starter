@@ -6,7 +6,7 @@ The catalogue lives under `_modules/` rather than `packages/` to keep the depend
 
 ## Real workspace packages
 
-These three modules ship real code under `_modules/<name>/src/`, are type-checked + tested + built by Turborepo, and self-activate the moment their env vars exist at build time. No extra steps for a fresh starter clone: `apps/web` already imports them.
+These four modules ship real code under `_modules/<name>/src/`, are type-checked + tested + built by Turborepo, and activate through the selected composition plus environment bindings.
 
 ### @repo/sentry -- Sentry observability
 
@@ -35,9 +35,20 @@ Browser-side PostHog analytics with a first-party `/ingest/*` reverse proxy so E
 
 The starter ships Better-Auth as default for data sovereignty, brand integrity, and custom-domain-by-default reasons. Activate Clerk only when an MVP genuinely needs B2B SaaS features at J1 (SSO, SCIM, advanced organizations) and the trade-off flips.
 
+### @repo/email-resend -- Transactional authentication email
+
+- **State:** real server-only package, type-checked + tested, wired into `@repo/auth`
+- **Env vars:** `RESEND_API_KEY`, `EMAIL_FROM` (optional: `EMAIL_REPLY_TO`, `EMAIL_APP_NAME`)
+- **Install:** see [`email-resend/README.md`](./email-resend/README.md)
+- **Pattern:** A. Selected by `operations.email: resend`; no vendor SDK or browser bundle.
+
+Delivers Better Auth verification, password-reset and magic-link messages through Resend's HTTPS
+API. Local development may log links only when the Resend pair is completely absent; production
+fails closed on missing or partial configuration.
+
 ## Placeholders
 
-The following eight modules are intentional scaffolds, not abandoned work. Each ships a `README.md` ONLY, with the full integration recipe inside. They deliberately stay out of the workspace graph (no `package.json`, no `src/`) so knip, Turborepo, and Renovate do not generate noise for capabilities no MVP has activated yet. See [ADR 29](../docs/DECISIONS.md) for the rationale. Implement when a real MVP needs the capability.
+The following seven modules are intentional scaffolds, not abandoned work. Each ships a `README.md` ONLY, with the full integration recipe inside. They deliberately stay out of the workspace graph (no `package.json`, no `src/`) so knip, Turborepo, and Renovate do not generate noise for capabilities no MVP has activated yet. See [ADR 29](../docs/DECISIONS.md) for the rationale. Implement when a real MVP needs the capability.
 
 ### @repo/payment-stripe -- Stripe checkout, customer portal, webhooks
 
@@ -47,15 +58,6 @@ The following eight modules are intentional scaffolds, not abandoned work. Each 
 - **Pattern:** A or B. Workspace package once a second app needs payments, otherwise inline in `apps/web`.
 
 Checkout sessions, Customer Portal, signed webhook handler, and a `stripe_customers` Drizzle table linking `users.id` to `stripe_customer_id`.
-
-### @repo/email-resend -- Transactional email via Resend + React Email
-
-- **State:** placeholder, README only
-- **Env vars:** `RESEND_API_KEY`, `EMAIL_FROM` (optional: `EMAIL_REPLY_TO`, `RESEND_AUDIENCE_ID`)
-- **Install:** see [`email-resend/README.md`](./email-resend/README.md)
-- **Pattern:** A or B. Workspace package once a second app needs email, otherwise inline in `apps/web`.
-
-Replaces the dev-only `sendMagicLink` logger stub in `@repo/auth` with real Resend delivery. Ships React Email templates colocated with the adapter.
 
 ### @repo/cms-payload -- Payload CMS as a sibling app
 
@@ -117,7 +119,8 @@ The rare migration path away from Neon when data sovereignty, cost-at-scale, exo
 
 The module is a real npm workspace under `_modules/<name>/` with `package.json`, `src/`, and a `tsconfig.json`. It is consumed via `"@repo/<name>": "workspace:*"` in the app's `package.json`, transpiled through `transpilePackages` in `next.config.ts`, and activates at build time when its env var is present.
 
-Used by `@repo/sentry`, `@repo/posthog`, and `@repo/auth-clerk` (activation deliberate, not env-var-driven).
+Used by `@repo/sentry`, `@repo/posthog`, `@repo/email-resend`, and `@repo/auth-clerk`
+(activation deliberate, not env-var-driven).
 
 The DCE story matters here: client-side modules (`@repo/posthog`, `@repo/sentry` client) use a dynamic `import()` gated on `process.env['NEXT_PUBLIC_*']` so the SDK never enters the eager bundle. Turbopack does not statically eliminate the gated branch, so the SDK chunks may exist on disk under `.next/static/chunks/`, but they are only referenced from the gated dynamic import and never fetched by users at runtime when the env var is unset. Both real-package modules document this caveat in their READMEs.
 
@@ -125,7 +128,7 @@ The DCE story matters here: client-side modules (`@repo/posthog`, `@repo/sentry`
 
 The module is README-only. The integration steps live as a recipe in the README, designed to be executed by a developer or AI agent against the current `apps/web` source. There is no workspace dep to add for the placeholder itself; the README tells you what to install in the consuming app. See [ADR 29](../docs/DECISIONS.md) for why placeholders deliberately stay out of the workspace graph.
 
-Used by all eight placeholders. The "module" is the recipe + scope contract, not a shipped package. This avoids dead workspace deps and keeps the workspace graph honest about what is actually consumed.
+Used by all seven placeholders. The "module" is the recipe + scope contract, not a shipped package. This avoids dead workspace deps and keeps the workspace graph honest about what is actually consumed.
 
 A placeholder can be promoted to Pattern A later (typical path: a second app needs the same capability, the cost-of-promotion is small per ADR 07). Until that happens, the recipe is the artifact.
 

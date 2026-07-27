@@ -37,7 +37,7 @@ The runtime API surface is small:
 - **`cacheLife(profile)`** from `next/cache` -- set the TTL (built-in profiles like `'minutes'`, `'hours'`, `'days'`, or a `{ stale, revalidate, expire }` object).
 - **`updateTag(tag: string)`** from `next/cache` -- invalidate every cache entry tagged with `tag`. Must be called inside a Server Action or route handler -- calling from a render returns a build-time signal only.
 
-Static analyzer note (ADR 23): TypeScript 6 introduced a deprecation diagnostic that interacts with Next's `paths` config. The `apps/web/tsconfig.json` workaround is documented; it does not affect cache semantics.
+Toolchain note (ADR 23): TypeScript 7 runs as a separate CI gate before `next build` while Next 16 catches up with the native compiler API. This does not affect cache semantics.
 
 ---
 
@@ -160,7 +160,7 @@ Things that look correct but fail in subtle ways.
 ## 7. Cross-references and current state
 
 - **ADR 10** -- no DI, no explicit CQRS. Cache Components plus `updateTag()` delivers soft CQRS for free: read paths cache aggressively, write paths invalidate. Explicit Command and Query buses would prepay a cost the venture-builder cadence does not justify.
-- **ADR 23** -- TypeScript 6 plus Next 16's `paths` config quirk. The `ignoreDeprecations: '6.0'` workaround in `apps/web/tsconfig.json` does not affect cache semantics; it only suppresses the TS6504 diagnostic.
+- **ADR 23** -- TypeScript 7 plus Next 16's native-compiler compatibility path. Type checking remains a required CI gate before the production build and does not affect cache semantics.
 - **`@repo/auth` and Cache Components.** The auth package is currently a thin wrapper around Better-Auth and does NOT use Cache Components. Better-Auth's session reads are themselves optimized (cookie token plus a single DB lookup keyed on the session id); adding `'use cache'` on top would tag the wrong layer (the session read should not be tagged the same way a user record is). Future domain services in the starter (posts, projects, billing) will use Cache Components from day 1.
 - **`docs/PATTERNS.md`** -- file naming conventions for service, repository, action.
 - **`docs/ARCHITECTURE.md`** -- topology, layering rules, where each cache point lives.

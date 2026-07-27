@@ -109,15 +109,16 @@ Client enters email (apps/web/src/app/(auth)/magic-link/page.tsx)
     -> Better-Auth magicLink plugin
       -> insert verifications row { identifier: email, value: token, expiresAt }
       -> sendMagicLink callback fires                      [packages/auth/src/auth.repository.ts]
-        -> dev: logger.warn prints email + URL + token     [pino, no email sent]
-        -> prod: _modules/email-resend wired here          [Resend API call]
+        -> dev without Resend: logger.warn prints email + URL
+        -> configured/prod: @repo/email-resend             [Resend API call]
   -> User clicks link in email
   -> Better-Auth /api/auth/[...all]/magic-link?token=...
     -> verify token, check expiry                          [throws MagicLinkExpiredError if past]
     -> create session row + Set-Cookie + redirect
 ```
 
-The `sendMagicLink` body in `auth.repository.ts` is currently a `logger.warn` stub. Replace it with a Resend call when activating `_modules/email-resend`. See section 7.
+Verification, password reset and magic links share the same server-only Resend adapter. See
+section 8.
 
 ---
 
@@ -154,6 +155,24 @@ Behavior:
 - **No session.** `requireRole` first calls `requireAuth`, which `redirect()`s to `/sign-in?callbackURL=<path>` (ADR 35). The visitor signs in and is returned to the page; no error boundary involved.
 - **Session, wrong role.** `ForbiddenError` (403) -- a genuine authorization failure, surfaced through `error.tsx`. Render a dedicated 403 page if you want a tailored screen.
 - **Session, role match (or admin).** Returns the `SessionUser`. Continue rendering.
+
+### First production administrator
+
+Production requires `AUTH_BOOTSTRAP_ADMIN_EMAIL`. Better Auth's user-create hook compares the new
+user's normalized email to that exact configured identity and stores role `admin` only on a match.
+No seed user, password or invitation token is generated.
+
+Operationally:
+
+1. Configure production authentication through the Factory lifecycle in `docs/FACTORY.md`.
+2. Redeploy after Vercel receives the variables.
+3. Sign up or request a magic link with the exact bootstrap address.
+4. Verify the address, then open `/admin` with the resulting session.
+
+The hook runs only when a user is first created. If that address already exists as `user`, promote
+it deliberately through Better Auth's admin API or a reviewed database operation; changing the
+environment variable does not rewrite existing roles. Remove or rotate the bootstrap identity
+only through a new reviewed Factory auth plan.
 
 The same logic works inside Server Actions via the auth-aware factory:
 
@@ -255,26 +274,29 @@ Do not commit real OAuth secrets. The dev pair stays in `.env.local`; prod value
 
 ---
 
-## 8. Customizing email templates
+## 8. Authentication email
 
-Today the magic-link sender is a development stub. The path to real email is wired but not active by default.
+`operations.email: resend` materializes the server-only `@repo/email-resend` workspace. Better
+Auth already routes email verification, password reset and magic links through its three typed
+exports. The adapter sends HTML plus text directly to Resend's HTTPS API, sets a deterministic
+idempotency key and never includes the provider response body or API key in errors.
 
-- **Default (dev).** `sendMagicLink` in `packages/auth/src/auth.repository.ts` calls `logger.warn({ email, url }, 'magic link (dev only ...)')`. Open the dev console, copy the URL, paste it in the browser. No mail server needed. The raw token is not logged separately -- the URL already embeds it.
-- **Production guard.** When `NODE_ENV === 'production'`, the dev stub throws `AppError('MAGIC_LINK_NOT_CONFIGURED')` instead of pretending to send. A deploy that enables magic link without wiring a real sender fails loud rather than silently swallowing logins (see ADR 31).
-- **Production.** Activate `_modules/email-resend` (placeholder today, see `_modules/email-resend/README.md`). The module ships React Email templates colocated with the adapter and replaces the body of `sendMagicLink` with a Resend API call. The `RESEND_API_KEY` env var gates activation.
+- **Development without Resend.** When both `RESEND_API_KEY` and `EMAIL_FROM` are absent, the three
+  callbacks log the recipient, purpose and generated URL so local flows remain testable. Partial
+  configuration throws instead of hiding a typo.
+- **Production.** Both variables are mandatory. A missing value throws
+  `AUTH_EMAIL_NOT_CONFIGURED`; production never logs authentication URLs. `EMAIL_REPLY_TO` and
+  `EMAIL_APP_NAME` are optional presentation settings.
+- **Sender domain.** `EMAIL_FROM` may use `Name <address@example.com>`. Its domain must be verified
+  in Resend before arbitrary recipients can receive messages.
+- **Factory production binding.** `auth:live` writes `BETTER_AUTH_SECRET` and `RESEND_API_KEY` as
+  Production-only Vercel Sensitive variables, writes canonical URL/sender/bootstrap values as
+  encrypted variables, and sends one idempotent configuration email to the bootstrap identity.
+  The receipt contains provider IDs and digests only; a fresh deployment is required afterward.
 
-When activating Resend, update `sendMagicLink` directly in `auth.repository.ts`:
-
-```ts
-magicLink({
-  sendMagicLink: async ({ email, url }) => {
-    const { sendMagicLinkEmail } = await import('@repo/email-resend/server');
-    await sendMagicLinkEmail({ to: email, url });
-  },
-}),
-```
-
-The same pattern (`forgetPassword`, `verifyEmail` callbacks) applies to password reset and email verification when the Better-Auth `emailAndPassword.requireEmailVerification: true` flow needs production-grade email.
+After email/password sign-up, the browser opens `/verify-email/pending`. Verification is sent on
+signup and again on an unverified sign-in; password reset and five-minute single-use magic links
+use their own subjects and expiry copy.
 
 ---
 
@@ -285,4 +307,5 @@ The same pattern (`forgetPassword`, `verifyEmail` callbacks) applies to password
 - `docs/PATTERNS.md` -- Server Action patterns, file naming, code style.
 - `docs/SECURITY.md` -- session security defaults, secret management, CSP.
 - `docs/CACHING.md` -- why `@repo/auth` does not yet use Cache Components.
-- `docs/MODULES.md` -- catalogue: `_modules/auth-clerk` (alternative repository), `_modules/email-resend` (placeholder).
+- `docs/MODULES.md` -- catalogue: `_modules/auth-clerk` (alternative repository),
+  `_modules/email-resend` (real server-only adapter).

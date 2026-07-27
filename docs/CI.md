@@ -4,7 +4,7 @@ This document describes the CI pipeline shipped in `.github/workflows/ci.yml` an
 
 ## Pipeline overview
 
-CI runs on every push to `main` and on every pull request. Two jobs run in sequence: `quality` gates the PR on static analysis, type safety, unit tests, build, dead-code detection, and secrets scanning. `e2e` then runs Playwright end-to-end tests against a freshly migrated Postgres.
+CI runs on every push to `main` and on every pull request. Two jobs run in sequence: `quality` gates the PR on dependency security, static analysis, type safety, unit tests, build, dead-code detection, and secrets scanning. `e2e` then runs Playwright end-to-end tests against a freshly migrated Postgres.
 
 Concurrency is scoped per ref so a force-push or new commit cancels the in-flight run, saving Actions minutes.
 
@@ -13,17 +13,18 @@ Concurrency is scoped per ref so a force-push or new commit cancels the in-fligh
 Steps, in order:
 
 1. Checkout the repository.
-2. Set up Bun at the version pinned in `package.json#packageManager` (currently `1.3.13`).
-3. Set up Node.js 24 LTS via `actions/setup-node@v4`. Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright) ship binaries with a `#!/usr/bin/env node` shebang; pinning Node 24 explicitly gives us reproducible CI, parity with the local dev runtime, and native `.ts` loading across `package.json#exports` boundaries (the case for `@repo/config/vitest.base.ts`) because Node 23.6+ ships `--experimental-strip-types` on by default. No `NODE_OPTIONS` flag needed. See `docs/DECISIONS.md` entry 30.
+2. Set up Bun at the version pinned in `package.json#packageManager` (currently `1.3.14`).
+3. Set up Node.js 24 LTS via `actions/setup-node@v6`. Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright) ship binaries with a `#!/usr/bin/env node` shebang; pinning Node 24 explicitly gives us reproducible CI, parity with the local dev runtime, and native `.ts` loading across `package.json#exports` boundaries (the case for `@repo/config/vitest.base.ts`) because Node 23.6+ ships `--experimental-strip-types` on by default. No `NODE_OPTIONS` flag needed. See `docs/DECISIONS.md` entry 30.
 4. Restore the Bun install cache and the Turborepo cache, keyed by the hash of `bun.lock`.
 5. `bun install --frozen-lockfile` to materialize workspace links and module graph.
-6. `bun run lint` (Biome).
-7. `bun run type-check` (Turborepo fan-out, each package runs `tsc --noEmit`).
-8. `cd packages/db && bunx drizzle-kit migrate` to apply schema migrations to the CI Postgres.
-9. `bun run test` (Turborepo fan-out, each package runs `vitest run`).
-10. `bun run build` (Turborepo fan-out, `apps/web` runs `next build`).
-11. `bunx knip --no-progress` to detect dead code, unused exports, and orphaned files.
-12. `gitleaks/gitleaks-action@v2` to scan the diff for accidentally committed secrets.
+6. `bun run audit` to fail on any known vulnerability in production or development dependencies.
+7. `bun run lint` (Biome).
+8. `bun run type-check` (Turborepo fan-out, each package runs TypeScript 7 `tsc --noEmit`).
+9. `cd packages/db && bunx drizzle-kit migrate` to apply schema migrations to the CI Postgres.
+10. `bun run test` (Turborepo fan-out, each package runs `vitest run`).
+11. `bun run build` (Turborepo fan-out, `apps/web` runs `next build` after the separate type gate).
+12. `bunx knip --no-progress` to detect dead code, unused exports, and orphaned files.
+13. Install the pinned gitleaks binary and scan the repository history for accidentally committed secrets.
 
 Any failure aborts the job. Subsequent steps do not run.
 
@@ -31,7 +32,7 @@ Any failure aborts the job. Subsequent steps do not run.
 
 Depends on `quality`. Steps:
 
-1. Checkout, set up Bun, set up Node 22, install with the frozen lockfile.
+1. Checkout, set up Bun, set up Node 24, install with the frozen lockfile.
 2. Apply DB migrations against the job's own Postgres service container.
 3. Install the Playwright Chromium browser with system dependencies.
 4. Run `bun run test:e2e` from `apps/web` (Playwright with the `chromium` project).
@@ -121,6 +122,7 @@ Repeat for any other long-lived branch (e.g., `develop`, `staging`) if your work
 Common failure modes:
 
 - **`bun install` fails**: someone bumped a dep without updating `bun.lock`. Run `bun install` locally and commit the lockfile.
+- **`bun run audit` fails**: a direct or transitive dependency has a published advisory. Update the owning dependency first; use a temporary root override only when the upstream range still resolves a vulnerable release, and record it in ADR 36.
 - **`bun run lint` fails**: Biome found a style issue. Run `bun run lint:fix` locally.
 - **`bun run type-check` fails**: TypeScript caught a regression. Read the error; do not weaken types to silence it.
 - **`drizzle-kit migrate` fails**: a migration is malformed or the schema diverged. Re-run `bun run db:generate` in `packages/db`.

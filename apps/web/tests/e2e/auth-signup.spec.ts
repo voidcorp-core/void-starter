@@ -13,7 +13,7 @@ test.describe('sign-up flow', () => {
     await closeTestSql();
   });
 
-  test('user can sign up and reach dashboard or verification page', async ({ page }) => {
+  test('user can sign up and reach the email verification notice', async ({ page }) => {
     await page.goto('/sign-up');
 
     await page.getByLabel('Name').fill('E2E Test User');
@@ -21,8 +21,10 @@ test.describe('sign-up flow', () => {
     await page.getByLabel('Password').fill('TestPassword123!');
     await page.getByRole('button', { name: 'Create account' }).click();
 
-    // Better-Auth can redirect to /dashboard directly or to /verify-email when
-    // requireEmailVerification is true. Accept either outcome.
-    await expect(page).toHaveURL(/\/(dashboard|verify-email)/, { timeout: 10_000 });
+    // Better-Auth does not create a session while email verification is
+    // required. The app must explain the next step instead of sending the
+    // anonymous user through /dashboard and back to /sign-in.
+    await expect(page).toHaveURL('/verify-email/pending', { timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: /check your email/i })).toBeVisible();
   });
 });

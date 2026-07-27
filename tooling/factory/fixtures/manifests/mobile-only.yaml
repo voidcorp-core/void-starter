@@ -1,0 +1,51 @@
+schema_version: 1
+
+project:
+  name: mobile-only
+  profile: internal-tool
+
+surfaces:
+  web: none
+  mobile:
+    adapter: expo-eas
+    ios_bundle_identifier: com.example.mobileonly
+    android_package: com.example.mobileonly
+  worker: none
+
+workloads:
+  http: none
+  durable_jobs: none
+  realtime_audio: none
+  persistent_service: none
+
+data:
+  database: none
+  orm: none
+  files: none
+
+auth:
+  provider: none
+  access_mode: none
+  passkeys: disabled
+  mfa: disabled
+
+operations:
+  errors: none
+  analytics: none
+  email: none
+
+data_residency:
+  policy: eu_primary
+  personal_data: eu_required
+  public_assets: global_allowed
+  non_eu_processor:
+    requires_approval: true
+    requires_dpa: true
+    requires_transfer_assessment: true
+
+dns:
+  provider: none
+
+cost_policy:
+  automatic_monthly_limit_eur: 0
+  paid_upgrade_requires_approval: true

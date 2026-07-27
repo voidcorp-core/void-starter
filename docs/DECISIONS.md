@@ -293,16 +293,17 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - **`console.log`:** zero structure, no log levels, no fields, no transports. Useless at scale and noisy in test output.
 - **When to revisit:** When deploying to Edge runtimes that lack `worker_threads` (`pino-pretty`'s transport requires it). The fix is to drop `pino-pretty` even in dev and stay on raw JSON, or swap to consola for the dev-only path. Already mitigated because `pino-pretty` only loads when `NODE_ENV !== 'production'`, but adding an Edge-targeted route would force the issue.
 
-### 23. `ignoreDeprecations: '6.0'` in apps/web tsconfig
+### 23. TypeScript 7 native compiler with a separate Next build type gate
 
-- **Date:** 2026-05-09
-- **Decision:** `apps/web/tsconfig.json` keeps `'baseUrl': '.'` alongside `'paths': { '@/*': ['./src/*'] }` and silences the TS 6 deprecation diagnostic with `'ignoreDeprecations': '6.0'`.
-- **Why:** TypeScript 6 deprecated standalone `baseUrl` (TS6504) when `paths` already provides the resolution mechanism, and `tsc --noEmit` errors on the diagnostic. The clean fix is to drop `baseUrl` and rely on `paths` only — but Next.js 16's TypeScript plugin still reads `baseUrl` to power IDE go-to-definition and `next build`'s type-check pass for the `@/*` alias. Removing `baseUrl` silently breaks alias ergonomics in tooling even though the bundler still resolves it via `paths` at runtime. Suppressing the deprecation preserves full alias UX until the Next plugin removes its `baseUrl` dependency.
+- **Date:** 2026-05-09; revised 2026-07-24
+- **Decision:** Resident baseline workspaces use TypeScript 7.0.2. `apps/web/tsconfig.json` keeps only `paths` for the `@/*` alias; the removed `baseUrl` and `ignoreDeprecations` options are not supported by TypeScript 7. The web app also declares `@typescript/native-preview` as an npm alias of the same stable TypeScript 7 package because Next 16.2.11 recognizes the native compiler under that legacy package name. `next.config.ts` sets `typescript.ignoreBuildErrors: true`, and CI runs the required `bun run type-check` gate before `bun run build`. A factory-generated Expo SDK 57 workspace pins the upstream-supported TypeScript `~6.0.3` locally; that exception moves with the Expo template rather than forcing the web compiler onto the mobile toolchain.
+- **Why:** TypeScript 7 is a native compiler and no longer ships the legacy `typescript/lib/typescript.js` programmatic API that Next 16 probes during `next build`. Without the alias, Next misclassifies TypeScript 7 as missing and attempts to install TypeScript with another package manager, which cannot resolve this Bun workspace. Next 16 already has a native-compiler branch keyed by `@typescript/native-preview`; aliasing the stable package activates that branch without installing a second compiler. The explicit CI type gate preserves strict type safety while the Next build handles compilation, route type generation, and rendering.
 - **Rejected alternatives:**
-  - Drop `baseUrl`, keep only `paths`: TS-spec correct, breaks `@/*` resolution in the Next.js TS plugin.
-  - Pin TypeScript to 5.x for the whole monorepo: regresses every package to dodge a one-line workaround.
-  - Switch the alias to a relative path: defeats the point of having an alias and bloats every import.
-- **When to revisit:** When the Next.js TypeScript plugin resolves the alias purely from `paths` (likely Next 17 or a next-plugin patch). Drop `baseUrl` AND `ignoreDeprecations` together at that point.
+  - Keep TypeScript 6 in the web app: avoids the compatibility path but leaves one workspace on the previous compiler and keeps the monorepo split across compiler generations.
+  - Install the actual `@typescript/native-preview` daily build: duplicates the compiler and replaces a stable release with a moving development snapshot.
+  - Let Next auto-install TypeScript: invokes a different package manager from `apps/web`, fails to resolve `workspace:*` packages, and mutates `node_modules`.
+  - Patch `node_modules/typescript` with a fake `typescript.js`: fragile, not represented by the lockfile, and lost on every install.
+- **When to revisit:** When Next resolves stable TypeScript 7 directly and no longer requires the legacy programmatic API, remove the alias and `ignoreBuildErrors`, then keep `bun run type-check` as the explicit CI gate unless Next's native check offers equivalent coverage.
 
 ### 24. Routing Middleware as `proxy.ts` (Next 16 rename)
 
@@ -380,8 +381,8 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 
 ### 30. Pin Node 24 LTS in CI for Node-shebang tooling
 
-- **Date:** 2026-05-09
-- **Decision:** Both jobs in `.github/workflows/ci.yml` declare `actions/setup-node@v4` with `node-version: '24'` immediately after `oven-sh/setup-bun@v2`. The root `package.json#engines.node` declares `>=24` to make the workspace contract explicit. No `NODE_OPTIONS` flag is set: Node 23.6+ ships `--experimental-strip-types` on by default, so cross-package `.ts` config loading works natively. The Bun version stays pinned at `1.3.13` (matches `packageManager`).
+- **Date:** 2026-05-09; revised 2026-07-24
+- **Decision:** Both jobs in `.github/workflows/ci.yml` declare `actions/setup-node@v6` with `node-version: '24'` immediately after `oven-sh/setup-bun@v2`. The root `package.json#engines.node` declares `>=24` to make the workspace contract explicit, and every direct `@types/node` dependency stays on major 24 to match that runtime. No `NODE_OPTIONS` flag is set: Node 23.6+ ships `--experimental-strip-types` on by default, so cross-package `.ts` config loading works natively. Bun stays pinned at `1.3.14` in both CI and `packageManager`.
 - **Why:** Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright, Sentry's webpack plugin) ship binaries with a `#!/usr/bin/env node` shebang. When `bun run test` invokes those binaries, they execute under Node, not Bun. Two consequences follow: (1) without explicit `setup-node`, the runner uses whatever Node version `ubuntu-latest` happens to ship (historically 18 or 20), producing non-deterministic CI behaviour. (2) Without modern Node, the loader refuses to load `.ts` files reached through cross-package `package.json#exports` (the case for `@repo/config/vitest.base`). Pinning Node 24 LTS gives us: (a) reproducible CI builds, (b) `.ts` consistency across the entire workspace including shared cross-package configs WITHOUT any flag, (c) parity with the local dev runtime (Folpe runs Node 24.x), (d) automatic version pickup for contributors via `nvm`/`fnm`/Volta reading `engines.node`. The flag-free path is the cleaner architectural choice: nothing experimental in the build contract, no `NODE_OPTIONS` to maintain.
 - **Rejected alternatives:**
   - Skip `setup-node` and use whatever the runner ships: non-deterministic; CI breaks every time the runner image rotates Node versions.
@@ -390,7 +391,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - Reformat `packages/config/vitest.base.ts` as `.mjs` to dodge the version requirement: works without any Node version pin but breaks the "everything is `.ts`" invariant for a cosmetic Node-tooling concern. Rejected per ADR 14's revision.
   - Replace Vitest with Bun's native test runner: removes the Node dependency entirely, but Vitest's ecosystem (jsdom, @testing-library/react integration, coverage reporters, vite transformer pipeline) is non-trivial to replace. Bigger lift than is warranted; revisit if Bun test ships first-class jsdom + RTL parity.
   - Invoke Vitest under Bun explicitly via `bunx --bun vitest run`: changes every package's `test` script and adds friction for contributors who run vitest from their IDE. The Node pin is the smaller, more reversible change.
-- **When to revisit:** When Bun test reaches feature parity with Vitest for our use cases (jsdom, coverage, RTL), at which point we can drop the Node dependency entirely and remove this pin. If Vercel Functions ever lags Node 24 (currently supports 18, 20, 22, 24 as of 2026-05), the deploy runtime is a separate concern from CI testing and is configured per-project; no change to this ADR.
+- **When to revisit:** When Bun test reaches feature parity with Vitest for our use cases (jsdom, coverage, RTL), at which point we can drop the Node dependency entirely and remove this pin. Move both the runtime and `@types/node` together when Node 26 reaches LTS and the deploy target supports it. If Vercel Functions ever lags Node 24 (currently supports 18, 20, 22, 24 as of 2026-05), the deploy runtime is a separate concern from CI testing and is configured per-project; no change to this ADR.
 
 ### 31. Social providers are opt-in; magic-link fails loud in production
 
@@ -433,7 +434,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 - **Rejected alternatives:**
   - *Cache the admin user-list / retrofit auth instead*: contradicts CACHING.md section 7 (auth does not cache; session reads should not be tagged like a record) and would cache PII-adjacent auth data as the teaching example. A neutral domain is clearer.
   - *Put the service in `apps/web` as a use-case*: violates the layering (services live in packages, only actions live in apps) and would not demonstrate the package-level convention future domains follow.
-  - *Doc-only example*: leaves `cacheComponents: true` with no real call site; the pattern stays unproven against the actual toolchain (Turbopack, the TS 6 setup, the build).
+  - *Doc-only example*: leaves `cacheComponents: true` with no real call site; the pattern stays unproven against the actual toolchain (Turbopack, the TS 7 setup, the build).
 - **When to revisit:** `notes` is intentionally minimal (no update/delete, no pagination). If MVPs never grow a second domain that caches, that is fine -- this one stays as the reference. When a richer domain lands (posts, projects, billing), it follows this shape from day one; if a cross-cutting caching helper emerges across three or more such domains, extract it then (not before).
 
 ### 35. Page guards redirect to sign-in; pathname carried via a proxy header
@@ -447,3 +448,659 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - *Redirect on wrong-role too*: silently bouncing an authenticated user hides a genuine 403. Throwing keeps the authorization failure visible and distinct from the unauthenticated case.
   - *Read the pathname with `useSearchParams`/headers without the proxy*: RSC has no pathname API; the proxy header is the supported mechanism.
 - **When to revisit:** When Next ships a stable RSC pathname API, drop the `x-pathname` header. When `forbidden()`/`unauthorized()` stabilize, reconsider rendering a dedicated 403/401 segment instead of the error boundary for the wrong-role case.
+
+### 36. Security overrides are centralized and enforced by `bun audit`
+
+- **Date:** 2026-07-24
+- **Decision:** The root `package.json#overrides` is the single place for temporary transitive security pins. It currently fixes `brace-expansion`, `dompurify`, `esbuild`, `fast-uri`, `js-yaml`, `postcss`, `sharp`, `undici`, and `vite`. The root `audit` script runs `bun audit`, and the `quality` CI job executes it immediately after the frozen install.
+- **Why:** All direct dependencies were already on their latest release, but their resolved trees still produced 28 advisories. Updating owners removed most findings; the remaining packages were held behind stale exact or pre-1.0 ranges in current Next, Drizzle Kit, Sentry, PostHog, and Vitest releases. Centralized overrides moved every affected transitive package to a patched release and reduced the audit to zero without pretending the packages are direct project dependencies. The range-crossing overrides for PostCSS, sharp, and esbuild were accepted only after the production Next build, all type checks, 123 unit tests, Knip, and Drizzle schema generation passed.
+- **Rejected alternatives:**
+  - Add transitive packages as root dependencies: does not reliably replace nested versions and falsely expands the application's direct API surface.
+  - Ignore or severity-filter advisories: makes the report quieter without removing vulnerable code.
+  - Leave current direct packages pinned until upstream ranges catch up: keeps known vulnerable artifacts in the lockfile even though patched releases pass the project pipeline.
+  - Patch files inside `node_modules`: not reproducible and disappears on install.
+- **When to revisit:** On every dependency update. Remove an override as soon as all owners resolve a patched version themselves, regenerate `bun.lock`, and require both the full validation pipeline and `bun audit` to remain green.
+
+### 37. Evolve the starter into a manifest-driven project factory
+
+- **Date:** 2026-07-24
+- **Decision:** Preserve the current Next.js monorepo as the proven web baseline, then add a
+  manifest-driven factory that composes only the surfaces and capabilities a project selects.
+  Forge produces product intent and a versioned build manifest. Void Starter plans, provisions,
+  configures, migrates, deploys and returns a receipt. Void Harness governs the implementation
+  that follows while remaining external development tooling: no Harness files, hooks, skills,
+  configuration or package dependencies are copied into generated repositories. Expo is an
+  optional surface in the same factory, not a permanent dependency of every generated repository.
+  Provider routing is workload-aware and Vercel-first, not Vercel-only. The full target contract
+  lives in `docs/FACTORY.md`.
+- **Why:** The current quickstart still requires manual GitHub, Vercel, Neon, environment,
+  migration, email and administrator work before product development starts. Copying every
+  possible surface or module into every repository would replace manual wiring with permanent
+  complexity. A typed manifest plus idempotent `plan/apply/resume/doctor` lifecycle automates the
+  setup while keeping generated outputs minimal and auditable.
+- **Rejected alternatives:**
+  - Keep the repo as a clone-only template and improve the README: documents the work but does
+    not remove it or make it resumable.
+  - Always include Expo, workers and every integration: maximizes unused dependencies, CI time
+    and upgrade surface.
+  - Embed Void Harness in the template or generated output: couples application source to
+    development governance and makes every generated project carry tooling it did not select.
+  - Make tRPC mandatory to unify web and mobile: protocol choice should follow the surface and
+    workload; REST/OpenAPI, Server Actions, SSE and WebRTC have distinct jobs.
+  - Move all workloads away from Vercel: loses the best Next.js integration without solving a
+    universal problem. Persistent and realtime workloads can route elsewhere selectively.
+- **When to revisit:** If fixture-generated projects become harder to maintain than the baseline,
+  if provider APIs make reliable idempotence impossible, or if Forge cannot express project
+  requirements without leaking provider implementation details.
+
+### 38. Render only into fresh targets and verify generation receipts
+
+- **Date:** 2026-07-24
+- **Decision:** Local factory generation copies the tested baseline only into a non-existing
+  directory outside the source repository. It rejects source symlinks, removes unselected
+  surfaces, applies deterministic overlays, excludes secrets and development-governance
+  artifacts, and emits a canonical manifest plus receipt under `.void-starter/`. `doctor`
+  recalculates the plan and generated-file SHA-256 digests and scans dependencies for Void
+  Harness. The source `bun.lock` is not copied; a newly installed lockfile is allowed and checked.
+- **Why:** A generator that mutates its own baseline or overwrites an existing project makes
+  recovery ambiguous. Fresh-target rendering is easy to retry and inspect. The receipt makes the
+  generated portion tamper-evident without pretending that copied baseline files are immutable.
+- **Rejected alternatives:**
+  - Render in place: risks mixing partial output with the factory source and user changes.
+  - Overwrite an existing target: makes ownership and rollback unclear.
+  - Copy the source lockfile: retains the development-only `@repo/factory` workspace after factory
+    source is excluded.
+  - Copy symlinks: could make generated writes or removals escape the target boundary.
+- **When to revisit:** Add an explicit upgrade/migration workflow only after it has a transactional
+  plan, conflict reporting, backups, and a separate authorization path from fresh generation.
+
+### 39. Prune unselected capabilities and materialize Clerk directly
+
+- **Date:** 2026-07-24
+- **Decision:** Local generation composes the application dependency graph as well as its
+  surfaces. A public minimal web output removes Better Auth, Neon/Drizzle, the notes reference
+  domain, PostHog, Sentry and every corresponding app import. Better Auth retains the proven
+  database-backed baseline. Clerk generates direct Next.js v7 provider, middleware, route and UI
+  overlays while removing both `packages/auth` and the `_modules/auth-clerk` documentation
+  scaffold. Mobile-only output removes all Next.js-only packages. Generated `.env.example`,
+  `package.json`, `next.config.ts`, layout and entry pages are deterministic receipt-tracked
+  overlays. `doctor` verifies that local packages and dependencies match the manifest.
+- **Why:** Removing a workspace directory without removing its imports produces a repo that looks
+  smaller but cannot install, type-check or build. Keeping every optional module avoids that
+  failure but defeats the factory's purpose. Treating the package graph, app call sites and config
+  as one composition unit makes absence real and testable. The Clerk scaffold explicitly was not
+  a runtime drop-in, so copying it would misrepresent support; generating the complete direct
+  integration is the honest boundary.
+- **Rejected alternatives:**
+  - Only remove package dependencies: leaves broken TypeScript imports and routes.
+  - Keep all `_modules` directories as examples: generated projects carry unselected catalogue
+    code and Knip/build surface.
+  - Copy the Clerk repository scaffold over Better Auth: the scaffold does not include provider,
+    middleware, UI and session-model changes and documents itself as incomplete.
+  - Allow web-only adapters on mobile manifests: implies a native integration that is not
+    implemented.
+- **When to revisit:** Add native-specific auth, analytics and error adapters behind separate
+  manifest adapter names. Move R2, Resend and DNS from planned bindings to materialized
+  capabilities only when their idempotent provider `apply` adapters and smoke tests exist.
+
+### 40. Prove resumable provisioning locally before enabling provider mutations
+
+- **Date:** 2026-07-24
+- **Decision:** Add a strict, non-secret provisioning context for explicit GitHub owner, Vercel
+  team and Neon organization coordinates. Derive a deterministic first-tranche action plan for
+  repository, web project, database project and database environment binding. Every action has a
+  content-derived idempotency key, dependencies and required permission intent. Implement
+  `apply --dry-run` as the write-free default and `apply --simulate` / `resume --simulate` as a
+  local-only execution engine. Persist canonical state atomically after each transition, prevent
+  concurrent applies with a process lock, recover dead-process locks, preserve safe structured
+  failures, reject manifest or plan drift, and skip already successful actions on resume.
+  `doctor` validates optional provisioning state. No live execution flag exists in this tranche.
+- **Why:** The retry contract must be correct before API credentials or billable resources enter
+  the loop. Neon explicitly warns that retrying an ambiguous create-project `POST` may create a
+  duplicate, so a live adapter must reconcile stable ownership metadata and persist returned
+  opaque IDs instead of treating a POST retry as idempotent. GitHub organization repository
+  creation requires repository-administration write permission, and Vercel team-scoped API calls
+  require an explicit team identifier. Separating product intent from account coordinates makes
+  those permissions visible without putting credentials in the manifest. Provider references:
+  [Neon create project](https://api-docs.neon.tech/reference/createproject),
+  [GitHub repositories API](https://docs.github.com/en/rest/repos/repos),
+  [Vercel REST API](https://vercel.com/docs/rest-api), and
+  [Vercel regions](https://vercel.com/docs/regions).
+- **Rejected alternatives:**
+  - Add real provider calls directly to `generate`: couples deterministic local rendering to
+    credentials, network availability and partial remote side effects.
+  - Accept tokens in the manifest or provisioning context: turns reproducible intent files and
+    receipts into secret-bearing artifacts.
+  - Retry create endpoints blindly: can duplicate resources after ambiguous timeouts.
+  - Infer owner, team, organization or returned resource IDs: risks mutating the wrong account
+    and makes resume unreliable.
+  - Keep state only in memory: loses the last confirmed provider action on interruption.
+- **When to revisit:** Enable a separately explicit live mode only after GitHub, Vercel and Neon
+  adapters implement lookup-before-create reconciliation, authenticated account preflight,
+  permission checks, redacted transport logging, provider-mocked contract tests and manual
+  sandbox-account validation. Add encrypted secret transport as a distinct reviewed tranche.
+
+### 41. Isolate live provisioning behind account preflight and exact confirmation
+
+- **Date:** 2026-07-24
+- **Decision:** Implement the first authenticated adapter for GitHub repository, Vercel project,
+  Neon project and Vercel database binding without changing the safe `apply` default. Expose
+  authenticated reads through `preflight:live`; expose mutations only through the separate
+  `apply:live` and `resume:live` commands with an exact project-name confirmation. Credentials
+  come only from `GITHUB_TOKEN`, `VERCEL_TOKEN` and `NEON_API_KEY` in process memory. Every action
+  uses lookup-before-create, validates matching resources before adoption and reconciles after a
+  create. An ambiguous create becomes lookup-only on resume. The Neon connection URI is sent
+  directly to write-only Vercel variables and never persisted: `sensitive` for Preview/Production
+  and `encrypted` for Development, where Vercel does not support the sensitive type. A non-secret
+  binding marker enables safe adoption. Generated web projects pin Functions to `fra1` in
+  `apps/web/vercel.json`; the current Neon contract is `aws-eu-central-1`.
+- **Why:** A valid token is insufficient proof that the factory is targeting the intended owner,
+  team or organization. A successful or failed create response is also insufficient proof of
+  remote state after transport ambiguity. Provider identity preflight and post-create
+  reconciliation make the mutation target and retry behavior explicit. For organization-owned
+  repositories, the exact GitHub membership endpoint requires `Members: read`; the broader
+  no-permission membership listing returned an empty list during the sandbox canary, making it
+  unreliable for exact owner validation. Vercel defaults Functions to `iad1` unless configured,
+  while its documentation recommends locating Functions near the database. Neon documents POST
+  as non-idempotent and exposes a safe project search endpoint.
+  Sensitive Vercel environment variables are write-only for the factory, and regular encrypted
+  values are not read back, so a separate non-secret marker is required for recovery. References:
+  [GitHub repository API](https://docs.github.com/en/rest/repos/repos),
+  [Vercel REST API](https://vercel.com/docs/rest-api),
+  [Vercel Function regions](https://vercel.com/docs/functions/configuring-functions/region),
+  [Vercel sensitive environment variables](https://vercel.com/docs/environment-variables/sensitive-environment-variables),
+  [Neon list projects](https://api-docs.neon.tech/reference/listprojects), and
+  [Neon connection URI](https://api-docs.neon.tech/reference/getconnectionuri).
+- **Rejected alternatives:**
+  - Reuse `apply --simulate` with a live flag: makes a typo capable of crossing the local/remote
+    boundary.
+  - Store tokens or `DATABASE_URL` in context or apply state: leaks credentials into durable
+    project metadata.
+  - Adopt a same-name resource without validating owner, visibility, framework, root directory or
+    region: can attach the generated project to unrelated infrastructure.
+  - Retry an ambiguous create after lookup misses once: eventual consistency can still turn that
+    retry into a duplicate.
+  - Read back Vercel's sensitive value to prove the binding: defeats the write-only secret
+    boundary and is unsupported for sensitive variables.
+- **When to revisit:** After a disposable sandbox-account run proves the current HTTP contracts.
+  Then add repository push, migrations, deployment and smoke checks as new receipt-tracked actions
+  rather than widening these resource-creation actions.
+
+### 42. Inject Forge foundations through a receipt-gated adapter
+
+- **Date:** 2026-07-24
+- **Decision:** Consume `forge/project-pack-v1` through a dedicated `foundation
+  preview|apply|check` lifecycle, separate from fresh generation and provider provisioning.
+  Preview and check are non-mutating. Apply requires the exact Forge project id, validates all 14
+  source hashes and path boundaries, takes a local lock, recomputes the plan under that lock, and
+  writes a canonical per-file receipt at `.void-starter/project-pack-receipt.json`. Initial writes
+  are create-only. A later write is allowed only when the destination hash matches the previous
+  receipt. Any unmanaged, missing, locally modified, or symlinked destination blocks the complete
+  transaction without overwriting. The adapter stages writes and rolls committed files back if a
+  later commit step fails.
+- **Why:** Forge foundations must survive into design and code without making `.forge` compete with
+  hand-maintained project documentation. Blind copying loses ownership, silently destroys local
+  decisions, and makes two linked repositories drift. A receipt gives every destination an
+  explicit provenance and expected hash while keeping the source contract owned by Forge.
+- **Rejected alternatives:**
+  - Copy the pack with overwrite enabled: destroys local edits and provides no merge evidence.
+  - Put foundation injection inside `generate`: excludes existing repositories and couples product
+    memory to baseline rendering.
+  - Put foundation injection inside provisioning `apply`: mixes local documents with credentialed,
+    billable remote mutations.
+  - Adopt an existing destination on first apply when contents happen to match: provenance is still
+    unknown, so later replacement would be unsafe.
+  - Extract a shared contract package now: there is one producer and one executable consumer. The
+    consumer compatibility boundary plus real-output dogfood is smaller until Forge's extraction
+    thresholds are reached.
+- **When to revisit:** When Project Pack gains a second executable consumer, a second producer, or
+  frequent breaking changes. At that point extract a single owned schema package and migrate both
+  repositories instead of maintaining another mirror.
+
+### 43. Validate first-tranche provisioning through creation, resume and stateless adoption
+
+- **Date:** 2026-07-25
+- **Decision:** Accept the GitHub repository, Vercel project, Neon project and Vercel database
+  binding tranche after a live isolated-account canary created all four resources in one attempt,
+  a completed-state resume preserved every ID and attempt counter, and a fresh generated project
+  without local apply state adopted every resource with the same opaque IDs. Keep the sandbox
+  resources for the next source, migration and deployment tranche.
+- **Why:** Provider-mocked tests prove request contracts but cannot prove current provider API
+  behavior, app installation access, environment-variable semantics or lookup compatibility.
+  Creation alone also cannot prove that recovery avoids duplicates. The three canary perspectives
+  jointly cover first execution, durable no-op resume and lookup-based adoption.
+- **Rejected alternatives:**
+  - Treat the first successful creation as sufficient: leaves adoption and duplicate prevention
+    unproven.
+  - Delete the resources immediately: prevents the next tranche from exercising a realistic
+    existing project.
+  - Persist provider credentials or the Neon connection URI as evidence: violates the
+    process-memory-only secret boundary.
+- **When to revisit:** Re-run the same three canaries after a provider API contract change, and add
+  remote smoke checks once source push, migration and deployment actions exist.
+
+### 44. Publish initial source through a separate digest-gated lifecycle
+
+- **Date:** 2026-07-25
+- **Decision:** Keep initial Git source publication separate from infrastructure provisioning.
+  Require a successful live provisioning receipt and generated `bun.lock`; compute a SHA-256 plan
+  over the exact publishable files; exclude operation state, secrets, caches and build output; and
+  publish one root commit to `main` through Git HTTPS. Attribute the commit to the authenticated
+  GitHub user's noreply identity. Pass the fine-grained token only through a temporary askpass
+  environment with credential helpers disabled. Persist a separate atomic
+  `.void-starter/source-state.json`. Adopt an existing branch only when both its factory source
+  marker and exact Git tree match; otherwise fail closed.
+- **Why:** Adding source to the already completed provider action plan would invalidate valid live
+  state. A separate plan can include the post-install lockfile and exact source digest, neither of
+  which exists when the infrastructure plan is derived from the build manifest. Git remotes that
+  embed a token and ordinary credential helpers can persist secrets. Vercel Pro also checks commit
+  authors on connected private organization repositories, so a made-up factory identity can block
+  automatic deployment.
+- **Rejected alternatives:**
+  - Widen the first provisioning plan: breaks resume for the already validated provider receipt
+    and still cannot derive the post-install lockfile digest from manifest intent.
+  - Store a token in the remote URL: leaks it through `.git/config`, diagnostics and process
+    inspection.
+  - Force-push or adopt same-name content: can destroy or silently claim unrelated work.
+  - Push without a lockfile: makes CI and Vercel dependency resolution non-reproducible.
+- **When to revisit:** Replace the personal token with a short-lived GitHub App installation token
+  for long-lived automation. Extend delivery with separate migration, deployment observation and
+  smoke-test receipts after the source canary passes.
+
+### 45. Keep EAS CLI on demand and recognize publication-owned Git metadata
+
+- **Date:** 2026-07-25
+- **Decision:** Keep the Expo SDK and EAS profiles in generated projects, but execute the pinned
+  EAS CLI on demand through `bunx eas-cli@21.2.0` instead of installing it in every mobile
+  workspace. Override `uuid` to the first non-vulnerable compatible release required by the
+  current Expo graph. Let `doctor` accept a local `.git` directory only when a structurally valid
+  source-publication receipt exists and matches the current source snapshot.
+- **Why:** The first source canary reached GitHub, then CI failed exclusively because the latest
+  EAS CLI pinned seven vulnerable transitive packages into the application lockfile even though
+  CI, local Expo development and static export never invoke EAS. Removing that operational CLI
+  reduced the generated graph from 1,200 to 930 packages while the complete Next.js and Expo
+  builds remained green. The same canary also showed that the source lifecycle creates legitimate
+  Git metadata after `doctor` has already proved generation isolation; continuing to classify
+  that receipt-owned `.git` as copied development governance is a false positive.
+- **Rejected alternatives:**
+  - Disable or weaken `bun audit`: hides actionable application dependency findings.
+  - Force all vulnerable transitive packages through global breaking-major overrides: can silently
+    break unrelated Expo and build-tool consumers.
+  - Always permit `.git`: loses the guarantee that generation never copied source-repository
+    metadata.
+- **When to revisit:** Install EAS CLI in the workspace again only if Expo publishes a
+  vulnerability-clean graph and local reproducibility materially benefits. Replace the `uuid`
+  override when the supported Expo SDK resolves a fixed release natively.
+
+### 46. Publish Factory revisions only as guarded fast-forwards
+
+- **Date:** 2026-07-25
+- **Decision:** Add a separate `source:update:preflight|live|resume` lifecycle for refreshing a
+  Factory-owned repository from a fresh generated target. Require that target to adopt the
+  existing infrastructure first. Treat the current remote `main` commit SHA, tree SHA and source
+  marker as the immutable update base. Fetch and verify that exact base, create one child commit,
+  recheck the remote immediately before mutation, and push only as a normal fast-forward.
+  Treat an immediate post-push read of that same old base as a retryable unconfirmed mutation;
+  `resume` reconciles the new exact child once GitHub exposes it.
+- **Why:** Initial publication intentionally rejects different remote content, but the first live
+  canary exposed fixes that must be delivered without bypassing the receipt and credential
+  boundaries. A remote source marker alone is insufficient if another commit lands between
+  preflight and push. Binding the plan to the complete HEAD identity and retaining Git's
+  fast-forward check protects both provenance and concurrency.
+- **Rejected alternatives:**
+  - Force-push the corrected generated tree: can erase user work or concurrent automation.
+  - Relax initial-source adoption to accept any marked history: conflates bootstrap and updates,
+    weakening the simpler empty/exact contract.
+  - Copy files and run an ad-hoc authenticated push for the canary: proves neither a reusable
+    product path nor safe resume behavior.
+- **When to revisit:** Add a merge-aware upgrade workflow only when real generated repositories
+  need to preserve user changes while accepting template revisions. Keep that separate from this
+  exact-snapshot fast-forward lane.
+
+### 47. Resolve the web tsconfig base by workspace-relative path
+
+- **Date:** 2026-07-25
+- **Decision:** Let `apps/web/tsconfig.json` extend
+  `../../packages/config/tsconfig.next.json` directly. Keep package exports for runtime/tool
+  imports, but do not depend on package-subpath resolution for TypeScript configuration
+  inheritance.
+- **Why:** The live canary's complete quality job passed, then Playwright 1.61 failed before test
+  discovery because its internal tsconfig loader could not resolve
+  `@repo/config/tsconfig.next.json` on Linux. TypeScript and Bun resolved the same path, making the
+  problem invisible to lint, type-check, unit tests and builds. The relative path expresses the
+  stable monorepo topology and works without a package-manager-specific resolver.
+- **Rejected alternatives:**
+  - Skip E2E in CI: removes the only browser-level gate.
+  - Patch Playwright's loader or pin a platform-dependent workaround: couples the starter to an
+    implementation detail that the local TypeScript compiler does not need.
+  - Duplicate the shared config into `apps/web`: creates configuration drift.
+- **When to revisit:** Reconsider package-specifier inheritance only when every supported
+  TypeScript consumer, including Playwright's loader, resolves it consistently on Linux.
+
+### 48. Keep Factory discovery and implementation history out of generated repositories
+
+- **Date:** 2026-07-25
+- **Decision:** Exclude `docs/discovery` and `docs/superpowers` from every generated repository,
+  record both paths in the generation receipt, and make `doctor` reject them as development
+  artifacts if they reappear. Keep reusable product documentation such as architecture, auth,
+  security, CI and decisions in the generated project.
+- **Why:** The live canary correctly excluded Harness, Factory code and agent governance, but a
+  final output inspection found sandbox handoffs and historical implementation plans in the
+  published application repository. They contained no secrets, yet exposed control-plane IDs and
+  irrelevant development history. Template isolation includes operational context, not only
+  executable dependencies.
+- **Rejected alternatives:**
+  - Leave the documents because they are harmless Markdown: generated repositories should not
+    inherit Factory-specific history or sandbox identifiers.
+  - Remove all documentation: discards useful product contracts that belong in the application.
+  - Rewrite individual handoffs during generation: brittle content filtering is weaker than a
+    path-level ownership boundary.
+- **When to revisit:** Promote a document into the generated set only after rewriting it as
+  reusable project documentation without Factory- or sandbox-specific state.
+
+### 49. Bind delivery evidence to the exact source and keep protection bypass in memory
+
+- **Date:** 2026-07-26
+- **Decision:** Observe Vercel delivery through a separate `delivery:plan|preflight|live|resume`
+  lifecycle. Bind its plan to the successful source-publication commit and source digest plus the
+  provisioned Vercel team/project IDs and Production target. Poll only a deployment carrying that
+  exact Git commit, require `READY`, then smoke the immutable deployment URL with manual redirects,
+  HTTP 200, HTML content and project-identity checks. When Deployment Protection is active, send
+  `VERCEL_AUTOMATION_BYPASS_SECRET` only through the `x-vercel-protection-bypass` request header.
+  Persist non-secret deployment and smoke evidence in `.void-starter/delivery-state.json`.
+- **Why:** A successful CI job or generic latest deployment does not prove that the published
+  source snapshot is the application being exercised. Vercel SSO also makes an anonymous 302 a
+  protection result rather than an application health result. Exact commit binding closes the
+  provenance gap, while a memory-only bypass permits real HTTP validation without turning an
+  access credential into source or receipt data. This follows Vercel's
+  [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation)
+  and [REST API](https://vercel.com/docs/rest-api) contracts.
+- **Rejected alternatives:**
+  - Accept the newest successful project deployment: can attest the wrong source revision.
+  - Treat the SSO redirect as a passing smoke: proves protection configuration, not application
+    availability.
+  - Put the bypass in the URL, manifest, context or receipt: expands its exposure into logs,
+    history and durable artifacts.
+  - Disable Deployment Protection for the canary: weakens the sandbox instead of testing the
+    intended production boundary.
+- **When to revisit:** Prefer Vercel Trusted Sources/OIDC when the Factory runs inside an eligible
+  workload with short-lived identity. Extend the receipt with migrations, authenticated health
+  checks and canonical-domain evidence when those lifecycle stages exist.
+
+### 50. Accept protected delivery only after an exact-commit live smoke
+
+- **Date:** 2026-07-26
+- **Decision:** Accept the first delivery-observation tranche after an isolated Vercel canary found
+  the Production deployment for the exact published commit, observed `READY`, crossed Vercel
+  Authentication with a process-memory-only automation bypass, and received HTTP 200 HTML
+  containing the project identity. Require the resulting receipt to pass `doctor`, remain mode
+  `0600`, and leave the publishable source SHA-256 unchanged. Keep provider IDs and canary-specific
+  digests only in the excluded operational handoff, not in reusable generated documentation.
+- **Why:** HTTP mocks prove request shape and failure semantics but cannot prove Vercel's current
+  deployment metadata, team routing, protection redirect or bypass behavior. The canary connects
+  the full evidence chain from the guarded Git source commit to the response body actually served
+  by its immutable deployment URL, while the postchecks prove the operational receipt neither
+  leaks into source nor weakens generated-project isolation.
+- **Rejected alternatives:**
+  - Accept `READY` without HTTP validation: proves Vercel's build state, not application delivery.
+  - Accept the anonymous SSO 302: proves protection, not the application behind it.
+  - Disable protection for the test: avoids the production boundary the lifecycle must support.
+  - Persist the bypass as evidence: turns a successful security check into credential exposure.
+- **When to revisit:** Re-run this canary after Vercel deployment/protection API changes. Add
+  migration, authenticated-route and canonical-domain evidence as those lifecycle stages become
+  available.
+
+### 51. Migrate exact published Drizzle history before defining product seed
+
+- **Date:** 2026-07-26
+- **Decision:** Add a separate `migration:plan|preflight|live|resume` lifecycle. Bind its plan to
+  the successful source-publication commit/digest, provisioned Neon identity, and the exact ordered
+  Drizzle journal with each SQL SHA-256 and timestamp. Retrieve a direct Neon connection URI only
+  into process memory. Require the remote migration log to be an exact prefix, hold a PostgreSQL
+  advisory lock, apply pending entries through Drizzle's transaction, re-read the full history and
+  persist only non-secret evidence in `.void-starter/migration-state.json`. Keep administrator
+  bootstrap/seed separate until Better Auth onboarding supplies an explicit identity.
+- **Why:** Running an unbound `drizzle-kit migrate` proves neither which published source supplied
+  the SQL nor whether a remote database has divergent history. Local and database locks plus
+  Drizzle's migration transaction make an interrupted attempt safely inspectable and resumable.
+  Conversely, the current manifest contains no administrator email or invitation identity; a
+  nominal seed would have to guess credentials or create misleading sample production data. The
+  API and history contracts follow Neon's
+  [connection URI endpoint](https://api-docs.neon.tech/reference/getconnectionuri) and Drizzle's
+  [migration log](https://orm.drizzle.team/docs/drizzle-kit-migrate).
+- **Rejected alternatives:**
+  - Run `drizzle-kit migrate` manually with an exported URI: lacks plan binding, safe receipt and
+    history-conflict diagnostics.
+  - Read `DATABASE_URL` back from Vercel: sensitive Production variables are intentionally
+    write-only to the Factory.
+  - Use the pooled application URI: migrations and advisory locking belong on a direct database
+    session, not the runtime pooler.
+  - Seed a placeholder admin or demo note: creates privileged or misleading production records
+    without product intent.
+- **When to revisit:** Add a separate bootstrap receipt when the auth contract defines the exact
+  administrator/invitation identity and real Resend delivery. Revisit the lock/migrator only if
+  Drizzle changes its PostgreSQL transactional migration semantics.
+
+### 52. Accept Neon migration only after empty-to-current history attestation
+
+- **Date:** 2026-07-26
+- **Decision:** Accept the first migration lifecycle after an isolated Neon canary authenticated
+  the exact provisioned project, observed an empty Drizzle history, applied every published SQL
+  entry in one attempt, and re-read the complete ordered history with the planned latest tag,
+  SHA-256 and timestamp. Require the receipt to pass `doctor`, remain mode `0600`, and leave the
+  publishable source digest unchanged. Keep provider IDs and canary-specific hashes in the excluded
+  operational handoff only.
+- **Why:** Mock databases prove plan and recovery logic but cannot prove current Neon connection
+  URI behavior, direct endpoint compatibility, PostgreSQL advisory locking, Drizzle transactions,
+  or durable migration-log writes. The live transition from zero to the exact planned count covers
+  the mutation path and its immediate reconciliation, while local postchecks protect receipt and
+  source-isolation invariants.
+- **Rejected alternatives:**
+  - Accept a successful Neon connection only: proves credentials, not schema mutation.
+  - Inspect application tables without migration history: loses the binding between database state
+    and the exact published SQL sequence.
+  - Store the connection URI for later verification: creates a durable database credential leak.
+  - Treat CI's ephemeral PostgreSQL migration as the production canary: does not exercise Neon or
+    the provisioned project boundary.
+- **When to revisit:** Re-run after Neon connection-URI or Drizzle migrator contract changes, and
+  whenever migration strategy moves away from ordered SQL files and the Drizzle history table.
+
+### 53. Materialize Resend as the required Better Auth production email adapter
+
+- **Date:** 2026-07-26
+- **Decision:** Promote `_modules/email-resend` from a README placeholder to a real server-only
+  workspace selected by `operations.email: resend`. Route Better Auth verification, password reset
+  and magic links through its direct Resend HTTPS adapter. Require Resend whenever Better Auth is
+  selected, but retain local console links only when both sender variables are absent. Partial
+  configuration and every unconfigured production send fail closed. Use text plus escaped HTML,
+  bounded requests and deterministic Resend idempotency keys; never surface provider bodies or
+  credentials in errors.
+- **Why:** A production authentication profile that throws for every email is not turnkey, and
+  implementing only magic links would leave verification and the existing reset UI broken. A
+  direct HTTPS adapter keeps the dependency and browser bundle at zero while covering Resend's
+  stable send-email contract. Requiring the adapter at manifest validation makes the declared
+  production baseline truthful.
+- **Rejected alternatives:**
+  - Keep the placeholder and configure email manually per project: recreates drift and cannot be
+    verified by generated-project tests.
+  - Add only the Resend SDK: adds a supply-chain dependency for one stable HTTP endpoint without
+    improving the local contract.
+  - Fall back to URL logging in production: leaks bearer-style authentication links and masks a
+    broken product flow.
+  - Await a React Email design system: blocks functional delivery on presentation work; the
+    adapter already has accessible HTML and text bodies and can adopt richer templates later.
+- **When to revisit:** Adopt React Email when multiple branded transactional templates justify the
+  dependency. Replace Resend only through the same three-purpose server port and manifest adapter.
+
+### 54. Bind production auth through an exact, secret-free bootstrap plan
+
+- **Date:** 2026-07-26
+- **Decision:** Add a separate `auth:plan|preflight|live|resume` lifecycle after source publication
+  and database migration. Keep canonical URL, verified Resend sender and exact bootstrap
+  administrator in a strict non-secret context; read `VERCEL_TOKEN`, `BETTER_AUTH_SECRET` and
+  `RESEND_API_KEY` only from process memory. Bind the two runtime secrets as Production-only
+  Vercel Sensitive variables and the remaining runtime configuration as encrypted variables. Use
+  a plain plan-digest ownership marker for reconciliation, send one idempotent configuration email
+  to validate the sending boundary, and persist only opaque IDs and non-secret evidence. Grant
+  `admin` through Better Auth's user-create hook only when the normalized new-user email exactly
+  matches the planned identity. Require a new Production deployment before testing auth.
+- **Why:** Authentication cannot be production-ready while its canonical origin, email provider
+  and first administrator depend on dashboard folklore. At the same time, a seed with an invented
+  password or placeholder user creates a durable privileged credential the product never asked
+  for. Exact identity intent lets the real person establish their own Better Auth account while
+  the hook atomically assigns the initial role. Vercel Sensitive values are write-only, so an
+  explicit non-secret marker is the only safe way to distinguish adoption from foreign or partial
+  configuration. Production-only targeting prevents previews from sharing the production
+  database and authentication secrets.
+- **Rejected alternatives:**
+  - Store API keys or `BETTER_AUTH_SECRET` in the auth context or receipt: makes reproducible intent
+    and operational evidence secret-bearing.
+  - Seed an admin with a generated/default password: creates an unmanaged privileged credential.
+  - Promote the first arbitrary signup: makes a deployment race determine production ownership.
+  - Read Sensitive values back to compare them: Vercel deliberately makes them unreadable and the
+    comparison would widen secret exposure.
+  - Bind the production database/auth keys into Preview: couples untrusted preview code and branch
+    authors to production identity and data.
+  - Treat successful variable creation as a deployed configuration: Vercel injects environment
+    changes only into subsequent deployments.
+- **When to revisit:** Replace static API tokens with workload identity where providers support it.
+  Add a guarded redeployment and authenticated-route observation receipt after the isolated live
+  auth canary establishes the current Vercel and Resend contracts.
+
+### 55. Accept production authentication after real identity bootstrap
+
+- **Date:** 2026-07-26
+- **Decision:** Accept the Better Auth production tranche after an isolated canary bound all eight
+  planned Vercel Production variables, delivered the idempotent Resend configuration message from
+  a verified subdomain, redeployed the exact source commit, passed the protected HTTP smoke and
+  completed a real magic-link session for the exact bootstrap identity. Require `/admin` to report
+  that identity with role `admin`, the auth/delivery/migration receipts to pass `doctor`, every
+  receipt to remain mode `0600`, and the publishable source digest to remain unchanged.
+- **Why:** Provider-mocked environment writes and email responses cannot prove Resend domain/key
+  alignment, Vercel's post-binding deployment semantics, Better Auth callback URLs, cookie/session
+  creation, database user hooks or the final authorization policy. The complete browser flow proves
+  that the configured human identity, rather than an invented seed credential, receives the first
+  administrator role across the real provider chain.
+- **Rejected alternatives:**
+  - Stop after the configuration email: proves Resend sending, not Better Auth's callback or role
+    hook.
+  - Inspect the database role directly without signing in: proves stored data, not session and
+    route authorization.
+  - Reuse the pre-binding deployment: Vercel does not inject changed variables retroactively.
+  - Persist the magic link, provider tokens or secret values as evidence: turns authentication
+    validation into credential disclosure.
+- **When to revisit:** Add an automated authenticated-route receipt only if a short-lived canary
+  identity can be exercised without persisting bearer links or session credentials. Re-run the
+  live canary after Better Auth, Resend or Vercel environment contracts change.
+
+### 56. Provision EAS identity through a receipt-owned source overlay
+
+- **Date:** 2026-07-26
+- **Decision:** Add a separate `eas:plan|preflight|live|resume` lifecycle for Expo projects. Keep
+  only the Expo account in a strict non-secret context and read `EXPO_TOKEN` from process memory.
+  Execute pinned `eas-cli@21.2.0` in an isolated temporary static config to create or adopt the
+  exact `@account/slug`, verify its UUID through `project:info`, then write a public non-secret
+  `apps/mobile/eas-project.json`. Have a stable generated `app.config.ts` consume that file while
+  leaving generation-owned `app.json` byte-for-byte unchanged. Persist the operational plan and
+  link digest in ignored mode-`0600` state, and make `doctor` reject unowned links. Do not start a
+  native build or create signing/store credentials in this lifecycle.
+- **Why:** EAS requires `extra.eas.projectId` in evaluated app configuration, but the ID exists only
+  after a remote project is created. Letting the provider CLI rewrite `app.json` would invalidate
+  the generation receipt and blur the boundary between deterministic template output and remote
+  identity. The small checked-in overlay is non-secret, reproducible on fresh renders, and can be
+  included in the next guarded source update. EAS uniqueness by account and slug also lets resume
+  adopt an ambiguously created project rather than duplicate it. This follows Expo's
+  [programmatic token](https://docs.expo.dev/accounts/programmatic-access/) and
+  [EAS CLI project initialization](https://github.com/expo/eas-cli#eas-init) contracts.
+- **Rejected alternatives:**
+  - Run `eas init` directly in the generated mobile directory: allows an external CLI to mutate a
+    receipt-owned file and potentially leave partial local changes.
+  - Put the project ID or account into manifest v1 before creation: the UUID does not exist at
+    intent time, and provider coordinates do not belong in product capability intent.
+  - Pass the project ID only through an environment variable: makes every local, CI and remote EAS
+    command depend on undeclared ambient configuration for a non-secret identity.
+  - Install EAS CLI in the generated workspace: reintroduces the dependency and vulnerability
+    graph already removed by decision 45.
+  - Combine project creation with `eas build`: mixes a free identity mutation with signing,
+    platform membership, build cost and store credentials that require separate approval.
+- **When to revisit:** Accept the lifecycle only after an isolated live create/adopt/resume canary
+  and a guarded source update prove current Expo behavior. Add EAS environment bindings and native
+  build receipts only when the first mobile product defines its runtime secrets, platform target
+  and signing ownership.
+
+### 57. Accept EAS project provisioning after guarded publication
+
+- **Date:** 2026-07-26
+- **Decision:** Accept the Expo/EAS identity tranche after an isolated organization canary created
+  and verified the exact `@account/slug`, wrote only the public UUID link, adopted the existing
+  GitHub/Vercel/Neon resources from a fresh generated target, published that link as one guarded
+  fast-forward, passed the complete quality and E2E workflow, and smoked the deployment for the
+  exact source commit through Vercel protection. Require EAS initialization to run from a
+  provider-owned temporary project containing a minimal `package.json` and an identity-only static
+  Expo config. Surface redacted provider diagnostics only in process memory; keep receipts generic,
+  mode `0600` and secret-free.
+- **Why:** Contract mocks proved idempotence but could not prove EAS CLI's project-root discovery,
+  config evaluation, robot-role behavior or the final Git/CI/deployment chain. The first two live
+  attempts exposed two boundary assumptions: EAS requires a package root, and the isolated config
+  must not carry runtime-only plugins into a dependency-free provider directory. The third attempt
+  created and read back the UUID, while guarded source resume reconciled GitHub's temporarily stale
+  post-push read without a second commit. The resulting CI build proves the checked-in overlay is
+  consumable by the real Expo application rather than only by Factory tests.
+- **Rejected alternatives:**
+  - Run initialization directly in `apps/mobile`: lets EAS mutate receipt-owned generation output.
+  - Copy the complete mobile dependency graph into the provider directory: couples identity
+    creation to runtime install state and makes the isolated boundary misleading.
+  - Treat project creation alone as acceptance: does not prove the UUID overlay survives source
+    publication, CI config evaluation or a fresh Production deployment.
+  - Persist raw EAS stderr for debugging: provider output is not a safe long-term receipt format.
+- **When to revisit:** Add a separate guarded EAS environment/build lifecycle only when a real
+  mobile product supplies runtime-secret requirements, target platforms, signing ownership, store
+  memberships and explicit cost approval. Re-run this canary after material EAS CLI project-init or
+  Expo configuration changes.
+
+### 58. Provision private EU R2 storage inside the guarded provider lifecycle
+
+- **Date:** 2026-07-26
+- **Decision:** Extend the deterministic provider plan with `cloudflare.r2-bucket` and, for a
+  Vercel web surface, `vercel.r2-binding`. Keep only the 32-character Cloudflare account ID in the
+  strict non-secret provisioning context. Read `CLOUDFLARE_API_TOKEN` and, when available,
+  `R2_ACCESS_KEY_ID` plus `R2_SECRET_ACCESS_KEY` from process memory. Derive the bucket name from
+  the exact project slug, require jurisdiction `eu` and storage class `Standard`, and send the
+  jurisdiction header on every R2 request. Before adoption, reject enabled managed or custom
+  public domains. Run one deterministic upload/read/delete object canary. If the runtime pair is
+  absent, persist a retryable binding failure so the operator can issue credentials scoped to that
+  exact bucket and finish with `resume:live`; otherwise bind the account, bucket, EU endpoint and
+  runtime keys to Vercel with a plain idempotency-key ownership marker. Persist only the bucket ID,
+  name, account ID, EU/private attestation, canary digest, binding marker ID and bound-key names.
+- **Why:** The manifest already selects `cloudflare-r2-eu` for durable private documents, but an
+  environment-variable scaffold does not prove that storage exists, remains in the EU, is private,
+  accepts object I/O or reaches the deployed runtime. Cloudflare's
+  [bucket API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/create/)
+  exposes an explicit `eu` jurisdiction, and its
+  [public-domain API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/domains/subresources/managed/methods/list/)
+  makes privacy observable before adoption. The object canary proves byte-level storage without
+  leaving test data. Existing Vercel Sensitive/Development binding semantics and the generic
+  atomic apply receipt preserve the same recovery and secret-handling boundary as Neon.
+- **Rejected alternatives:**
+  - Treat a location hint as EU residency: hints influence placement but do not provide the
+    jurisdictional guarantee required by the manifest.
+  - Trust default bucket privacy without reading domain state: a previously created bucket may
+    have acquired a managed or custom public domain outside this plan.
+  - Put Cloudflare or R2 credentials in the manifest/context/receipt: turns reproducible product
+    intent and operational evidence into secret-bearing artifacts.
+  - Generate a new R2 API token inside every apply: the secret value is shown only at creation,
+    cannot be recovered during stateless adoption, and requires a broader token-management
+    permission than bucket provisioning.
+  - Repeat a timed-out bucket create on resume: risks duplicating or conflicting with a mutation
+    whose outcome is unknown; resume must only reconcile after an ambiguous create.
+- **Acceptance evidence:** The isolated canary passed on 2026-07-27 with plan
+  `7a7be8babbdb8240ca34e7855bff008cf7f4302b85b0dbfd6797cd771afb0770`. It created the EU/private
+  bucket `void-starter-canary-20260725` (`f520e89b2e934d96a7b4275140e122b7`), proved the exact object
+  round trip and deletion, then paused until exact-bucket runtime credentials were available and
+  adopted Vercel binding `ERMGEG72S7cCdvST`. A completed-state resume changed no attempt counter;
+  a fresh secret-free local state adopted the same six provider IDs with one attempt each. The
+  first real upload also exposed that Cloudflare's object endpoint requires a raw octet-stream
+  body rather than multipart form data; the corrected contract is now enforced by the HTTP mock.
+- **When to revisit:** Revisit credential generation when a recoverable workload-identity or
+  short-lived credential flow can replace static R2 keys, or when the Cloudflare object API,
+  jurisdiction guarantees or Vercel secret semantics materially change.

@@ -25,7 +25,7 @@ The starter ships secure-by-default substrates and documents which primitive add
 | A03 | Injection | Drizzle parameterized queries (`packages/db/src/schema/*`, every repository); Zod validation at every boundary via `defineAction` and `defineFormAction` (`packages/core/src/server-action.ts`); no string interpolation into SQL or shell |
 | A04 | Insecure Design | ADR-driven architecture (`docs/DECISIONS.md`, 25 entries); service-layer authorization separated via `policy.ts` (ADR 08); component to action to service to repository import direction enforced (ADR 03 and `docs/ARCHITECTURE.md` section 3) |
 | A05 | Security Misconfiguration | `defaultSecurityHeaders()` from `@repo/core/security-headers` wired in `apps/web/next.config.ts`; no debug routes; no public source maps unless `_modules/observability-sentry` uploads them privately to Sentry |
-| A06 | Vulnerable and Outdated Components | Renovate auto-PRs (CI doc to land in Phase D); `gitleaks` pre-commit job (`lefthook.yml`); `bunx knip` flags unused deps so the dependency surface stays minimal |
+| A06 | Vulnerable and Outdated Components | `bun audit` blocks CI on published advisories; root overrides patch lagging transitive ranges (ADR 36); Renovate opens update PRs; `bunx knip` keeps the dependency surface minimal |
 | A07 | Identification and Authentication Failures | Better-Auth session rotation on auth-state change; httpOnly Secure cookies; magic-link expiry (`verifications.expiresAt`); role-based admin (`admin` plugin in `auth.repository.ts`); `requireEmailVerification: true` (Better-Auth config) |
 | A08 | Software and Data Integrity Failures | Conventional commits enforced by review; signed merges recommended at the GitHub branch-protection layer; pre-commit hooks (`lefthook.yml`); no `eval`, no dynamic `require`, no untrusted code paths in core |
 | A09 | Security Logging and Monitoring Failures | `pino` structured logger (ADR 22, `packages/core/src/logger.ts`); captured by Vercel function logs and Sentry when enabled (`_modules/observability-sentry`) |
@@ -55,6 +55,12 @@ The starter does not "make you compliant" -- compliance is a per-MVP exercise --
 - **Command-time presence check via `required()`.** For CLI configs (drizzle-kit) where the full schema is overkill, `required(name)` throws `Missing required env var: <NAME>` on absent or empty values. See ADR 13 and the `dbCredentials.url` getter in `packages/db/drizzle.config.ts`.
 - **Never commit secrets.** `gitleaks` runs in `lefthook.yml` as a pre-commit job. `.gitignore` excludes `.env`, `.env.local`, and `.env.*.local`. Allow-listed Next.js build artifacts live in `.gitleaks.toml`.
 - **Vercel "Sensitive" type for production secrets.** Set `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `SENTRY_AUTH_TOKEN`, `STRIPE_SECRET_KEY`, etc. as the Sensitive var type in the Vercel dashboard so they never appear in deploy logs or the Vercel UI after creation.
+- **Factory auth binding is write-only and Production-only.** `auth:live` reads `VERCEL_TOKEN`,
+  `BETTER_AUTH_SECRET` and `RESEND_API_KEY` from process memory, sends the two runtime secrets
+  directly to Vercel Sensitive variables, and persists only opaque environment/email IDs plus a
+  plan digest. Preview deployments intentionally remain auth-unconfigured instead of sharing the
+  production database and credentials. A non-secret ownership marker permits safe resume without
+  reading secret values back.
 - **No raw `process.env` in business code.** `PATTERNS.md` section 7 forbids it. Read through `createAppEnv` or `required()` so the missing-var error message is uniform across packages.
 
 ---
@@ -176,9 +182,18 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
 
 ---
 
+## 10. Dependency security
+
+- **Audit is a required gate.** `bun run audit` checks production and development dependencies and exits non-zero when the registry reports any advisory. The `quality` CI job runs it immediately after the frozen install.
+- **Fix owners before leaves.** Update the direct dependency that owns a vulnerable transitive package whenever its latest release contains the fix.
+- **Centralize temporary overrides.** If the latest owner still pins a vulnerable transitive release, add the patched version to the root `package.json#overrides`, validate the full pipeline, and record the rationale in ADR 36. Do not add fake direct dependencies just to influence the resolver.
+- **Remove overrides when upstream catches up.** Each dependency update should re-run `bun audit` and test whether an override can be deleted. An override is a temporary security control, not a permanent fork.
+
+---
+
 ## Cross-references
 
-- `docs/DECISIONS.md` -- the why behind every architectural choice. Read entry 02 (Better-Auth), entry 04 (build-time activation), entry 11 (Neon DB), entry 13 (`required()`), entry 22 (pino logger), entry 25 (server-only boundary).
+- `docs/DECISIONS.md` -- the why behind every architectural choice. Read entry 02 (Better-Auth), entry 04 (build-time activation), entry 11 (Neon DB), entry 13 (`required()`), entry 22 (pino logger), entry 25 (server-only boundary), and entry 36 (dependency security overrides).
 - `docs/ARCHITECTURE.md` -- topology, layering rules, package boundaries.
 - `docs/PATTERNS.md` -- file naming, service layout, code style commitments.
 - `docs/AUTH.md` -- Better-Auth integration details, session lifecycle, role-based access.

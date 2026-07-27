@@ -12,11 +12,14 @@
       "ignoreDependencies": ["pino-pretty"]
     },
     "packages/ui": {
-      "project": "src/**/*.{ts,tsx}"
+      "project": "src/**/*.{ts,tsx,css}"
+    },
+    "tooling/*": {
+      "project": "src/**/*.ts"
     },
     "apps/*": {
       "entry": ["src/app/**/page.tsx", "src/app/**/layout.tsx", "tests/e2e/**/*.spec.ts"],
-      "project": ["src/**/*.{ts,tsx}", "tests/e2e/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx,css}", "tests/e2e/**/*.ts"],
       "ignore": ["src/components/_examples/**"],
       "ignoreDependencies": ["@testing-library/react", "@testing-library/user-event"]
     }

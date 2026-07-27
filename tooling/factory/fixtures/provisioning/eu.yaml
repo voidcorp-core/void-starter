@@ -1,0 +1,17 @@
+schema_version: 1
+
+github:
+  owner: voidcorp-core
+  owner_kind: organization
+  visibility: private
+
+vercel:
+  team_id: team_example
+  region: fra1
+
+neon:
+  org_id: org-example
+  region_id: aws-eu-central-1
+
+cloudflare:
+  account_id: 0123456789abcdef0123456789abcdef
