@@ -87,7 +87,7 @@ type AuthenticatedGitHubUser = {
   id: number;
 };
 
-export type RemoteSource = {
+type RemoteSource = {
   commitSha: string;
   treeSha: string;
   sourceSha256: string | null;

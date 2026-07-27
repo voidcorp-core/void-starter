@@ -14,7 +14,7 @@ const stageStatusSchema = z.enum([
   'blocked',
 ]);
 
-export function isSafeRelativePath(value: string): boolean {
+function isSafeRelativePath(value: string): boolean {
   if (!value || isAbsolute(value) || value.includes('\\') || value.includes('\0')) {
     return false;
   }
@@ -116,7 +116,6 @@ export const projectPackManifestSchema = z
   });
 
 export type ProjectPackManifest = z.infer<typeof projectPackManifestSchema>;
-export type ProjectPackDocument = ProjectPackManifest['documents'][number];
 
 const receiptFileSchema = z.strictObject({
   document_id: documentIdSchema,
@@ -161,7 +160,7 @@ export type ProjectPackReceipt = z.infer<typeof projectPackReceiptSchema>;
 
 export type ProjectPackActionKind = 'create' | 'update' | 'unchanged' | 'conflict';
 
-export type ProjectPackActionReason =
+type ProjectPackActionReason =
   | 'destination_missing'
   | 'destination_exists_without_receipt'
   | 'managed_destination_missing'
