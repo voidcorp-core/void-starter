@@ -599,6 +599,11 @@ describe('doctorProject', () => {
       cloudflare: {
         account_id: '0123456789abcdef0123456789abcdef',
       },
+      sentry: {
+        organization_slug: 'void-sandbox',
+        team_slug: 'platform',
+        region: 'de',
+      },
     });
     await applyProvisioning({
       projectRoot: targetRoot,

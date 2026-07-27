@@ -425,6 +425,29 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         bound_keys: action.input.bindings,
       };
     }
+    if (action.id === 'sentry.project') {
+      return {
+        provider: 'sentry',
+        resource_kind: 'project',
+        resource_id: resourceId,
+        display_name: action.input.slug,
+        organization_slug: action.input.organization_slug,
+        team_slug: action.input.team_slug,
+        region: 'de',
+        platform: 'javascript-nextjs',
+        client_key_id: `key_${action.idempotency_key.slice(-20)}`,
+        dsn_sha256: sha256(`simulated-sentry-dsn:${action.idempotency_key}`),
+      };
+    }
+    if (action.id === 'vercel.sentry-binding') {
+      return {
+        provider: 'vercel',
+        resource_kind: 'sentry-binding',
+        resource_id: resourceId,
+        display_name: 'Sentry runtime binding',
+        bound_keys: action.input.bindings,
+      };
+    }
     return {
       provider: 'vercel',
       resource_kind: 'database-binding',
@@ -454,7 +477,9 @@ export function validateProvisioningState(
             ? 'r2-bucket'
             : action.id === 'vercel.r2-binding'
               ? 'r2-binding'
-              : 'project';
+              : action.id === 'vercel.sentry-binding'
+                ? 'sentry-binding'
+                : 'project';
     if (
       actionState.status === 'succeeded' &&
       (!actionState.resource ||
@@ -486,6 +511,28 @@ export function validateProvisioningState(
         serializeCanonicalJson(action.input.bindings)
     ) {
       throw new Error('Succeeded R2 binding action does not attest the exact runtime keys');
+    }
+    if (
+      action.id === 'sentry.project' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'sentry' &&
+      (actionState.resource.display_name !== action.input.slug ||
+        actionState.resource.organization_slug !== action.input.organization_slug ||
+        actionState.resource.team_slug !== action.input.team_slug ||
+        actionState.resource.region !== action.input.region ||
+        actionState.resource.platform !== action.input.platform)
+    ) {
+      throw new Error('Succeeded Sentry provisioning action does not attest the exact DE project');
+    }
+    if (
+      action.id === 'vercel.sentry-binding' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'vercel' &&
+      actionState.resource.resource_kind === 'sentry-binding' &&
+      serializeCanonicalJson(actionState.resource.bound_keys) !==
+        serializeCanonicalJson(action.input.bindings)
+    ) {
+      throw new Error('Succeeded Sentry binding action does not attest the exact runtime keys');
     }
     if (actionState.status === 'failed' && (!actionState.error || actionState.resource !== null)) {
       throw new Error(`Failed provisioning action ${action.id} has inconsistent diagnostics`);

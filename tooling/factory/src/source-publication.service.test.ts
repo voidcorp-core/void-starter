@@ -49,6 +49,11 @@ const context: ProvisioningContext = {
   cloudflare: {
     account_id: '0123456789abcdef0123456789abcdef',
   },
+  sentry: {
+    organization_slug: 'void-sandbox',
+    team_slug: 'platform',
+    region: 'de',
+  },
 };
 
 type RemoteSource = {
@@ -254,6 +259,37 @@ async function createProvisionedProject(): Promise<string> {
           'R2_BUCKET_NAME',
           'R2_ENDPOINT',
           'R2_SECRET_ACCESS_KEY',
+        ],
+      },
+    ],
+    [
+      'sentry.project',
+      {
+        provider: 'sentry',
+        resource_kind: 'project',
+        resource_id: 'sentry_project_example',
+        display_name: 'example-saas',
+        organization_slug: 'void-sandbox',
+        team_slug: 'platform',
+        region: 'de',
+        platform: 'javascript-nextjs',
+        client_key_id: 'sentry_key_example',
+        dsn_sha256: 'b'.repeat(64),
+      },
+    ],
+    [
+      'vercel.sentry-binding',
+      {
+        provider: 'vercel',
+        resource_kind: 'sentry-binding',
+        resource_id: 'env_sentry',
+        display_name: 'Sentry runtime binding',
+        bound_keys: [
+          'SENTRY_DSN',
+          'NEXT_PUBLIC_SENTRY_DSN',
+          'SENTRY_AUTH_TOKEN',
+          'SENTRY_ORG',
+          'SENTRY_PROJECT',
         ],
       },
     ],
@@ -755,6 +791,10 @@ neon:
   region_id: aws-eu-central-1
 cloudflare:
   account_id: 0123456789abcdef0123456789abcdef
+sentry:
+  organization_slug: void-sandbox
+  team_slug: platform
+  region: de
 `,
       'utf8',
     );

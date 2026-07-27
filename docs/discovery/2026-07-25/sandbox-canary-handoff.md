@@ -248,9 +248,20 @@ forme pour prévenir la régression. Les deux tokens Cloudflare créés pour ce 
 sept jours : révoquer le token de contrôle après validation et conserver/faire tourner le token
 runtime uniquement si le sandbox doit continuer à accéder au bucket.
 
+## Sentry en cours
+
+`DEV-466` est en cours dans Linear. Le plan déterministe, le préflight d'organisation active en
+région `de`, la création/adoption du projet Next.js, la sélection stricte de la clé client et la
+liaison Vercel sont implémentés et couverts par les tests de contrat. Le flux sépare le token de
+contrôle `SENTRY_API_TOKEN` du token d'upload de releases `SENTRY_BUILD_AUTH_TOKEN`, avec reprise
+après l'échec volontaire et retryable de liaison. Aucun DSN ni token n'entre dans l'état local.
+
+Le canari réel Sentry n'a pas encore été exécuté : ne pas considérer cette tranche comme validée
+live avant création, reprise, adoption sans état et vérification des reçus sur le sandbox.
+
 ## Suite globale
 
-1. Ajouter Sentry/PostHog et DNS; R2, Resend et le projet EAS sont terminés.
+1. Exécuter le canari Sentry, puis ajouter PostHog et DNS; R2, Resend et le projet EAS sont terminés.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
