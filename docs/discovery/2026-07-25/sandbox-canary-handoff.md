@@ -266,9 +266,27 @@ runtime uniquement si le sandbox doit continuer à accéder au bucket.
 - deux `doctor` verts, états en mode `0600`, aucun des huit credentials du trousseau ni DSN public
   présent dans les reçus.
 
+## PostHog validé
+
+`DEV-468` est prêt à être terminé dans Linear. Le canari isolé a validé le plan
+`9d7a61823147d36f96447c98243cf0a8cab052f00b4e2b9b4e516b6c0a691617` le 2026-07-27 :
+
+- préflight vert sur les six fournisseurs et l'organisation PostHog EU `Void Corp`
+  (`019d9316-714e-0000-01c7-e9a08d38242b`);
+- adoption des huit ressources historiques sans changement d'ID;
+- création unique du projet PostHog `void-starter-canary-20260725`, ID `233588`;
+- correction du validateur après observation d'un ID d'organisation hexadécimal UUID-shaped mais
+  sans version/variante RFC, puis reprise sans second `POST` projet;
+- liaison Vercel `KHP1Sghuyxh0KK7M` pour `NEXT_PUBLIC_POSTHOG_KEY` et
+  `NEXT_PUBLIC_POSTHOG_HOST=/ingest`;
+- reprise terminée avec compteurs `1,1,1,1,1,1,1,1,2,1`, puis adoption fraîche des dix mêmes IDs
+  avec une tentative par action;
+- deux `doctor` verts, états en mode `0600`, aucune correspondance avec les neuf credentials, le
+  DSN Sentry ou la clé projet PostHog.
+
 ## Suite globale
 
-1. Ajouter PostHog et DNS; R2, Resend, Sentry et le projet EAS sont terminés.
+1. Ajouter DNS; R2, Resend, Sentry, PostHog et le projet EAS sont terminés.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
