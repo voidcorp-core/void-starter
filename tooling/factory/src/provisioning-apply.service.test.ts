@@ -31,6 +31,9 @@ const context = parseProvisioningContext({
     org_id: 'org-example',
     region_id: 'aws-eu-central-1',
   },
+  cloudflare: {
+    account_id: '0123456789abcdef0123456789abcdef',
+  },
 });
 
 async function createGeneratedProject() {
@@ -100,6 +103,8 @@ describe('applyProvisioning', () => {
       ['vercel.project', 'succeeded', 1],
       ['neon.project', 'failed', 1],
       ['vercel.database-binding', 'pending', 0],
+      ['cloudflare.r2-bucket', 'pending', 0],
+      ['vercel.r2-binding', 'pending', 0],
     ]);
     expect(serializeCanonicalJson(failedState)).not.toContain('Simulated failure for');
 
@@ -110,7 +115,7 @@ describe('applyProvisioning', () => {
       requireExistingState: true,
     });
     expect(resumedState.status).toBe('succeeded');
-    expect(resumedState.actions.map((action) => action.attempts)).toEqual([1, 1, 2, 1]);
+    expect(resumedState.actions.map((action) => action.attempts)).toEqual([1, 1, 2, 1, 1, 1]);
   });
 
   it('refuses a mismatched plan, concurrent apply, and resume without state', async () => {
@@ -185,6 +190,18 @@ describe('applyProvisioning', () => {
     firstAction.status = 'pending';
     expect(() => validateProvisioningState(tampered, project.plan.manifest_sha256)).toThrow(
       /incomplete/i,
+    );
+
+    const tamperedR2 = structuredClone(state);
+    const r2Action = tamperedR2.actions.find(
+      (action) => action.action_id === 'cloudflare.r2-bucket',
+    );
+    if (r2Action?.resource?.provider !== 'cloudflare') {
+      throw new Error('Expected a simulated R2 resource');
+    }
+    r2Action.resource.display_name = 'foreign-bucket';
+    expect(() => validateProvisioningState(tamperedR2, project.plan.manifest_sha256)).toThrow(
+      /exact private EU bucket/i,
     );
   });
 });

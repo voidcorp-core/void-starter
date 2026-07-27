@@ -40,6 +40,8 @@ vercel:
 neon:
   org_id: org-example
   region_id: aws-eu-central-1
+cloudflare:
+  account_id: 0123456789abcdef0123456789abcdef
 `,
       'utf8',
     );

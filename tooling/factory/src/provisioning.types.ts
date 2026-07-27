@@ -22,11 +22,19 @@ const neonContextSchema = z.strictObject({
   region_id: z.enum(['aws-eu-central-1']),
 });
 
+const cloudflareContextSchema = z.strictObject({
+  account_id: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{32}$/),
+});
+
 export const provisioningContextSchema = z.strictObject({
   schema_version: z.literal(1),
   github: githubContextSchema,
   vercel: vercelContextSchema.optional(),
   neon: neonContextSchema.optional(),
+  cloudflare: cloudflareContextSchema.optional(),
 });
 
 export type ProvisioningContext = z.infer<typeof provisioningContextSchema>;
@@ -98,11 +106,58 @@ const vercelDatabaseBindingActionSchema = z.strictObject({
   idempotency_key: idempotencyKeySchema,
 });
 
+const cloudflareR2BucketActionSchema = z.strictObject({
+  id: z.literal('cloudflare.r2-bucket'),
+  provider: z.literal('cloudflare'),
+  kind: z.literal('ensure-r2-bucket'),
+  depends_on: z.tuple([]),
+  permissions: z.tuple([
+    z.literal('r2-bucket:read'),
+    z.literal('r2-bucket:write'),
+    z.literal('r2-object:read'),
+    z.literal('r2-object:write'),
+  ]),
+  input: z.strictObject({
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    name: z
+      .string()
+      .min(3)
+      .max(63)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    jurisdiction: z.literal('eu'),
+    storage_class: z.literal('Standard'),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
+const vercelR2BindingActionSchema = z.strictObject({
+  id: z.literal('vercel.r2-binding'),
+  provider: z.literal('vercel'),
+  kind: z.literal('ensure-r2-binding'),
+  depends_on: z.tuple([z.literal('vercel.project'), z.literal('cloudflare.r2-bucket')]),
+  permissions: z.tuple([z.literal('project-environment:write')]),
+  input: z.strictObject({
+    project_action_id: z.literal('vercel.project'),
+    bucket_action_id: z.literal('cloudflare.r2-bucket'),
+    bindings: z.tuple([
+      z.literal('CLOUDFLARE_ACCOUNT_ID'),
+      z.literal('R2_ACCESS_KEY_ID'),
+      z.literal('R2_BUCKET_NAME'),
+      z.literal('R2_ENDPOINT'),
+      z.literal('R2_SECRET_ACCESS_KEY'),
+    ]),
+    targets: z.tuple([z.literal('development'), z.literal('preview'), z.literal('production')]),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
 const provisioningActionSchema = z.discriminatedUnion('id', [
   githubRepositoryActionSchema,
   vercelProjectActionSchema,
   neonProjectActionSchema,
   vercelDatabaseBindingActionSchema,
+  cloudflareR2BucketActionSchema,
+  vercelR2BindingActionSchema,
 ]);
 
 export type ProvisioningAction = z.infer<typeof provisioningActionSchema>;
@@ -148,6 +203,27 @@ export const provisionedResourceSchema = z.union([
     resource_kind: z.literal('database-binding'),
     ...resourceIdentitySchema,
   }),
+  z.strictObject({
+    provider: z.literal('cloudflare'),
+    resource_kind: z.literal('r2-bucket'),
+    ...resourceIdentitySchema,
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    jurisdiction: z.literal('eu'),
+    public_access: z.literal(false),
+    canary_sha256: sha256Schema,
+  }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('r2-binding'),
+    ...resourceIdentitySchema,
+    bound_keys: z.tuple([
+      z.literal('CLOUDFLARE_ACCOUNT_ID'),
+      z.literal('R2_ACCESS_KEY_ID'),
+      z.literal('R2_BUCKET_NAME'),
+      z.literal('R2_ENDPOINT'),
+      z.literal('R2_SECRET_ACCESS_KEY'),
+    ]),
+  }),
 ]);
 
 export type ProvisionedResource = z.infer<typeof provisionedResourceSchema>;
@@ -164,6 +240,8 @@ const provisioningActionStateSchema = z.strictObject({
     'vercel.project',
     'neon.project',
     'vercel.database-binding',
+    'cloudflare.r2-bucket',
+    'vercel.r2-binding',
   ]),
   idempotency_key: idempotencyKeySchema,
   status: z.enum(['pending', 'running', 'failed', 'succeeded']),

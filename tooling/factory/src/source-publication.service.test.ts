@@ -46,6 +46,9 @@ const context: ProvisioningContext = {
     org_id: 'org-example',
     region_id: 'aws-eu-central-1',
   },
+  cloudflare: {
+    account_id: '0123456789abcdef0123456789abcdef',
+  },
 };
 
 type RemoteSource = {
@@ -223,6 +226,35 @@ async function createProvisionedProject(): Promise<string> {
         resource_kind: 'database-binding',
         resource_id: 'env_example',
         display_name: 'DATABASE_URL',
+      },
+    ],
+    [
+      'cloudflare.r2-bucket',
+      {
+        provider: 'cloudflare',
+        resource_kind: 'r2-bucket',
+        resource_id: 'r2_bucket_example',
+        display_name: 'example-saas',
+        account_id: '0123456789abcdef0123456789abcdef',
+        jurisdiction: 'eu',
+        public_access: false,
+        canary_sha256: 'a'.repeat(64),
+      },
+    ],
+    [
+      'vercel.r2-binding',
+      {
+        provider: 'vercel',
+        resource_kind: 'r2-binding',
+        resource_id: 'env_r2',
+        display_name: 'Cloudflare R2 runtime binding',
+        bound_keys: [
+          'CLOUDFLARE_ACCOUNT_ID',
+          'R2_ACCESS_KEY_ID',
+          'R2_BUCKET_NAME',
+          'R2_ENDPOINT',
+          'R2_SECRET_ACCESS_KEY',
+        ],
       },
     ],
   ]);
@@ -721,6 +753,8 @@ vercel:
 neon:
   org_id: org-example
   region_id: aws-eu-central-1
+cloudflare:
+  account_id: 0123456789abcdef0123456789abcdef
 `,
       'utf8',
     );

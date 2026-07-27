@@ -26,10 +26,13 @@ const fullContext = {
     org_id: 'org-example',
     region_id: 'aws-eu-central-1',
   },
+  cloudflare: {
+    account_id: '0123456789abcdef0123456789abcdef',
+  },
 } as const;
 
 describe('createProvisioningPlan', () => {
-  it('plans GitHub, Vercel, Neon, and their database binding deterministically', () => {
+  it('plans GitHub, Vercel, Neon, R2, and their bindings deterministically', () => {
     const manifest = parseBuildManifest(canonicalManifest);
     const context = parseProvisioningContext(fullContext);
 
@@ -42,6 +45,8 @@ describe('createProvisioningPlan', () => {
       'vercel.project',
       'neon.project',
       'vercel.database-binding',
+      'cloudflare.r2-bucket',
+      'vercel.r2-binding',
     ]);
     expect(
       first.actions.every((action) => action.idempotency_key.startsWith('void-starter:v1:')),
@@ -51,6 +56,11 @@ describe('createProvisioningPlan', () => {
       'repository:administration:write',
     ]);
     expect(first.actions[3]?.depends_on).toEqual(['vercel.project', 'neon.project']);
+    expect(first.actions[4]).toMatchObject({
+      provider: 'cloudflare',
+      input: { jurisdiction: 'eu', storage_class: 'Standard' },
+    });
+    expect(first.actions[5]?.depends_on).toEqual(['vercel.project', 'cloudflare.r2-bucket']);
   });
 
   it('plans only resources selected by each surface and capability profile', () => {
@@ -94,6 +104,14 @@ describe('createProvisioningPlan', () => {
       neon: fullContext.neon,
     });
     expect(() => createProvisioningPlan(manifest, contextWithoutVercel)).toThrow(/Vercel/);
+
+    const contextWithoutCloudflare = parseProvisioningContext({
+      schema_version: 1,
+      github: fullContext.github,
+      vercel: fullContext.vercel,
+      neon: fullContext.neon,
+    });
+    expect(() => createProvisioningPlan(manifest, contextWithoutCloudflare)).toThrow(/Cloudflare/);
 
     expect(() =>
       parseProvisioningContext({

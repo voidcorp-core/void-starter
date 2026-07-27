@@ -48,6 +48,8 @@ vercel:
 neon:
   org_id: org-example
   region_id: aws-eu-central-1
+cloudflare:
+  account_id: 0123456789abcdef0123456789abcdef
 `,
       'utf8',
     );
@@ -73,12 +75,18 @@ neon:
       if (url.pathname === '/api/v2/users/me/organizations') {
         return jsonResponse({ organizations: [{ id: 'org-example' }] });
       }
+      if (url.pathname === '/client/v4/accounts/0123456789abcdef0123456789abcdef/r2/buckets') {
+        return jsonResponse({ success: true, result: { buckets: [] } });
+      }
       throw new Error(`Unexpected preflight request: ${url.toString()}`);
     };
     const environment = {
       GITHUB_TOKEN: 'github-secret',
       VERCEL_TOKEN: 'vercel-secret',
       NEON_API_KEY: 'neon-secret',
+      CLOUDFLARE_API_TOKEN: 'cloudflare-secret',
+      R2_ACCESS_KEY_ID: 'r2-access-key',
+      R2_SECRET_ACCESS_KEY: 'r2-secret-key',
     };
 
     await expect(
@@ -90,9 +98,9 @@ neon:
     ).resolves.toMatchObject({
       ok: true,
       mode: 'live-preflight',
-      providers: ['github', 'neon', 'vercel'],
+      providers: ['cloudflare', 'github', 'neon', 'vercel'],
     });
-    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET']);
+    expect(methods).toEqual(['GET', 'GET', 'GET', 'GET', 'GET']);
     await expect(
       readFile(join(projectRoot, '.void-starter/apply-state.json'), 'utf8'),
     ).rejects.toThrow();

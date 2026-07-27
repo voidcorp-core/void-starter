@@ -404,6 +404,27 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         display_name: action.input.name,
       };
     }
+    if (action.id === 'cloudflare.r2-bucket') {
+      return {
+        provider: 'cloudflare',
+        resource_kind: 'r2-bucket',
+        resource_id: resourceId,
+        display_name: action.input.name,
+        account_id: action.input.account_id,
+        jurisdiction: 'eu',
+        public_access: false,
+        canary_sha256: sha256(`simulated-r2-canary:${action.idempotency_key}`),
+      };
+    }
+    if (action.id === 'vercel.r2-binding') {
+      return {
+        provider: 'vercel',
+        resource_kind: 'r2-binding',
+        resource_id: resourceId,
+        display_name: 'Cloudflare R2 runtime binding',
+        bound_keys: action.input.bindings,
+      };
+    }
     return {
       provider: 'vercel',
       resource_kind: 'database-binding',
@@ -429,7 +450,11 @@ export function validateProvisioningState(
         ? 'repository'
         : action.id === 'vercel.database-binding'
           ? 'database-binding'
-          : 'project';
+          : action.id === 'cloudflare.r2-bucket'
+            ? 'r2-bucket'
+            : action.id === 'vercel.r2-binding'
+              ? 'r2-binding'
+              : 'project';
     if (
       actionState.status === 'succeeded' &&
       (!actionState.resource ||
@@ -438,6 +463,29 @@ export function validateProvisioningState(
         actionState.resource.resource_kind !== expectedResourceKind)
     ) {
       throw new Error(`Succeeded provisioning action ${action.id} has inconsistent output`);
+    }
+    if (
+      action.id === 'cloudflare.r2-bucket' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'cloudflare' &&
+      (actionState.resource.display_name !== action.input.name ||
+        actionState.resource.account_id !== action.input.account_id ||
+        actionState.resource.jurisdiction !== action.input.jurisdiction ||
+        actionState.resource.public_access !== false)
+    ) {
+      throw new Error(
+        'Succeeded R2 provisioning action does not attest the exact private EU bucket',
+      );
+    }
+    if (
+      action.id === 'vercel.r2-binding' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'vercel' &&
+      actionState.resource.resource_kind === 'r2-binding' &&
+      serializeCanonicalJson(actionState.resource.bound_keys) !==
+        serializeCanonicalJson(action.input.bindings)
+    ) {
+      throw new Error('Succeeded R2 binding action does not attest the exact runtime keys');
     }
     if (actionState.status === 'failed' && (!actionState.error || actionState.resource !== null)) {
       throw new Error(`Failed provisioning action ${action.id} has inconsistent diagnostics`);

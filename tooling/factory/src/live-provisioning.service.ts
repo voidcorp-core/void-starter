@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sha256 } from './integrity.service';
 import type {
   ProvisionedResource,
   ProvisioningAction,
@@ -13,18 +14,32 @@ import {
 const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
 const NEON_API = 'https://console.neon.tech/api/v2';
+const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
 const DATABASE_BINDING_MARKER = 'VOID_STARTER_DATABASE_BINDING_ID';
+const R2_BINDING_MARKER = 'VOID_STARTER_R2_BINDING_ID';
 const DATABASE_SENSITIVE_TARGETS = ['preview', 'production'] as const;
 const DATABASE_DEVELOPMENT_TARGETS = ['development'] as const;
 const DATABASE_MARKER_TARGETS = ['development', 'preview', 'production'] as const;
+const R2_BINDING_KEYS = [
+  'CLOUDFLARE_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_BUCKET_NAME',
+  'R2_ENDPOINT',
+  'R2_SECRET_ACCESS_KEY',
+] as const;
+const R2_SECRET_KEYS = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] as const;
+const R2_NON_SECRET_KEYS = ['CLOUDFLARE_ACCOUNT_ID', 'R2_BUCKET_NAME', 'R2_ENDPOINT'] as const;
 
-type Provider = 'github' | 'vercel' | 'neon';
+type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare';
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export type LiveProvisioningCredentials = {
   githubToken: string;
   vercelToken?: string;
   neonApiKey?: string;
+  cloudflareApiToken?: string;
+  r2AccessKeyId?: string;
+  r2SecretAccessKey?: string;
 };
 
 export type LiveProvisioningAdapterOptions = {
@@ -126,9 +141,62 @@ const vercelEnvironmentVariablesSchema = z.object({
   envs: z.array(vercelEnvironmentVariableSchema),
 });
 
+const cloudflareBucketSchema = z.object({
+  name: z.string().min(3),
+  jurisdiction: z.enum(['default', 'eu', 'fedramp']).optional(),
+  storage_class: z.enum(['Standard', 'InfrequentAccess']).optional(),
+});
+
+const cloudflareBucketResponseSchema = z.object({
+  success: z.literal(true),
+  result: cloudflareBucketSchema,
+});
+
+const cloudflareBucketListResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    buckets: z.array(cloudflareBucketSchema),
+  }),
+});
+
+const cloudflareManagedDomainResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    bucketId: z.string().min(1),
+    domain: z.string().min(1),
+    enabled: z.boolean(),
+  }),
+});
+
+const cloudflareCustomDomainsResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    domains: z.array(
+      z.object({
+        domain: z.string().min(1),
+        enabled: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+const cloudflareObjectUploadResponseSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    key: z.string().min(1),
+    etag: z.string().min(1),
+  }),
+});
+
 function requiredCredential(
   environment: Record<string, string | undefined>,
-  name: 'GITHUB_TOKEN' | 'VERCEL_TOKEN' | 'NEON_API_KEY',
+  name:
+    | 'GITHUB_TOKEN'
+    | 'VERCEL_TOKEN'
+    | 'NEON_API_KEY'
+    | 'CLOUDFLARE_API_TOKEN'
+    | 'R2_ACCESS_KEY_ID'
+    | 'R2_SECRET_ACCESS_KEY',
 ): string {
   const value = environment[name]?.trim();
   if (!value) {
@@ -143,10 +211,28 @@ export function loadLiveProvisioningCredentials(
 ): LiveProvisioningCredentials {
   const usesVercel = plan.actions.some((action) => action.provider === 'vercel');
   const usesNeon = plan.actions.some((action) => action.provider === 'neon');
+  const usesCloudflare = plan.actions.some((action) => action.provider === 'cloudflare');
+  const usesR2Binding = plan.actions.some((action) => action.id === 'vercel.r2-binding');
+  const r2AccessKeyId = usesR2Binding ? environment['R2_ACCESS_KEY_ID']?.trim() : undefined;
+  const r2SecretAccessKey = usesR2Binding ? environment['R2_SECRET_ACCESS_KEY']?.trim() : undefined;
+  if (Boolean(r2AccessKeyId) !== Boolean(r2SecretAccessKey)) {
+    throw new Error(
+      'Live provisioning requires R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY together',
+    );
+  }
   return {
     githubToken: requiredCredential(environment, 'GITHUB_TOKEN'),
     ...(usesVercel ? { vercelToken: requiredCredential(environment, 'VERCEL_TOKEN') } : {}),
     ...(usesNeon ? { neonApiKey: requiredCredential(environment, 'NEON_API_KEY') } : {}),
+    ...(usesCloudflare
+      ? { cloudflareApiToken: requiredCredential(environment, 'CLOUDFLARE_API_TOKEN') }
+      : {}),
+    ...(r2AccessKeyId && r2SecretAccessKey
+      ? {
+          r2AccessKeyId,
+          r2SecretAccessKey,
+        }
+      : {}),
   };
 }
 
@@ -169,6 +255,10 @@ function adapterFailure(
 
 function encoded(value: string): string {
   return encodeURIComponent(value);
+}
+
+function encodedObjectKey(value: string): string {
+  return value.split('/').map(encoded).join('/');
 }
 
 function withQuery(base: string, parameters: Record<string, string>): string {
@@ -211,8 +301,10 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
   async #request(input: {
     provider: Provider;
     url: string;
-    method?: 'GET' | 'POST';
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
+    rawBody?: Exclude<RequestInit['body'], null>;
+    headers?: Record<string, string>;
     acceptedStatuses: number[];
   }): Promise<Response> {
     const method = input.method ?? 'GET';
@@ -221,7 +313,9 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         ? this.#credentials.githubToken
         : input.provider === 'vercel'
           ? this.#credentials.vercelToken
-          : this.#credentials.neonApiKey;
+          : input.provider === 'neon'
+            ? this.#credentials.neonApiKey
+            : this.#credentials.cloudflareApiToken;
     if (!token) {
       throw adapterFailure(
         input.provider,
@@ -233,9 +327,13 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       Accept: input.provider === 'github' ? 'application/vnd.github+json' : 'application/json',
       Authorization: `Bearer ${token}`,
       'User-Agent': 'void-starter-factory',
+      ...input.headers,
     };
     if (input.provider === 'github') {
       headers['X-GitHub-Api-Version'] = '2026-03-10';
+    }
+    if (input.body !== undefined && input.rawBody !== undefined) {
+      throw new Error('Provider request cannot contain JSON and raw bodies together');
     }
     if (input.body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -246,7 +344,11 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       response = await this.#fetch(input.url, {
         method,
         headers,
-        ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+        ...(input.body === undefined
+          ? input.rawBody === undefined
+            ? {}
+            : { body: input.rawBody }
+          : { body: JSON.stringify(input.body) }),
         signal: AbortSignal.timeout(this.#timeoutMs),
       });
     } catch {
@@ -285,11 +387,13 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     const githubAction = plan.actions.find((action) => action.id === 'github.repository');
     const vercelAction = plan.actions.find((action) => action.id === 'vercel.project');
     const neonAction = plan.actions.find((action) => action.id === 'neon.project');
+    const cloudflareAction = plan.actions.find((action) => action.id === 'cloudflare.r2-bucket');
 
     await Promise.all([
       githubAction ? this.#preflightGithub(githubAction) : Promise.resolve(),
       vercelAction ? this.#preflightVercel(vercelAction) : Promise.resolve(),
       neonAction ? this.#preflightNeon(neonAction) : Promise.resolve(),
+      cloudflareAction ? this.#preflightCloudflare(cloudflareAction) : Promise.resolve(),
     ]);
   }
 
@@ -381,6 +485,18 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     }
   }
 
+  async #preflightCloudflare(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+  ): Promise<void> {
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: `${CLOUDFLARE_API}/accounts/${encoded(action.input.account_id)}/r2/buckets`,
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      acceptedStatuses: [200],
+    });
+    await this.#json('cloudflare', response, cloudflareBucketListResponseSchema);
+  }
+
   async ensure(
     action: ProvisioningAction,
     context: ProvisioningExecutionContext,
@@ -394,6 +510,10 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensureNeonProject(action, context);
       case 'vercel.database-binding':
         return this.#ensureDatabaseBinding(action, context);
+      case 'cloudflare.r2-bucket':
+        return this.#ensureR2Bucket(action, context);
+      case 'vercel.r2-binding':
+        return this.#ensureR2Binding(action, context);
     }
   }
 
@@ -708,6 +828,199 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     );
   }
 
+  #r2BucketUrl(action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>): string {
+    return `${CLOUDFLARE_API}/accounts/${encoded(action.input.account_id)}/r2/buckets/${encoded(action.input.name)}`;
+  }
+
+  async #lookupR2Bucket(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+  ): Promise<z.infer<typeof cloudflareBucketSchema> | null> {
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: this.#r2BucketUrl(action),
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      acceptedStatuses: [200, 404],
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    return (await this.#json('cloudflare', response, cloudflareBucketResponseSchema)).result;
+  }
+
+  async #inspectR2Privacy(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+  ): Promise<string> {
+    const [managedResponse, customResponse] = await Promise.all([
+      this.#request({
+        provider: 'cloudflare',
+        url: `${this.#r2BucketUrl(action)}/domains/managed`,
+        headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+        acceptedStatuses: [200],
+      }),
+      this.#request({
+        provider: 'cloudflare',
+        url: `${this.#r2BucketUrl(action)}/domains/custom`,
+        headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+        acceptedStatuses: [200],
+      }),
+    ]);
+    const managed = (
+      await this.#json('cloudflare', managedResponse, cloudflareManagedDomainResponseSchema)
+    ).result;
+    const custom = (
+      await this.#json('cloudflare', customResponse, cloudflareCustomDomainsResponseSchema)
+    ).result.domains;
+    if (managed.enabled || custom.some((domain) => domain.enabled)) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_PUBLIC_ACCESS_CONFLICT',
+        'Existing R2 bucket exposes a public domain',
+      );
+    }
+    return managed.bucketId;
+  }
+
+  async #runR2Canary(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+  ): Promise<string> {
+    const payload = `void-starter-r2-canary:${action.idempotency_key}\n`;
+    const payloadSha256 = sha256(payload);
+    const objectKey = `.void-starter/canary/${payloadSha256}.txt`;
+    const objectUrl = `${this.#r2BucketUrl(action)}/objects/${encodedObjectKey(objectKey)}`;
+
+    const uploadResponse = await this.#request({
+      provider: 'cloudflare',
+      url: objectUrl,
+      method: 'PUT',
+      rawBody: payload,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'cf-r2-jurisdiction': action.input.jurisdiction,
+      },
+      acceptedStatuses: [200],
+    });
+    try {
+      const upload = (
+        await this.#json('cloudflare', uploadResponse, cloudflareObjectUploadResponseSchema)
+      ).result;
+      if (upload.key !== objectKey) {
+        throw adapterFailure(
+          'cloudflare',
+          'R2_CANARY_UPLOAD_MISMATCH',
+          'R2 canary upload returned an unexpected object key',
+        );
+      }
+      const readResponse = await this.#request({
+        provider: 'cloudflare',
+        url: objectUrl,
+        headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+        acceptedStatuses: [200],
+      });
+      if ((await readResponse.text()) !== payload) {
+        throw adapterFailure(
+          'cloudflare',
+          'R2_CANARY_READ_MISMATCH',
+          'R2 canary read did not return the exact uploaded bytes',
+        );
+      }
+    } finally {
+      await this.#request({
+        provider: 'cloudflare',
+        url: objectUrl,
+        method: 'DELETE',
+        headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+        acceptedStatuses: [200],
+      });
+    }
+    return payloadSha256;
+  }
+
+  async #r2BucketResource(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+    bucket: z.infer<typeof cloudflareBucketSchema>,
+  ): Promise<ProvisionedResource> {
+    if (
+      bucket.name !== action.input.name ||
+      bucket.jurisdiction !== action.input.jurisdiction ||
+      (bucket.storage_class !== undefined && bucket.storage_class !== action.input.storage_class)
+    ) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_RESOURCE_CONFLICT',
+        'Existing R2 bucket does not match the requested jurisdiction or storage class',
+      );
+    }
+    const resourceId = await this.#inspectR2Privacy(action);
+    const canarySha256 = await this.#runR2Canary(action);
+    return {
+      provider: 'cloudflare',
+      resource_kind: 'r2-bucket',
+      resource_id: resourceId,
+      display_name: bucket.name,
+      account_id: action.input.account_id,
+      jurisdiction: 'eu',
+      public_access: false,
+      canary_sha256: canarySha256,
+    };
+  }
+
+  async #ensureR2Bucket(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-bucket' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const existing = await this.#lookupR2Bucket(action);
+    if (existing) {
+      return this.#r2BucketResource(action, existing);
+    }
+    if (context.previousError?.code === 'CLOUDFLARE_R2_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_CREATE_AMBIGUOUS',
+        'R2 bucket creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'cloudflare',
+        url: `${CLOUDFLARE_API}/accounts/${encoded(action.input.account_id)}/r2/buckets`,
+        method: 'POST',
+        body: {
+          name: action.input.name,
+          storageClass: action.input.storage_class,
+        },
+        headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+        acceptedStatuses: [200],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupR2Bucket(action);
+    if (reconciled) {
+      return this.#r2BucketResource(action, reconciled);
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_CREATE_AMBIGUOUS',
+        'R2 bucket creation is ambiguous; resume will reconcile without creating again',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'cloudflare',
+      'R2_CREATE_AMBIGUOUS',
+      'Cloudflare accepted R2 bucket creation but the bucket is not yet observable',
+      true,
+    );
+  }
+
   async #lookupDatabaseBinding(
     action: Extract<ProvisioningAction, { id: 'vercel.database-binding' }>,
     project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
@@ -876,6 +1189,198 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       'vercel',
       'BINDING_CREATE_AMBIGUOUS',
       'Vercel accepted the binding but its ownership marker is not yet observable',
+      true,
+    );
+  }
+
+  async #lookupR2Binding(
+    action: Extract<ProvisioningAction, { id: 'vercel.r2-binding' }>,
+    project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
+  ): Promise<ProvisionedResource | null> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    const response = await this.#request({
+      provider: 'vercel',
+      url: withQuery(`${VERCEL_API}/v9/projects/${encoded(project.resource_id)}/env`, {
+        teamId,
+      }),
+      acceptedStatuses: [200],
+    });
+    const environment = (await this.#json('vercel', response, vercelEnvironmentVariablesSchema))
+      .envs;
+    const managedKeys = new Set<string>([...R2_BINDING_KEYS, R2_BINDING_MARKER]);
+    const managed = environment.filter((variable) => managedKeys.has(variable.key));
+    if (managed.length === 0) {
+      return null;
+    }
+
+    const nonSecretBindingsMatch = R2_NON_SECRET_KEYS.every((key) => {
+      const variables = managed.filter((variable) => variable.key === key);
+      return (
+        variables.length === 1 &&
+        variables[0]?.type === 'encrypted' &&
+        hasExactTargets(variables[0].target, DATABASE_MARKER_TARGETS)
+      );
+    });
+    const secretBindingsMatch = R2_SECRET_KEYS.every((key) => {
+      const variables = managed.filter((variable) => variable.key === key);
+      return (
+        variables.length === 2 &&
+        variables.some(
+          (variable) =>
+            variable.type === 'sensitive' &&
+            hasExactTargets(variable.target, DATABASE_SENSITIVE_TARGETS),
+        ) &&
+        variables.some(
+          (variable) =>
+            variable.type === 'encrypted' &&
+            hasExactTargets(variable.target, DATABASE_DEVELOPMENT_TARGETS),
+        )
+      );
+    });
+    const markers = managed.filter((variable) => variable.key === R2_BINDING_MARKER);
+    const marker = markers[0];
+    if (
+      managed.length !== 8 ||
+      !nonSecretBindingsMatch ||
+      !secretBindingsMatch ||
+      markers.length !== 1 ||
+      !marker ||
+      marker.type !== 'plain' ||
+      marker.value !== action.idempotency_key ||
+      !hasExactTargets(marker.target, DATABASE_MARKER_TARGETS)
+    ) {
+      throw adapterFailure(
+        'vercel',
+        'R2_BINDING_CONFLICT',
+        'Existing Vercel R2 variables are not owned by this plan',
+      );
+    }
+    return {
+      provider: 'vercel',
+      resource_kind: 'r2-binding',
+      resource_id: marker.id,
+      display_name: 'Cloudflare R2 runtime binding',
+      bound_keys: action.input.bindings,
+    };
+  }
+
+  async #ensureR2Binding(
+    action: Extract<ProvisioningAction, { id: 'vercel.r2-binding' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const project = requireDependency(context, 'vercel.project');
+    const bucket = requireDependency(context, 'cloudflare.r2-bucket');
+    if (project.provider !== 'vercel' || project.resource_kind !== 'project') {
+      throw new Error('R2 binding dependency is not a Vercel project');
+    }
+    if (bucket.provider !== 'cloudflare' || bucket.resource_kind !== 'r2-bucket') {
+      throw new Error('R2 binding dependency is not a Cloudflare R2 bucket');
+    }
+
+    const existing = await this.#lookupR2Binding(action, project);
+    if (existing) {
+      return existing;
+    }
+    if (context.previousError?.code === 'VERCEL_R2_BINDING_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'vercel',
+        'R2_BINDING_CREATE_AMBIGUOUS',
+        'Vercel R2 binding creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    const accessKeyId = this.#credentials.r2AccessKeyId;
+    const secretAccessKey = this.#credentials.r2SecretAccessKey;
+    if (!accessKeyId || !secretAccessKey) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_RUNTIME_CREDENTIAL_MISSING',
+        'R2 runtime credentials are missing; create a bucket-scoped Object Read & Write token and resume',
+        true,
+      );
+    }
+    const values: Record<(typeof R2_BINDING_KEYS)[number], string> = {
+      CLOUDFLARE_ACCOUNT_ID: bucket.account_id,
+      R2_ACCESS_KEY_ID: accessKeyId,
+      R2_BUCKET_NAME: bucket.display_name,
+      R2_ENDPOINT: `https://${bucket.account_id}.eu.r2.cloudflarestorage.com`,
+      R2_SECRET_ACCESS_KEY: secretAccessKey,
+    };
+    const variables = R2_BINDING_KEYS.flatMap((key) =>
+      R2_SECRET_KEYS.includes(key as (typeof R2_SECRET_KEYS)[number])
+        ? [
+            {
+              key,
+              value: values[key],
+              type: 'sensitive',
+              target: [...DATABASE_SENSITIVE_TARGETS],
+            },
+            {
+              key,
+              value: values[key],
+              type: 'encrypted',
+              target: [...DATABASE_DEVELOPMENT_TARGETS],
+            },
+          ]
+        : [
+            {
+              key,
+              value: values[key],
+              type: 'encrypted',
+              target: [...DATABASE_MARKER_TARGETS],
+            },
+          ],
+    );
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'vercel',
+        url: withQuery(`${VERCEL_API}/v10/projects/${encoded(project.resource_id)}/env`, {
+          teamId,
+        }),
+        method: 'POST',
+        body: [
+          ...variables,
+          {
+            key: R2_BINDING_MARKER,
+            value: action.idempotency_key,
+            type: 'plain',
+            target: [...DATABASE_MARKER_TARGETS],
+          },
+        ],
+        acceptedStatuses: [200, 201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupR2Binding(action, project);
+    if (reconciled) {
+      return reconciled;
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'vercel',
+        'R2_BINDING_CREATE_AMBIGUOUS',
+        'Vercel R2 binding creation is ambiguous; resume will only reconcile',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'vercel',
+      'R2_BINDING_CREATE_AMBIGUOUS',
+      'Vercel accepted the R2 binding but its ownership marker is not yet observable',
       true,
     );
   }

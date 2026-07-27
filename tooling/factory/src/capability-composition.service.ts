@@ -546,6 +546,7 @@ function createEnvironmentExample(manifest: BuildManifest): GeneratedFile {
       'R2_ACCESS_KEY_ID=',
       'R2_SECRET_ACCESS_KEY=',
       'R2_BUCKET_NAME=',
+      'R2_ENDPOINT=',
     );
   } else if (manifest.data.files === 'vercel-blob') {
     lines.push('', '# Vercel Blob', 'BLOB_READ_WRITE_TOKEN=');

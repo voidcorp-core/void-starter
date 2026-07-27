@@ -223,9 +223,34 @@ HTTP 200 HTML, 14 427 octets et le SHA-256
 simultanément les reçus EAS, provisioning, source et delivery; le lien EAS est public, mais les
 tokens Expo/Vercel/GitHub et le bypass restent absents de la source et des reçus.
 
+## R2 validé
+
+`DEV-467` est fermé dans le projet Linear `Void Starter`. Le canari isolé a validé le plan
+`7a7be8babbdb8240ca34e7855bff008cf7f4302b85b0dbfd6797cd771afb0770` le 2026-07-27 :
+
+- bucket `void-starter-canary-20260725`, ID `f520e89b2e934d96a7b4275140e122b7`, compte
+  `afec34d4c8f123c2235386929f2dcfee`, juridiction `eu`, accès public désactivé;
+- upload/read/delete exact, objet supprimé et digest du payload
+  `ac59473e043aa0897c106b119fc8a505c74570acff654112a5c07f3759dd228e`;
+- liaison Vercel `ERMGEG72S7cCdvST` pour les cinq clés runtime attendues, sans valeur secrète dans
+  l'état Factory;
+- premier apply volontairement suspendu avant la liaison, puis reprise réussie après création de
+  credentials Object Read & Write limités au bucket exact;
+- reprise d'un état déjà terminé sans nouvel appel de mutation ni changement des compteurs
+  `1,1,1,1,2,2`;
+- adoption depuis `/tmp/void-starter-canary-r2-adoption-20260727` sans état préalable : mêmes six
+  IDs fournisseur et compteurs `1,1,1,1,1,1`, donc aucun doublon;
+- états en mode `0600`, `doctor` vert et aucun token ou secret persisté.
+
+Le premier appel objet réel avait retourné HTTP 501 parce que le client envoyait du multipart. Le
+payload est désormais envoyé brut en `application/octet-stream`, et le mock HTTP impose cette
+forme pour prévenir la régression. Les deux tokens Cloudflare créés pour ce canari expirent après
+sept jours : révoquer le token de contrôle après validation et conserver/faire tourner le token
+runtime uniquement si le sandbox doit continuer à accéder au bucket.
+
 ## Suite globale
 
-1. Ajouter R2, Sentry/PostHog et DNS; Resend et le projet EAS sont terminés.
+1. Ajouter Sentry/PostHog et DNS; R2, Resend et le projet EAS sont terminés.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du

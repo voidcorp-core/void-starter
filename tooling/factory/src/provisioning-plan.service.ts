@@ -47,12 +47,18 @@ export function createProvisioningPlan(
 ): ProvisioningPlan {
   const hasWeb = manifest.surfaces.web === 'next-vercel';
   const hasDatabase = manifest.data.database === 'neon-eu';
+  const hasR2 = manifest.data.files === 'cloudflare-r2-eu';
 
   if (hasWeb && !context.vercel) {
     throw new Error('Provisioning context requires Vercel settings for the selected web surface');
   }
   if (hasDatabase && !context.neon) {
     throw new Error('Provisioning context requires Neon settings for the selected database');
+  }
+  if (hasR2 && !context.cloudflare) {
+    throw new Error(
+      'Provisioning context requires Cloudflare settings for the selected R2 storage',
+    );
   }
 
   const actions: ProvisioningAction[] = [
@@ -123,6 +129,48 @@ export function createProvisioningPlan(
           project_action_id: 'vercel.project',
           database_action_id: 'neon.project',
           environment_variable: 'DATABASE_URL',
+          targets: ['development', 'preview', 'production'],
+        },
+      }),
+    );
+  }
+
+  if (hasR2 && context.cloudflare) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'cloudflare.r2-bucket',
+        provider: 'cloudflare',
+        kind: 'ensure-r2-bucket',
+        depends_on: [],
+        permissions: ['r2-bucket:read', 'r2-bucket:write', 'r2-object:read', 'r2-object:write'],
+        input: {
+          account_id: context.cloudflare.account_id,
+          name: manifest.project.name,
+          jurisdiction: 'eu',
+          storage_class: 'Standard',
+        },
+      }),
+    );
+  }
+
+  if (hasWeb && hasR2) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'vercel.r2-binding',
+        provider: 'vercel',
+        kind: 'ensure-r2-binding',
+        depends_on: ['vercel.project', 'cloudflare.r2-bucket'],
+        permissions: ['project-environment:write'],
+        input: {
+          project_action_id: 'vercel.project',
+          bucket_action_id: 'cloudflare.r2-bucket',
+          bindings: [
+            'CLOUDFLARE_ACCOUNT_ID',
+            'R2_ACCESS_KEY_ID',
+            'R2_BUCKET_NAME',
+            'R2_ENDPOINT',
+            'R2_SECRET_ACCESS_KEY',
+          ],
           targets: ['development', 'preview', 'production'],
         },
       }),

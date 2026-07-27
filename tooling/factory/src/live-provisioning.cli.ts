@@ -11,7 +11,9 @@ export const liveProvisioningUsage = `Usage:
   bun run apply:live -- <generated-project-directory> <context.yaml|context.json> --confirm-project <project-name>
   bun run resume:live -- <generated-project-directory> <context.yaml|context.json> --confirm-project <project-name>
 
-Credentials are read from GITHUB_TOKEN and, when selected, VERCEL_TOKEN and NEON_API_KEY.
+Credentials are read from GITHUB_TOKEN and, when selected, VERCEL_TOKEN, NEON_API_KEY and
+CLOUDFLARE_API_TOKEN. R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are optional until the R2 runtime
+binding action; omit both to create the bucket first, then provide a bucket-scoped pair on resume.
 preflight:live performs authenticated identity checks using GET requests only.
 apply:live and resume:live can create remote resources and require the exact project-name confirmation.
 `;

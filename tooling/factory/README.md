@@ -15,12 +15,12 @@ The current slice exposes:
   dry runs;
 - `renderProject(input)` to copy the baseline into a new target, apply selected surfaces, exclude
   secrets and development-only artifacts, and emit deterministic metadata;
-- `createProvisioningPlan(manifest, context)` to plan non-secret GitHub, Vercel and Neon
-  reconciliation actions with stable idempotency keys;
+- `createProvisioningPlan(manifest, context)` to plan non-secret GitHub, Vercel, Neon and
+  Cloudflare R2 reconciliation actions with stable idempotency keys;
 - `applyProvisioning(input)` and the simulated adapter to exercise atomic state, locking,
   interruption recovery and resume without making remote changes;
 - `LiveProvisioningAdapter` plus separate live CLIs for authenticated provider preflight,
-  lookup-before-create reconciliation and in-memory database secret transport;
+  lookup-before-create reconciliation, private-EU R2 validation and in-memory secret transport;
 - `createDeliveryPlan`, `preflightDelivery`, and `observeDelivery` to bind a Vercel Production
   deployment and HTTP smoke receipt to the exact published source commit;
 - `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
@@ -65,8 +65,10 @@ and production.
 
 The current Better Auth, Clerk, PostHog and Sentry adapters target the Next.js surface. A manifest
 that selects one of them without web is rejected instead of producing a misleading mobile
-integration. R2, Resend and DNS remain planned provider capabilities. The GitHub, Vercel and Neon
-tranche has a deterministic plan, simulated state machine and authenticated live adapter.
+integration. Resend is live-validated. R2 has a deterministic provider plan, resumable live
+adapter, private-domain checks, object canary and Vercel secret binding; creation, completed-state
+resume and fresh-state adoption have passed against the isolated sandbox. DNS remains a planned
+provider capability.
 
 To materialize the Expo blueprint in a temporary directory, install it, type-check it, and export
 the iOS, Android, and web bundles:
@@ -88,9 +90,10 @@ bun run apply -- \
 ```
 
 `--dry-run` is the default and writes nothing. It produces an ordered GitHub repository, Vercel
-project, Neon project and Vercel database-binding plan according to the selected manifest. The
-separate provisioning context contains account coordinates such as owner, team and organization
-IDs, never tokens or secret values.
+project, Neon project, database binding, EU-jurisdiction R2 bucket and R2 runtime-binding plan
+according to the selected manifest. The separate provisioning context contains account
+coordinates such as owner, team, organization and Cloudflare account IDs, never tokens or secret
+values.
 
 The resumable engine can currently be exercised without provider calls:
 
@@ -115,6 +118,7 @@ Before allowing mutations, validate that each token targets the intended account
 
 ```sh
 GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
+CLOUDFLARE_API_TOKEN=... \
   bun run preflight:live -- \
   /absolute/path/to/new-project \
   fixtures/provisioning/eu.yaml
@@ -125,10 +129,16 @@ are never accepted by the manifest or provisioning context. GitHub organization 
 exact authenticated membership endpoint and requires `Organization permissions > Members:
 Read-only`.
 
-Live apply is deliberately a separate command and requires the exact generated project name:
+Live apply is deliberately a separate command and requires the exact generated project name. R2
+runtime credentials may be omitted on the first apply: the engine creates and validates the EU
+private bucket, then stops with the retryable `CLOUDFLARE_R2_RUNTIME_CREDENTIAL_MISSING` code. This
+lets the operator create an Object Read & Write token scoped to that exact bucket instead of
+granting the application account-wide storage access. Supplying both credentials from the start
+remains supported when an already-scoped token exists:
 
 ```sh
 GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
+CLOUDFLARE_API_TOKEN=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
   bun run apply:live -- \
   /absolute/path/to/new-project \
   fixtures/provisioning/eu.yaml \
@@ -136,15 +146,23 @@ GITHUB_TOKEN=... VERCEL_TOKEN=... NEON_API_KEY=... \
 ```
 
 It reconciles before creating and again after every create response. GitHub visibility, Vercel
-framework/root directory and Neon region must match before an existing resource is adopted. A
-database URL is retrieved from Neon and posted to Vercel as `sensitive` for Preview/Production and
-`encrypted` for Development, where Vercel does not support sensitive variables. It is never
-written to factory state or read back. A non-secret ownership marker makes the binding
-recoverable.
+framework/root directory, Neon region and the R2 bucket's `eu` jurisdiction must match before an
+existing resource is adopted. R2 adoption also rejects any enabled managed or custom public
+domain and runs a deterministic upload/read/delete object canary. Database and R2 runtime secrets
+are posted to Vercel as `sensitive` for Preview/Production and `encrypted` for Development, where
+Vercel does not support sensitive variables. They are never written to factory state or read back.
+Separate non-secret ownership markers make both bindings recoverable.
+
+After a bucket-scoped runtime token exists, load `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`
+together and run `resume:live`; it skips the completed bucket action and finishes only the Vercel
+binding. Supplying just one credential fails before provider calls.
 
 An ambiguous provider create is recorded and `resume:live` performs lookup only; it never repeats
-that create blindly. Live contract tests use mocked HTTP providers. Creation, completed-state
-resume and stateless adoption have also passed against the isolated sandbox accounts.
+that create blindly. Live contract tests use mocked HTTP providers. The GitHub, Vercel and Neon
+tranche and the R2 extension passed creation, completed-state resume and stateless adoption
+against isolated sandbox accounts. The R2 canary also proved the two-phase least-privilege flow:
+create and validate the private bucket with the control token, then bind exact-bucket runtime
+credentials on resume.
 
 After `bun install` has generated the selected project lockfile, source publication remains a
 separate lifecycle:
