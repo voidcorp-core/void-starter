@@ -136,16 +136,36 @@ function readEasProjectLink(): EasProjectLink | null {
   return value as EasProjectLink;
 }
 
+function readStaticExpoConfig(): ExpoConfig {
+  const path = join(__dirname, 'app.json');
+  const value = JSON.parse(readFileSync(path, 'utf8')) as {
+    expo?: Partial<ExpoConfig>;
+  };
+  if (
+    typeof value.expo !== 'object' ||
+    value.expo === null ||
+    typeof value.expo.name !== 'string' ||
+    typeof value.expo.slug !== 'string'
+  ) {
+    throw new Error('apps/mobile/app.json is invalid');
+  }
+  return value.expo as ExpoConfig;
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
+  const application =
+    typeof config.name === 'string' && typeof config.slug === 'string'
+      ? (config as ExpoConfig)
+      : readStaticExpoConfig();
   const project = readEasProjectLink();
-  if (!project) return config as ExpoConfig;
-  if (project.slug !== config.slug) {
+  if (!project) return application;
+  if (project.slug !== application.slug) {
     throw new Error('EAS project slug does not match the Expo application slug');
   }
-  const extra = config.extra ?? {};
+  const extra = application.extra ?? {};
   const eas = typeof extra.eas === 'object' && extra.eas !== null ? extra.eas : {};
   return {
-    ...config,
+    ...application,
     owner: project.owner,
     extra: {
       ...extra,

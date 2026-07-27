@@ -543,6 +543,22 @@ second create. Completed-state resume preserved attempts `1,1,1,1,1,1,1,1,2,1`; 
 state adopted the same ten IDs with one attempt each. Both receipts passed `doctor`, remained mode
 `0600`, and matched none of the nine provider credentials, Sentry DSN or PostHog project key.
 
+The cross-provider replay for DEV-471 then adopted all ten GitHub, Vercel, Neon, R2, Sentry and
+PostHog actions in one attempt each without a DNS context. It published source digest
+`8fdb9f6b11d23cc2af72eff570c13e22d8a31c185662d0d575b8ca7bcec84f6e` at commit
+`b72382505f6205d7e24a90a1b30970ca88fa604c`, verified four applied Neon migrations with zero
+pending, and smoked the exact READY Vercel Production deployment in HTTP 200 through the stored
+automation bypass. The generated application passed lint, type-check, tests, Knip, Next.js build
+and Expo iOS/Android/Web exports; GitHub Actions run `30279121369` passed both quality and E2E on
+the same source commit. This replay exposed and fixed a dynamic Expo configuration
+boundary: tools may load `app.config.ts` without pre-merging `app.json`, so the generated loader
+now falls back to the validated static Expo config before applying the receipt-owned EAS link.
+The fresh target then adopted the same EAS project in one attempt under plan
+`27b4ffa2428f2e6c4b2eae26f5eddb08976a5df1c467eaf4ac12167aa9e2230c`. Its public link remained
+byte-identical while the new operational receipt bound dynamic-config digest
+`ce347db34067c06fd55aeee520b5886c100ece2562cc601a767a0d3ed4383c44`; no additional source push
+was required and the final `doctor` passed every lifecycle check.
+
 ### 10.4 Initial source publication
 
 Initial source publication is a separate receipt and lock boundary, so adding it does not
@@ -906,7 +922,10 @@ be proven locally.
     guarded propagation resume, with its live canary pending.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
-13. Connect Forge as manifest producer and Linear as project bootstrap.
+13. Complete cross-provider smoke coverage. **Done for GitHub/Vercel/Neon/R2/Sentry/PostHog/EAS,
+    local builds, remote CI/E2E, migrations, final doctor and protected HTTP smoke on one exact
+    commit. DNS live is intentionally deferred until a dedicated zone exists.**
+14. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions
 

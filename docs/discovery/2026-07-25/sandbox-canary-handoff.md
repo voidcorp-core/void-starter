@@ -1,6 +1,6 @@
 # Sandbox canary handoff
 
-> État actualisé le 2026-07-26. Aucun secret n'est enregistré dans ce document.
+> État actualisé le 2026-07-27. Aucun secret n'est enregistré dans ce document.
 
 ## État validé
 
@@ -36,8 +36,10 @@
 - Neon : organization API key, org ID `org-withered-mode-66336948`.
 - Régions : Vercel `fra1`, Neon `aws-eu-central-1`.
 
-Les credentials requis existent mais ne sont jamais persistés. À chaque nouvelle session, les
-recharger dans le terminal. Le fine-grained GitHub PAT doit cibler `void-sandbox` et posséder :
+Les credentials fournisseur utilisés par la Factory sont désormais conservés dans le trousseau
+macOS et chargés uniquement en mémoire par les commandes. GitHub utilise également son entrée de
+trousseau persistante, tout comme le token Expo/EAS. Le fine-grained GitHub PAT doit cibler
+`void-sandbox` et posséder :
 
 - Organization permissions — Members: Read-only;
 - Repository permissions — Administration: Read and write;
@@ -284,6 +286,43 @@ runtime uniquement si le sandbox doit continuer à accéder au bucket.
 - deux `doctor` verts, états en mode `0600`, aucune correspondance avec les neuf credentials, le
   DSN Sentry ou la clé projet PostHog.
 
+## Matrice transverse DEV-471
+
+La matrice sans DNS propriétaire a été rejouée le 2026-07-27 sur une génération fraîche. Le plan
+`9d7a61823147d36f96447c98243cf0a8cab052f00b4e2b9b4e516b6c0a691617` a adopté en une tentative
+chacune les dix ressources GitHub, Vercel, Neon, R2, Sentry et PostHog existantes. Aucun domaine,
+record DNS ou nameserver n'a été lu ou modifié.
+
+La mise à jour finale a publié 245 fichiers et le SHA-256 source
+`8fdb9f6b11d23cc2af72eff570c13e22d8a31c185662d0d575b8ca7bcec84f6e` au commit
+`b72382505f6205d7e24a90a1b30970ca88fa604c`. Une confirmation post-push momentanément ambiguë a
+été réconciliée par `source:update:resume` sans second commit. Le plan migration
+`dc50d7ff981af94ef0070fd57fce5bd8f51a6705da246dc585c26d4620808d41` a relié ce commit aux quatre
+migrations Neon déjà appliquées, avec zéro migration en attente.
+
+Le plan delivery `85e2c6d26db0b6889d5b6cf131d77082c4a34b669068e9f9bbe8024506440957`
+a observé le déploiement Production `dpl_HVZjYCnsVvNBobF8kDPbcAN4QkMZ` en état `READY`. Le bypass
+d'automatisation Vercel, stocké séparément dans le trousseau, a permis un smoke HTTP 200 sur l'URL
+immuable `.vercel.app`; la réponse HTML contient 14 427 octets et porte le SHA-256
+`0f81e1128efc3013ddd63fe0a4e2eef9986a53e7aed723db4c72ff3614b393ca`.
+
+La matrice locale passe lint, type-check, tests, Knip, build Next.js et exports Expo iOS, Android et
+Web. Le replay a aussi révélé qu'un outil chargeant directement `app.config.ts` peut fournir une
+configuration Expo vide. Le générateur relit désormais `app.json` dans ce cas, ce qui préserve le
+lien EAS et rend Knip déterministe; un test de génération couvre ce chemin.
+
+Le workflow GitHub Actions `30279121369` est entièrement vert sur ce même commit : le job qualité
+valide audit, lint, type-check, migrations, tests, builds, Knip et gitleaks; le job E2E valide les
+scénarios Playwright.
+
+Le reçu opérationnel EAS a ensuite été recréé proprement, sans copier l'état historique. Le plan
+`27b4ffa2428f2e6c4b2eae26f5eddb08976a5df1c467eaf4ac12167aa9e2230c` a adopté en une tentative
+le même projet `@void-sandbox/void-starter-canary-20260725`, UUID
+`a37e6150-91af-461c-9d4f-ebf6ef100088`, et lié le nouveau hash de configuration dynamique
+`ce347db34067c06fd55aeee520b5886c100ece2562cc601a767a0d3ed4383c44`. Le lien public est resté
+strictement identique, donc aucune nouvelle publication source n'était nécessaire. `doctor` passe
+désormais tous ses contrôles, dont EAS, provisioning, source, migrations et delivery.
+
 ## Suite globale
 
 L’adaptateur Cloudflare DNS est désormais implémenté et contract-testé sur la branche dédiée. Il
@@ -292,7 +331,8 @@ challenges TXT Vercel, attend `verified=true` et `misconfigured=false`, reprend 
 recréation et refuse les enregistrements étrangers, les upgrades payants et tout changement de
 nameserver. Le canari live sur une zone isolée reste à exécuter avant de clore `DEV-469`.
 
-1. Valider DNS en live; R2, Resend, Sentry, PostHog et le projet EAS sont terminés.
+1. Valider DNS en live lorsqu'une zone dédiée existe; cette étape est volontairement différée et
+   ne bloque pas le dogfood sur `.vercel.app`.
 2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
 3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
 4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
