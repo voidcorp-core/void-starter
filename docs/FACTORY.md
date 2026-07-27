@@ -553,9 +553,11 @@ and Expo iOS/Android/Web exports; GitHub Actions run `30279121369` passed both q
 the same source commit. This replay exposed and fixed a dynamic Expo configuration
 boundary: tools may load `app.config.ts` without pre-merging `app.json`, so the generated loader
 now falls back to the validated static Expo config before applying the receipt-owned EAS link.
-The fresh target still requires an authenticated EAS adoption receipt before its final `doctor`
-can pass; a historical receipt is intentionally not reusable after the dynamic config digest
-changes.
+The fresh target then adopted the same EAS project in one attempt under plan
+`27b4ffa2428f2e6c4b2eae26f5eddb08976a5df1c467eaf4ac12167aa9e2230c`. Its public link remained
+byte-identical while the new operational receipt bound dynamic-config digest
+`ce347db34067c06fd55aeee520b5886c100ece2562cc601a767a0d3ed4383c44`; no additional source push
+was required and the final `doctor` passed every lifecycle check.
 
 ### 10.4 Initial source publication
 
@@ -920,9 +922,9 @@ be proven locally.
     guarded propagation resume, with its live canary pending.**
 12. Add `resume` and failure injection tests. **Done for provider, source, migration, delivery,
     auth and EAS project tranches.**
-13. Complete cross-provider smoke coverage. **GitHub/Vercel/Neon/R2/Sentry/PostHog, local builds
-    and protected HTTP smoke pass on one exact commit; fresh EAS receipt renewal remains, while
-    DNS live is intentionally deferred until a dedicated zone exists.**
+13. Complete cross-provider smoke coverage. **Done for GitHub/Vercel/Neon/R2/Sentry/PostHog/EAS,
+    local builds, remote CI/E2E, migrations, final doctor and protected HTTP smoke on one exact
+    commit. DNS live is intentionally deferred until a dedicated zone exists.**
 14. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 15. Open decisions

@@ -38,8 +38,8 @@
 
 Les credentials fournisseur utilisés par la Factory sont désormais conservés dans le trousseau
 macOS et chargés uniquement en mémoire par les commandes. GitHub utilise également son entrée de
-trousseau persistante. `EXPO_TOKEN` reste le seul credential de cette matrice qui n'est pas encore
-enregistré. Le fine-grained GitHub PAT doit cibler `void-sandbox` et posséder :
+trousseau persistante, tout comme le token Expo/EAS. Le fine-grained GitHub PAT doit cibler
+`void-sandbox` et posséder :
 
 - Organization permissions — Members: Read-only;
 - Repository permissions — Administration: Read and write;
@@ -315,11 +315,13 @@ Le workflow GitHub Actions `30279121369` est entièrement vert sur ce même comm
 valide audit, lint, type-check, migrations, tests, builds, Knip et gitleaks; le job E2E valide les
 scénarios Playwright.
 
-Le seul contrôle restant est le reçu opérationnel EAS de cette génération fraîche : le lien public
-existe et le projet EAS historique est valide, mais `doctor` refuse à juste titre un lien sans reçu
-lié au nouveau hash de configuration. Il faut enregistrer un `EXPO_TOKEN`, relancer
-`eas:preflight` puis `eas:live`, republier ce receipt-owned overlay et rejouer `doctor`. Aucun reçu
-historique ne doit être copié.
+Le reçu opérationnel EAS a ensuite été recréé proprement, sans copier l'état historique. Le plan
+`27b4ffa2428f2e6c4b2eae26f5eddb08976a5df1c467eaf4ac12167aa9e2230c` a adopté en une tentative
+le même projet `@void-sandbox/void-starter-canary-20260725`, UUID
+`a37e6150-91af-461c-9d4f-ebf6ef100088`, et lié le nouveau hash de configuration dynamique
+`ce347db34067c06fd55aeee520b5886c100ece2562cc601a767a0d3ed4383c44`. Le lien public est resté
+strictement identique, donc aucune nouvelle publication source n'était nécessaire. `doctor` passe
+désormais tous ses contrôles, dont EAS, provisioning, source, migrations et delivery.
 
 ## Suite globale
 
@@ -329,12 +331,11 @@ challenges TXT Vercel, attend `verified=true` et `misconfigured=false`, reprend 
 recréation et refuse les enregistrements étrangers, les upgrades payants et tout changement de
 nameserver. Le canari live sur une zone isolée reste à exécuter avant de clore `DEV-469`.
 
-1. Revalider le reçu EAS de la matrice transverse avec un `EXPO_TOKEN` persistant.
-2. Valider DNS en live lorsqu'une zone dédiée existe; cette étape est volontairement différée et
+1. Valider DNS en live lorsqu'une zone dédiée existe; cette étape est volontairement différée et
    ne bloque pas le dogfood sur `.vercel.app`.
-3. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
-4. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
-5. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
+2. Étendre la matrice distante aux profils internal, jobs, documents EU et temps réel.
+3. Connecter Forge comme producteur de manifeste et Linear pour le bootstrap projet.
+4. Définir les garanties de rollback, le modèle de secrets restant et la distribution finale du
    CLI.
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
