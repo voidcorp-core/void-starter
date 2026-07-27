@@ -13,13 +13,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.6.0",
+    "@clerk/nextjs": "^7.6.1",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
     "@repo/config": "workspace:*",
-    "next": "^16.2.11",
+    "next": "^16.2.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
