@@ -66,9 +66,12 @@ describe('createSurfaceFilePlan', () => {
       '@types/react': '~19.2.2',
       typescript: '~6.0.3',
     });
-    expect(
-      filePlan.writes.find((file) => file.path === 'apps/mobile/app.config.ts')?.content,
-    ).toContain('eas-project.json');
+    const dynamicConfig = filePlan.writes.find(
+      (file) => file.path === 'apps/mobile/app.config.ts',
+    )?.content;
+    expect(dynamicConfig).toContain('eas-project.json');
+    expect(dynamicConfig).toContain('readStaticExpoConfig');
+    expect(dynamicConfig).toContain("typeof config.slug === 'string'");
   });
 
   it('removes the web baseline for a mobile-only project', () => {
