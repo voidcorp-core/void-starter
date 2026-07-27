@@ -20,6 +20,8 @@ const temporaryRoots: string[] = [];
 const connectionUri =
   'postgresql://neondb_owner:provider-secret@ep-example-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require';
 const sentryDsn = 'https://public-key@o123.ingest.de.sentry.io/456';
+const posthogProjectKey = 'phc_posthog-project-public-key';
+const posthogOrganizationId = '019d9316-714e-0000-01c7-e9a08d38242b';
 
 type RecordedRequest = {
   method: string;
@@ -56,6 +58,11 @@ class MockProviderApi {
   sentryBindingMarker: string | null = null;
   sentryRegionUrl = 'https://de.sentry.io';
   failSentryCreateWithNetwork = false;
+  posthogProjectExists = false;
+  posthogBindingMarker: string | null = null;
+  posthogOrganizationAccessible = true;
+  failPosthogCreateWithNetwork = false;
+  failPosthogBindingWithNetwork = false;
   readonly requests: RecordedRequest[] = [];
 
   readonly fetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -219,6 +226,23 @@ class MockProviderApi {
               },
             ]
           : []),
+        ...(this.posthogBindingMarker
+          ? [
+              ...['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'].map((key) => ({
+                id: `env_${key.toLowerCase()}`,
+                key,
+                type: 'encrypted',
+                target: ['development', 'preview', 'production'],
+              })),
+              {
+                id: 'env_posthog_marker',
+                key: 'VOID_STARTER_POSTHOG_BINDING_ID',
+                type: 'plain',
+                value: this.posthogBindingMarker,
+                target: ['development', 'preview', 'production'],
+              },
+            ]
+          : []),
       ];
       return jsonResponse({ envs });
     }
@@ -228,6 +252,12 @@ class MockProviderApi {
       method === 'POST'
     ) {
       const variables = body as Array<{ key: string; value: string }>;
+      if (
+        this.failPosthogBindingWithNetwork &&
+        variables.some((variable) => variable.key === 'VOID_STARTER_POSTHOG_BINDING_ID')
+      ) {
+        throw new Error('mocked ambiguous PostHog binding network failure');
+      }
       this.bindingMarker =
         variables.find((variable) => variable.key === 'VOID_STARTER_DATABASE_BINDING_ID')?.value ??
         this.bindingMarker;
@@ -237,6 +267,9 @@ class MockProviderApi {
       this.sentryBindingMarker =
         variables.find((variable) => variable.key === 'VOID_STARTER_SENTRY_BINDING_ID')?.value ??
         this.sentryBindingMarker;
+      this.posthogBindingMarker =
+        variables.find((variable) => variable.key === 'VOID_STARTER_POSTHOG_BINDING_ID')?.value ??
+        this.posthogBindingMarker;
       return jsonResponse({}, 201);
     }
 
@@ -434,6 +467,57 @@ class MockProviderApi {
       );
     }
 
+    const posthogProjects = `/api/organizations/${posthogOrganizationId}/projects/`;
+    if (
+      url.hostname === 'eu.posthog.com' &&
+      url.pathname === `/api/organizations/${posthogOrganizationId}/` &&
+      method === 'GET'
+    ) {
+      return this.posthogOrganizationAccessible
+        ? jsonResponse({ id: posthogOrganizationId })
+        : jsonResponse({}, 404);
+    }
+    if (url.hostname === 'eu.posthog.com' && url.pathname === posthogProjects && method === 'GET') {
+      return jsonResponse({
+        count: this.posthogProjectExists ? 1 : 0,
+        results: this.posthogProjectExists
+          ? [
+              {
+                id: 42,
+                organization: posthogOrganizationId,
+                name: 'example-saas',
+                api_token: posthogProjectKey,
+              },
+            ]
+          : [],
+      });
+    }
+    if (
+      url.hostname === 'eu.posthog.com' &&
+      url.pathname === posthogProjects &&
+      method === 'POST'
+    ) {
+      if (this.failPosthogCreateWithNetwork) {
+        throw new Error('mocked ambiguous PostHog network failure');
+      }
+      this.posthogProjectExists = true;
+      return jsonResponse({}, 201);
+    }
+    if (
+      url.hostname === 'eu.posthog.com' &&
+      url.pathname === `${posthogProjects}42/` &&
+      method === 'GET'
+    ) {
+      return this.posthogProjectExists
+        ? jsonResponse({
+            id: 42,
+            organization: posthogOrganizationId,
+            name: 'example-saas',
+            api_token: posthogProjectKey,
+          })
+        : jsonResponse({}, 404);
+    }
+
     throw new Error(`Unexpected provider request: ${method} ${url.toString()}`);
   };
 }
@@ -461,6 +545,10 @@ const context = parseProvisioningContext({
     team_slug: 'platform',
     region: 'de',
   },
+  posthog: {
+    organization_id: posthogOrganizationId,
+    region: 'eu',
+  },
 });
 
 const credentials = {
@@ -472,6 +560,7 @@ const credentials = {
   r2SecretAccessKey: 'r2-secret-provider-secret',
   sentryApiToken: 'sentry-control-provider-secret',
   sentryBuildAuthToken: 'sentry-build-provider-secret',
+  posthogPersonalApiKey: 'posthog-control-provider-secret',
 };
 
 async function createGeneratedProject() {
@@ -521,8 +610,10 @@ describe('LiveProvisioningAdapter', () => {
       'env_r2_marker',
       'sentry_project_example',
       'env_sentry_marker',
+      '42',
+      'env_posthog_marker',
     ]);
-    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(8);
+    expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(10);
     expect(provider.requests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
       true,
     );
@@ -536,7 +627,9 @@ describe('LiveProvisioningAdapter', () => {
               ? `Bearer ${credentials.neonApiKey}`
               : request.url.hostname === 'api.cloudflare.com'
                 ? `Bearer ${credentials.cloudflareApiToken}`
-                : `Bearer ${credentials.sentryApiToken}`;
+                : request.url.hostname === 'de.sentry.io'
+                  ? `Bearer ${credentials.sentryApiToken}`
+                  : `Bearer ${credentials.posthogPersonalApiKey}`;
       expect(request.authorization).toBe(expectedAuthorization);
     }
 
@@ -616,6 +709,14 @@ describe('LiveProvisioningAdapter', () => {
       default_rules: true,
     });
 
+    const posthogCreateRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' &&
+        request.url.hostname === 'eu.posthog.com' &&
+        request.url.pathname === `/api/organizations/${posthogOrganizationId}/projects/`,
+    );
+    expect(posthogCreateRequest?.body).toEqual({ name: 'example-saas' });
+
     const r2EnvironmentRequest = provider.requests.find(
       (request) =>
         request.method === 'POST' &&
@@ -678,6 +779,35 @@ describe('LiveProvisioningAdapter', () => {
       ]),
     );
 
+    const posthogEnvironmentRequest = provider.requests.find(
+      (request) =>
+        request.method === 'POST' &&
+        Array.isArray(request.body) &&
+        request.body.some(
+          (variable: { key?: string }) => variable.key === 'VOID_STARTER_POSTHOG_BINDING_ID',
+        ),
+    );
+    expect(posthogEnvironmentRequest?.body).toEqual([
+      {
+        key: 'NEXT_PUBLIC_POSTHOG_KEY',
+        type: 'encrypted',
+        target: ['development', 'preview', 'production'],
+        value: posthogProjectKey,
+      },
+      {
+        key: 'NEXT_PUBLIC_POSTHOG_HOST',
+        type: 'encrypted',
+        target: ['development', 'preview', 'production'],
+        value: '/ingest',
+      },
+      {
+        key: 'VOID_STARTER_POSTHOG_BINDING_ID',
+        type: 'plain',
+        target: ['development', 'preview', 'production'],
+        value: expect.any(String),
+      },
+    ]);
+
     const persistedState = await readFile(
       join(project.root, '.void-starter/apply-state.json'),
       'utf8',
@@ -712,6 +842,12 @@ describe('LiveProvisioningAdapter', () => {
     );
     if (!sentryBindingAction) throw new Error('Expected Sentry binding action');
     provider.sentryBindingMarker = sentryBindingAction.idempotency_key;
+    provider.posthogProjectExists = true;
+    const posthogBindingAction = project.plan.actions.find(
+      (action) => action.id === 'vercel.posthog-binding',
+    );
+    if (!posthogBindingAction) throw new Error('Expected PostHog binding action');
+    provider.posthogBindingMarker = posthogBindingAction.idempotency_key;
 
     const state = await applyProvisioning({
       projectRoot: project.root,
@@ -735,6 +871,7 @@ describe('LiveProvisioningAdapter', () => {
       neonApiKey: credentials.neonApiKey,
       cloudflareApiToken: credentials.cloudflareApiToken,
       sentryApiToken: credentials.sentryApiToken,
+      posthogPersonalApiKey: credentials.posthogPersonalApiKey,
     };
 
     await expect(
@@ -795,6 +932,7 @@ describe('LiveProvisioningAdapter', () => {
       r2AccessKeyId: credentials.r2AccessKeyId,
       r2SecretAccessKey: credentials.r2SecretAccessKey,
       sentryApiToken: credentials.sentryApiToken,
+      posthogPersonalApiKey: credentials.posthogPersonalApiKey,
     };
 
     await expect(
@@ -957,6 +1095,97 @@ describe('LiveProvisioningAdapter', () => {
     ).toHaveLength(1);
   });
 
+  it('never repeats an ambiguous PostHog project create while resume can only reconcile it', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.failPosthogCreateWithNetwork = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(project.root))?.actions.find(
+        (action) => action.action_id === 'posthog.project',
+      )?.error?.code,
+    ).toBe('POSTHOG_PROJECT_CREATE_AMBIGUOUS');
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+        requireExistingState: true,
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.hostname === 'eu.posthog.com' &&
+          request.url.pathname === `/api/organizations/${posthogOrganizationId}/projects/`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('never repeats an ambiguous PostHog binding create and rejects foreign ownership', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.failPosthogBindingWithNetwork = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(project.root))?.actions.find(
+        (action) => action.action_id === 'vercel.posthog-binding',
+      )?.error?.code,
+    ).toBe('VERCEL_POSTHOG_BINDING_CREATE_AMBIGUOUS');
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+        requireExistingState: true,
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          Array.isArray(request.body) &&
+          request.body.some(
+            (variable: { key?: string }) => variable.key === 'VOID_STARTER_POSTHOG_BINDING_ID',
+          ),
+      ),
+    ).toHaveLength(1);
+
+    const conflictProject = await createGeneratedProject();
+    const conflictProvider = new MockProviderApi();
+    conflictProvider.posthogProjectExists = true;
+    conflictProvider.posthogBindingMarker = 'foreign-plan';
+    await expect(
+      applyProvisioning({
+        projectRoot: conflictProject.root,
+        plan: conflictProject.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: conflictProvider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+    expect(
+      (await readProvisioningState(conflictProject.root))?.actions.find(
+        (action) => action.action_id === 'vercel.posthog-binding',
+      )?.error?.code,
+    ).toBe('VERCEL_POSTHOG_BINDING_CONFLICT');
+  });
+
   it('rejects an R2 bucket exposed through a public domain before the object canary or binding', async () => {
     const project = await createGeneratedProject();
     const provider = new MockProviderApi();
@@ -1010,6 +1239,22 @@ describe('LiveProvisioningAdapter', () => {
         adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
       }),
     ).rejects.toThrow(/requested active DE organization/);
+    expect(await readProvisioningState(project.root)).toBeNull();
+    expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
+  });
+
+  it('fails preflight before state or mutation when the PostHog organization is inaccessible', async () => {
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.posthogOrganizationAccessible = false;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toThrow(/posthog request returned HTTP 404/);
     expect(await readProvisioningState(project.root)).toBeNull();
     expect(provider.requests.some((request) => request.method === 'POST')).toBe(false);
   });
@@ -1093,6 +1338,19 @@ describe('loadLiveProvisioningCredentials', () => {
           NEON_API_KEY: 'neon',
           CLOUDFLARE_API_TOKEN: 'cloudflare',
           SENTRY_API_TOKEN: 'sentry-control',
+        },
+        canonicalPlan,
+      ),
+    ).toThrow(/POSTHOG_PERSONAL_API_KEY/);
+    expect(() =>
+      loadLiveProvisioningCredentials(
+        {
+          GITHUB_TOKEN: 'github',
+          VERCEL_TOKEN: 'vercel',
+          NEON_API_KEY: 'neon',
+          CLOUDFLARE_API_TOKEN: 'cloudflare',
+          SENTRY_API_TOKEN: 'sentry-control',
+          POSTHOG_PERSONAL_API_KEY: 'posthog-control',
         },
         canonicalPlan,
       ),

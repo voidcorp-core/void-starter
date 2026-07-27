@@ -42,6 +42,16 @@ const sentryContextSchema = z.strictObject({
   region: z.literal('de'),
 });
 
+const posthogOrganizationIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);
+
+const posthogContextSchema = z.strictObject({
+  organization_id: posthogOrganizationIdSchema,
+  region: z.literal('eu'),
+});
+
 export const provisioningContextSchema = z.strictObject({
   schema_version: z.literal(1),
   github: githubContextSchema,
@@ -49,6 +59,7 @@ export const provisioningContextSchema = z.strictObject({
   neon: neonContextSchema.optional(),
   cloudflare: cloudflareContextSchema.optional(),
   sentry: sentryContextSchema.optional(),
+  posthog: posthogContextSchema.optional(),
 });
 
 export type ProvisioningContext = z.infer<typeof provisioningContextSchema>;
@@ -209,6 +220,42 @@ const vercelSentryBindingActionSchema = z.strictObject({
   idempotency_key: idempotencyKeySchema,
 });
 
+const posthogProjectActionSchema = z.strictObject({
+  id: z.literal('posthog.project'),
+  provider: z.literal('posthog'),
+  kind: z.literal('ensure-project'),
+  depends_on: z.tuple([]),
+  permissions: z.tuple([
+    z.literal('organization:read'),
+    z.literal('project:read'),
+    z.literal('project:write'),
+  ]),
+  input: z.strictObject({
+    organization_id: posthogOrganizationIdSchema,
+    name: z.string().trim().min(1).max(200),
+    region: z.literal('eu'),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
+const vercelPosthogBindingActionSchema = z.strictObject({
+  id: z.literal('vercel.posthog-binding'),
+  provider: z.literal('vercel'),
+  kind: z.literal('ensure-posthog-binding'),
+  depends_on: z.tuple([z.literal('vercel.project'), z.literal('posthog.project')]),
+  permissions: z.tuple([z.literal('project-environment:write')]),
+  input: z.strictObject({
+    project_action_id: z.literal('vercel.project'),
+    posthog_action_id: z.literal('posthog.project'),
+    bindings: z.tuple([
+      z.literal('NEXT_PUBLIC_POSTHOG_KEY'),
+      z.literal('NEXT_PUBLIC_POSTHOG_HOST'),
+    ]),
+    targets: z.tuple([z.literal('development'), z.literal('preview'), z.literal('production')]),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
 const provisioningActionSchema = z.discriminatedUnion('id', [
   githubRepositoryActionSchema,
   vercelProjectActionSchema,
@@ -218,6 +265,8 @@ const provisioningActionSchema = z.discriminatedUnion('id', [
   vercelR2BindingActionSchema,
   sentryProjectActionSchema,
   vercelSentryBindingActionSchema,
+  posthogProjectActionSchema,
+  vercelPosthogBindingActionSchema,
 ]);
 
 export type ProvisioningAction = z.infer<typeof provisioningActionSchema>;
@@ -307,6 +356,23 @@ export const provisionedResourceSchema = z.union([
       z.literal('SENTRY_PROJECT'),
     ]),
   }),
+  z.strictObject({
+    provider: z.literal('posthog'),
+    resource_kind: z.literal('project'),
+    ...resourceIdentitySchema,
+    organization_id: posthogOrganizationIdSchema,
+    region: z.literal('eu'),
+    project_api_key_sha256: sha256Schema,
+  }),
+  z.strictObject({
+    provider: z.literal('vercel'),
+    resource_kind: z.literal('posthog-binding'),
+    ...resourceIdentitySchema,
+    bound_keys: z.tuple([
+      z.literal('NEXT_PUBLIC_POSTHOG_KEY'),
+      z.literal('NEXT_PUBLIC_POSTHOG_HOST'),
+    ]),
+  }),
 ]);
 
 export type ProvisionedResource = z.infer<typeof provisionedResourceSchema>;
@@ -327,6 +393,8 @@ const provisioningActionStateSchema = z.strictObject({
     'vercel.r2-binding',
     'sentry.project',
     'vercel.sentry-binding',
+    'posthog.project',
+    'vercel.posthog-binding',
   ]),
   idempotency_key: idempotencyKeySchema,
   status: z.enum(['pending', 'running', 'failed', 'succeeded']),

@@ -15,9 +15,11 @@ const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
 const NEON_API = 'https://console.neon.tech/api/v2';
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
+const POSTHOG_API = 'https://eu.posthog.com/api';
 const DATABASE_BINDING_MARKER = 'VOID_STARTER_DATABASE_BINDING_ID';
 const R2_BINDING_MARKER = 'VOID_STARTER_R2_BINDING_ID';
 const SENTRY_BINDING_MARKER = 'VOID_STARTER_SENTRY_BINDING_ID';
+const POSTHOG_BINDING_MARKER = 'VOID_STARTER_POSTHOG_BINDING_ID';
 const DATABASE_SENSITIVE_TARGETS = ['preview', 'production'] as const;
 const DATABASE_DEVELOPMENT_TARGETS = ['development'] as const;
 const DATABASE_MARKER_TARGETS = ['development', 'preview', 'production'] as const;
@@ -44,8 +46,9 @@ const SENTRY_NON_SECRET_KEYS = [
   'SENTRY_ORG',
   'SENTRY_PROJECT',
 ] as const;
+const POSTHOG_BINDING_KEYS = ['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'] as const;
 
-type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare' | 'sentry';
+type Provider = 'github' | 'vercel' | 'neon' | 'cloudflare' | 'sentry' | 'posthog';
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export type LiveProvisioningCredentials = {
@@ -57,6 +60,7 @@ export type LiveProvisioningCredentials = {
   r2SecretAccessKey?: string;
   sentryApiToken?: string;
   sentryBuildAuthToken?: string;
+  posthogPersonalApiKey?: string;
 };
 
 export type LiveProvisioningAdapterOptions = {
@@ -235,6 +239,22 @@ const sentryClientKeySchema = z.object({
 
 const sentryClientKeysSchema = z.array(sentryClientKeySchema);
 
+const posthogOrganizationSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/),
+});
+
+const posthogProjectSchema = z.object({
+  id: z.union([z.string().min(1), z.number().int().positive()]).transform(String),
+  organization: z.string().regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/),
+  name: z.string().min(1),
+  api_token: z.string().min(1),
+});
+
+const posthogProjectsSchema = z.object({
+  count: z.number().int().nonnegative(),
+  results: z.array(posthogProjectSchema),
+});
+
 function requiredCredential(
   environment: Record<string, string | undefined>,
   name:
@@ -245,7 +265,8 @@ function requiredCredential(
     | 'R2_ACCESS_KEY_ID'
     | 'R2_SECRET_ACCESS_KEY'
     | 'SENTRY_API_TOKEN'
-    | 'SENTRY_BUILD_AUTH_TOKEN',
+    | 'SENTRY_BUILD_AUTH_TOKEN'
+    | 'POSTHOG_PERSONAL_API_KEY',
 ): string {
   const value = environment[name]?.trim();
   if (!value) {
@@ -264,6 +285,7 @@ export function loadLiveProvisioningCredentials(
   const usesR2Binding = plan.actions.some((action) => action.id === 'vercel.r2-binding');
   const usesSentry = plan.actions.some((action) => action.provider === 'sentry');
   const usesSentryBinding = plan.actions.some((action) => action.id === 'vercel.sentry-binding');
+  const usesPosthog = plan.actions.some((action) => action.provider === 'posthog');
   const r2AccessKeyId = usesR2Binding ? environment['R2_ACCESS_KEY_ID']?.trim() : undefined;
   const r2SecretAccessKey = usesR2Binding ? environment['R2_SECRET_ACCESS_KEY']?.trim() : undefined;
   if (Boolean(r2AccessKeyId) !== Boolean(r2SecretAccessKey)) {
@@ -281,6 +303,9 @@ export function loadLiveProvisioningCredentials(
     ...(usesSentry ? { sentryApiToken: requiredCredential(environment, 'SENTRY_API_TOKEN') } : {}),
     ...(usesSentryBinding && environment['SENTRY_BUILD_AUTH_TOKEN']?.trim()
       ? { sentryBuildAuthToken: environment['SENTRY_BUILD_AUTH_TOKEN'].trim() }
+      : {}),
+    ...(usesPosthog
+      ? { posthogPersonalApiKey: requiredCredential(environment, 'POSTHOG_PERSONAL_API_KEY') }
       : {}),
     ...(r2AccessKeyId && r2SecretAccessKey
       ? {
@@ -376,7 +401,9 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
             ? this.#credentials.neonApiKey
             : input.provider === 'cloudflare'
               ? this.#credentials.cloudflareApiToken
-              : this.#credentials.sentryApiToken;
+              : input.provider === 'sentry'
+                ? this.#credentials.sentryApiToken
+                : this.#credentials.posthogPersonalApiKey;
     if (!token) {
       throw adapterFailure(
         input.provider,
@@ -450,6 +477,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     const neonAction = plan.actions.find((action) => action.id === 'neon.project');
     const cloudflareAction = plan.actions.find((action) => action.id === 'cloudflare.r2-bucket');
     const sentryAction = plan.actions.find((action) => action.id === 'sentry.project');
+    const posthogAction = plan.actions.find((action) => action.id === 'posthog.project');
 
     await Promise.all([
       githubAction ? this.#preflightGithub(githubAction) : Promise.resolve(),
@@ -457,6 +485,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       neonAction ? this.#preflightNeon(neonAction) : Promise.resolve(),
       cloudflareAction ? this.#preflightCloudflare(cloudflareAction) : Promise.resolve(),
       sentryAction ? this.#preflightSentry(sentryAction) : Promise.resolve(),
+      posthogAction ? this.#preflightPosthog(posthogAction) : Promise.resolve(),
     ]);
   }
 
@@ -604,6 +633,24 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     }
   }
 
+  async #preflightPosthog(
+    action: Extract<ProvisioningAction, { id: 'posthog.project' }>,
+  ): Promise<void> {
+    const response = await this.#request({
+      provider: 'posthog',
+      url: `${POSTHOG_API}/organizations/${encoded(action.input.organization_id)}/`,
+      acceptedStatuses: [200],
+    });
+    const organization = await this.#json('posthog', response, posthogOrganizationSchema);
+    if (organization.id !== action.input.organization_id) {
+      throw adapterFailure(
+        'posthog',
+        'ORGANIZATION_MISMATCH',
+        'Authenticated PostHog key cannot access the requested EU organization',
+      );
+    }
+  }
+
   async ensure(
     action: ProvisioningAction,
     context: ProvisioningExecutionContext,
@@ -625,6 +672,10 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensureSentryProject(action, context);
       case 'vercel.sentry-binding':
         return this.#ensureSentryBinding(action, context);
+      case 'posthog.project':
+        return this.#ensurePosthogProject(action, context);
+      case 'vercel.posthog-binding':
+        return this.#ensurePosthogBinding(action, context);
     }
   }
 
@@ -1261,6 +1312,125 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     );
   }
 
+  async #lookupPosthogProject(
+    action: Extract<ProvisioningAction, { id: 'posthog.project' }>,
+  ): Promise<z.infer<typeof posthogProjectSchema> | null> {
+    const projects: z.infer<typeof posthogProjectSchema>[] = [];
+    const limit = 100;
+    let offset = 0;
+    let count = 0;
+    do {
+      const response = await this.#request({
+        provider: 'posthog',
+        url: withQuery(
+          `${POSTHOG_API}/organizations/${encoded(action.input.organization_id)}/projects/`,
+          { search: action.input.name, limit: String(limit), offset: String(offset) },
+        ),
+        acceptedStatuses: [200],
+      });
+      const page = await this.#json('posthog', response, posthogProjectsSchema);
+      projects.push(
+        ...page.results.filter(
+          (project) =>
+            project.name === action.input.name &&
+            project.organization === action.input.organization_id,
+        ),
+      );
+      count = page.count;
+      offset += page.results.length;
+      if (page.results.length === 0) {
+        break;
+      }
+    } while (offset < count);
+
+    if (projects.length > 1) {
+      throw adapterFailure(
+        'posthog',
+        'PROJECT_CONFLICT',
+        'PostHog organization contains multiple projects with the requested exact name',
+      );
+    }
+    return projects[0] ?? null;
+  }
+
+  #posthogProjectResource(
+    action: Extract<ProvisioningAction, { id: 'posthog.project' }>,
+    project: z.infer<typeof posthogProjectSchema>,
+  ): ProvisionedResource {
+    if (
+      project.name !== action.input.name ||
+      project.organization !== action.input.organization_id
+    ) {
+      throw adapterFailure(
+        'posthog',
+        'PROJECT_CONFLICT',
+        'Existing PostHog project does not match the requested name or organization',
+      );
+    }
+    return {
+      provider: 'posthog',
+      resource_kind: 'project',
+      resource_id: project.id,
+      display_name: project.name,
+      organization_id: project.organization,
+      region: action.input.region,
+      project_api_key_sha256: sha256(project.api_token),
+    };
+  }
+
+  async #ensurePosthogProject(
+    action: Extract<ProvisioningAction, { id: 'posthog.project' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const existing = await this.#lookupPosthogProject(action);
+    if (existing) {
+      return this.#posthogProjectResource(action, existing);
+    }
+    if (context.previousError?.code === 'POSTHOG_PROJECT_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'posthog',
+        'PROJECT_CREATE_AMBIGUOUS',
+        'PostHog project creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'posthog',
+        url: `${POSTHOG_API}/organizations/${encoded(action.input.organization_id)}/projects/`,
+        method: 'POST',
+        body: { name: action.input.name },
+        acceptedStatuses: [201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupPosthogProject(action);
+    if (reconciled) {
+      return this.#posthogProjectResource(action, reconciled);
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'posthog',
+        'PROJECT_CREATE_AMBIGUOUS',
+        'PostHog project creation is ambiguous; resume will reconcile without creating again',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'posthog',
+      'PROJECT_CREATE_AMBIGUOUS',
+      'PostHog accepted project creation but the project is not yet observable',
+      true,
+    );
+  }
+
   async #lookupDatabaseBinding(
     action: Extract<ProvisioningAction, { id: 'vercel.database-binding' }>,
     project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
@@ -1841,6 +2011,173 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       'vercel',
       'SENTRY_BINDING_CREATE_AMBIGUOUS',
       'Vercel accepted the Sentry binding but its ownership marker is not yet observable',
+      true,
+    );
+  }
+
+  async #lookupPosthogBinding(
+    action: Extract<ProvisioningAction, { id: 'vercel.posthog-binding' }>,
+    project: Extract<ProvisionedResource, { provider: 'vercel'; resource_kind: 'project' }>,
+  ): Promise<ProvisionedResource | null> {
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    const response = await this.#request({
+      provider: 'vercel',
+      url: withQuery(`${VERCEL_API}/v9/projects/${encoded(project.resource_id)}/env`, {
+        teamId,
+      }),
+      acceptedStatuses: [200],
+    });
+    const environment = (await this.#json('vercel', response, vercelEnvironmentVariablesSchema))
+      .envs;
+    const managedKeys = new Set<string>([...POSTHOG_BINDING_KEYS, POSTHOG_BINDING_MARKER]);
+    const managed = environment.filter((variable) => managedKeys.has(variable.key));
+    if (managed.length === 0) {
+      return null;
+    }
+
+    const bindingsMatch = POSTHOG_BINDING_KEYS.every((key) => {
+      const variables = managed.filter((variable) => variable.key === key);
+      return (
+        variables.length === 1 &&
+        variables[0]?.type === 'encrypted' &&
+        hasExactTargets(variables[0].target, DATABASE_MARKER_TARGETS)
+      );
+    });
+    const markers = managed.filter((variable) => variable.key === POSTHOG_BINDING_MARKER);
+    const marker = markers[0];
+    if (
+      managed.length !== 3 ||
+      !bindingsMatch ||
+      markers.length !== 1 ||
+      !marker ||
+      marker.type !== 'plain' ||
+      marker.value !== action.idempotency_key ||
+      !hasExactTargets(marker.target, DATABASE_MARKER_TARGETS)
+    ) {
+      throw adapterFailure(
+        'vercel',
+        'POSTHOG_BINDING_CONFLICT',
+        'Existing Vercel PostHog variables are not owned by this plan',
+      );
+    }
+    return {
+      provider: 'vercel',
+      resource_kind: 'posthog-binding',
+      resource_id: marker.id,
+      display_name: 'PostHog runtime binding',
+      bound_keys: action.input.bindings,
+    };
+  }
+
+  async #posthogProjectApiKey(
+    project: Extract<ProvisionedResource, { provider: 'posthog'; resource_kind: 'project' }>,
+  ): Promise<string> {
+    const response = await this.#request({
+      provider: 'posthog',
+      url: `${POSTHOG_API}/organizations/${encoded(project.organization_id)}/projects/${encoded(project.resource_id)}/`,
+      acceptedStatuses: [200],
+    });
+    const current = await this.#json('posthog', response, posthogProjectSchema);
+    if (
+      current.id !== project.resource_id ||
+      current.name !== project.display_name ||
+      current.organization !== project.organization_id ||
+      sha256(current.api_token) !== project.project_api_key_sha256
+    ) {
+      throw adapterFailure(
+        'posthog',
+        'PROJECT_KEY_CONFLICT',
+        'PostHog project key changed after project provisioning',
+      );
+    }
+    return current.api_token;
+  }
+
+  async #ensurePosthogBinding(
+    action: Extract<ProvisioningAction, { id: 'vercel.posthog-binding' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const project = requireDependency(context, 'vercel.project');
+    const posthogProject = requireDependency(context, 'posthog.project');
+    if (project.provider !== 'vercel' || project.resource_kind !== 'project') {
+      throw new Error('PostHog binding dependency is not a Vercel project');
+    }
+    if (posthogProject.provider !== 'posthog' || posthogProject.resource_kind !== 'project') {
+      throw new Error('PostHog binding dependency is not a PostHog project');
+    }
+
+    const existing = await this.#lookupPosthogBinding(action, project);
+    if (existing) {
+      return existing;
+    }
+    if (context.previousError?.code === 'VERCEL_POSTHOG_BINDING_CREATE_AMBIGUOUS') {
+      throw adapterFailure(
+        'vercel',
+        'POSTHOG_BINDING_CREATE_AMBIGUOUS',
+        'Vercel PostHog binding creation remains ambiguous; no second create was attempted',
+        true,
+      );
+    }
+
+    const values: Record<(typeof POSTHOG_BINDING_KEYS)[number], string> = {
+      NEXT_PUBLIC_POSTHOG_KEY: await this.#posthogProjectApiKey(posthogProject),
+      NEXT_PUBLIC_POSTHOG_HOST: '/ingest',
+    };
+    const variables = POSTHOG_BINDING_KEYS.map((key) => ({
+      key,
+      value: values[key],
+      type: 'encrypted',
+      target: [...DATABASE_MARKER_TARGETS],
+    }));
+    const teamId = this.#currentVercelTeamId;
+    if (!teamId) {
+      throw new Error('Vercel team preflight was not completed');
+    }
+    let createError: unknown;
+    try {
+      await this.#request({
+        provider: 'vercel',
+        url: withQuery(`${VERCEL_API}/v10/projects/${encoded(project.resource_id)}/env`, {
+          teamId,
+        }),
+        method: 'POST',
+        body: [
+          ...variables,
+          {
+            key: POSTHOG_BINDING_MARKER,
+            value: action.idempotency_key,
+            type: 'plain',
+            target: [...DATABASE_MARKER_TARGETS],
+          },
+        ],
+        acceptedStatuses: [200, 201],
+      });
+    } catch (error) {
+      createError = error;
+    }
+
+    const reconciled = await this.#lookupPosthogBinding(action, project);
+    if (reconciled) {
+      return reconciled;
+    }
+    if (createError instanceof ProviderHttpFailure && createError.ambiguousMutation) {
+      throw adapterFailure(
+        'vercel',
+        'POSTHOG_BINDING_CREATE_AMBIGUOUS',
+        'Vercel PostHog binding creation is ambiguous; resume will only reconcile',
+        true,
+      );
+    }
+    if (createError) {
+      throw createError;
+    }
+    throw adapterFailure(
+      'vercel',
+      'POSTHOG_BINDING_CREATE_AMBIGUOUS',
+      'Vercel accepted the PostHog binding but its ownership marker is not yet observable',
       true,
     );
   }

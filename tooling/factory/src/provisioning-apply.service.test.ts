@@ -39,6 +39,10 @@ const context = parseProvisioningContext({
     team_slug: 'platform',
     region: 'de',
   },
+  posthog: {
+    organization_id: '123e4567-e89b-42d3-a456-426614174000',
+    region: 'eu',
+  },
 });
 
 async function createGeneratedProject() {
@@ -112,6 +116,8 @@ describe('applyProvisioning', () => {
       ['vercel.r2-binding', 'pending', 0],
       ['sentry.project', 'pending', 0],
       ['vercel.sentry-binding', 'pending', 0],
+      ['posthog.project', 'pending', 0],
+      ['vercel.posthog-binding', 'pending', 0],
     ]);
     expect(serializeCanonicalJson(failedState)).not.toContain('Simulated failure for');
 
@@ -122,7 +128,9 @@ describe('applyProvisioning', () => {
       requireExistingState: true,
     });
     expect(resumedState.status).toBe('succeeded');
-    expect(resumedState.actions.map((action) => action.attempts)).toEqual([1, 1, 2, 1, 1, 1, 1, 1]);
+    expect(resumedState.actions.map((action) => action.attempts)).toEqual([
+      1, 1, 2, 1, 1, 1, 1, 1, 1, 1,
+    ]);
   });
 
   it('refuses a mismatched plan, concurrent apply, and resume without state', async () => {

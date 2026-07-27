@@ -448,6 +448,26 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         bound_keys: action.input.bindings,
       };
     }
+    if (action.id === 'posthog.project') {
+      return {
+        provider: 'posthog',
+        resource_kind: 'project',
+        resource_id: resourceId,
+        display_name: action.input.name,
+        organization_id: action.input.organization_id,
+        region: 'eu',
+        project_api_key_sha256: sha256(`simulated-posthog-project-key:${action.idempotency_key}`),
+      };
+    }
+    if (action.id === 'vercel.posthog-binding') {
+      return {
+        provider: 'vercel',
+        resource_kind: 'posthog-binding',
+        resource_id: resourceId,
+        display_name: 'PostHog runtime binding',
+        bound_keys: action.input.bindings,
+      };
+    }
     return {
       provider: 'vercel',
       resource_kind: 'database-binding',
@@ -479,7 +499,9 @@ export function validateProvisioningState(
               ? 'r2-binding'
               : action.id === 'vercel.sentry-binding'
                 ? 'sentry-binding'
-                : 'project';
+                : action.id === 'vercel.posthog-binding'
+                  ? 'posthog-binding'
+                  : 'project';
     if (
       actionState.status === 'succeeded' &&
       (!actionState.resource ||
@@ -533,6 +555,26 @@ export function validateProvisioningState(
         serializeCanonicalJson(action.input.bindings)
     ) {
       throw new Error('Succeeded Sentry binding action does not attest the exact runtime keys');
+    }
+    if (
+      action.id === 'posthog.project' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'posthog' &&
+      (actionState.resource.display_name !== action.input.name ||
+        actionState.resource.organization_id !== action.input.organization_id ||
+        actionState.resource.region !== action.input.region)
+    ) {
+      throw new Error('Succeeded PostHog provisioning action does not attest the exact EU project');
+    }
+    if (
+      action.id === 'vercel.posthog-binding' &&
+      actionState.status === 'succeeded' &&
+      actionState.resource?.provider === 'vercel' &&
+      actionState.resource.resource_kind === 'posthog-binding' &&
+      serializeCanonicalJson(actionState.resource.bound_keys) !==
+        serializeCanonicalJson(action.input.bindings)
+    ) {
+      throw new Error('Succeeded PostHog binding action does not attest the exact runtime keys');
     }
     if (actionState.status === 'failed' && (!actionState.error || actionState.resource !== null)) {
       throw new Error(`Failed provisioning action ${action.id} has inconsistent diagnostics`);

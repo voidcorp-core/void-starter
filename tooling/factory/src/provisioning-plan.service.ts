@@ -49,6 +49,7 @@ export function createProvisioningPlan(
   const hasDatabase = manifest.data.database === 'neon-eu';
   const hasR2 = manifest.data.files === 'cloudflare-r2-eu';
   const hasSentry = hasWeb && manifest.operations.errors === 'sentry';
+  const hasPosthog = hasWeb && manifest.operations.analytics === 'posthog';
 
   if (hasWeb && !context.vercel) {
     throw new Error('Provisioning context requires Vercel settings for the selected web surface');
@@ -63,6 +64,11 @@ export function createProvisioningPlan(
   }
   if (hasSentry && !context.sentry) {
     throw new Error('Provisioning context requires Sentry settings for the selected error adapter');
+  }
+  if (hasPosthog && !context.posthog) {
+    throw new Error(
+      'Provisioning context requires PostHog settings for the selected analytics adapter',
+    );
   }
 
   const actions: ProvisioningAction[] = [
@@ -215,6 +221,36 @@ export function createProvisioningPlan(
             'SENTRY_ORG',
             'SENTRY_PROJECT',
           ],
+          targets: ['development', 'preview', 'production'],
+        },
+      }),
+    );
+  }
+
+  if (hasPosthog && context.posthog) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'posthog.project',
+        provider: 'posthog',
+        kind: 'ensure-project',
+        depends_on: [],
+        permissions: ['organization:read', 'project:read', 'project:write'],
+        input: {
+          organization_id: context.posthog.organization_id,
+          name: manifest.project.name,
+          region: context.posthog.region,
+        },
+      }),
+      withIdempotencyKey({
+        id: 'vercel.posthog-binding',
+        provider: 'vercel',
+        kind: 'ensure-posthog-binding',
+        depends_on: ['vercel.project', 'posthog.project'],
+        permissions: ['project-environment:write'],
+        input: {
+          project_action_id: 'vercel.project',
+          posthog_action_id: 'posthog.project',
+          bindings: ['NEXT_PUBLIC_POSTHOG_KEY', 'NEXT_PUBLIC_POSTHOG_HOST'],
           targets: ['development', 'preview', 'production'],
         },
       }),
