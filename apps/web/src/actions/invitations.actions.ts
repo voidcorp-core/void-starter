@@ -16,6 +16,11 @@ import { z } from 'zod';
  * The issued token is returned to the caller for delivery and is never
  * persisted in clear (only its SHA-256 digest reaches the database), so this
  * response is the single moment the link exists in readable form.
+ *
+ * It is returned as a complete link rather than a bare token because the token
+ * is only usable through `/invite/<token>`, which is what parks it in the
+ * cookie the admission check reads (ADR 65). Handing an administrator a raw
+ * token would leave them to assemble that URL themselves.
  */
 
 const emailSchema = z.object({
@@ -43,7 +48,7 @@ export const issueInvitationAction = defineAction({
     return {
       email: invitation.email,
       expiresAt: invitation.expiresAt.toISOString(),
-      token: invitation.token,
+      invitePath: `/invite/${encodeURIComponent(invitation.token)}`,
     };
   },
 });

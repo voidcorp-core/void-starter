@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // `next/headers` and is unresolvable outside the Next runtime. `access-mode.ts`
 // has no imports at all, so it is safe to read from any context.
 import { ACCESS_MODE } from '@repo/auth/access-mode';
-import { closeTestSql, deleteTestUser } from './_helpers';
+import { admitForSignUp, closeTestSql, deleteTestUser, invitationCookie } from './_helpers';
 
 /**
  * The invite-only account creation contract (ADR 63).
@@ -78,6 +78,58 @@ if (hasDb && isInviteOnlyProject) {
       await page.goto('/admin/invitations');
 
       await expect(page).not.toHaveURL(/\/admin\/invitations$/);
+    });
+
+    /**
+     * The invitation is a credential, not a list membership (ADR 65). Holding a
+     * pending invitation is not enough: the address must also present the token
+     * it was issued with. Without this, anyone who guesses an invited address
+     * could create that account first and burn the invitation.
+     */
+    test('refuses an invited address that presents no token', async ({ request }) => {
+      const invited = `e2e-notoken-${Date.now()}@example.test`;
+      await admitForSignUp(invited);
+
+      const response = await request.post('/api/auth/sign-up/email', {
+        data: { email: invited, password, name: 'No Token' },
+        failOnStatusCode: false,
+      });
+
+      expect(response.ok()).toBe(false);
+      await deleteTestUser(invited);
+    });
+
+    test('refuses an invited address that presents the wrong token', async ({ request }) => {
+      const invited = `e2e-wrongtoken-${Date.now()}@example.test`;
+      const other = `e2e-othertoken-${Date.now()}@example.test`;
+      await admitForSignUp(invited);
+      // A real token, issued for a different address: a leaked link must not
+      // open an account it was not issued for.
+      const foreignToken = await admitForSignUp(other);
+
+      const response = await request.post('/api/auth/sign-up/email', {
+        data: { email: invited, password, name: 'Wrong Token' },
+        headers: invitationCookie(foreignToken),
+        failOnStatusCode: false,
+      });
+
+      expect(response.ok()).toBe(false);
+      await deleteTestUser(invited);
+      await deleteTestUser(other);
+    });
+
+    test('admits an invited address that presents its own token', async ({ request }) => {
+      const invited = `e2e-goodtoken-${Date.now()}@example.test`;
+      const token = await admitForSignUp(invited);
+
+      const response = await request.post('/api/auth/sign-up/email', {
+        data: { email: invited, password, name: 'Good Token' },
+        headers: invitationCookie(token),
+        failOnStatusCode: false,
+      });
+
+      expect(response.ok()).toBe(true);
+      await deleteTestUser(invited);
     });
   });
 }

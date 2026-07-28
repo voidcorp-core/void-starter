@@ -15,6 +15,7 @@ import { betterAuth } from 'better-auth';
 import { admin, magicLink } from 'better-auth/plugins';
 import { z } from 'zod';
 import { isInviteOnly } from './access-mode';
+import { readInvitationCookie } from './invitation.helper';
 import {
   assertSignUpAdmitted,
   consumeInvitationFor,
@@ -194,13 +195,19 @@ function initAuth() {
           // admission check therefore closes all three at once rather than
           // guarding the sign-up form alone, which would leave magic link as an
           // open side door (ADR 63).
-          before: async (user) => {
+          before: async (user, context) => {
             if (isInviteOnly()) {
               await assertSignUpAdmitted({
                 email: user.email,
                 bootstrapAdminEmail: bootstrapAdministrator,
                 now: new Date(),
                 gateway: defaultInvitationGateway,
+                // The token the invitee carried from their invitation link,
+                // parked in a cookie by `/invite/[token]`. Read from the raw
+                // header rather than a request field because the social
+                // provider callback returns from an external redirect and
+                // carries nothing of ours (ADR 65).
+                presentedToken: readInvitationCookie(context?.headers?.get('cookie') ?? undefined),
               });
             }
             const role = bootstrapRoleForEmail(user.email, bootstrapAdministrator);

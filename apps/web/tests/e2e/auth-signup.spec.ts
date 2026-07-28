@@ -12,6 +12,7 @@ const hasDb = Boolean(process.env['DATABASE_URL']);
 if (hasDb) {
   test.describe('sign-up flow', () => {
     const testEmail = `e2e-signup-${Date.now()}@example.test`;
+    let invitationToken: string | undefined;
 
     test.beforeAll(async () => {
       // The subject here is what the form does once an address is allowed to
@@ -19,7 +20,7 @@ if (hasDb) {
       // the refusal is `invite-only.spec.ts`; without this admission the form
       // would be driven against a rejection and this suite would assert a
       // contract the manifest forbids.
-      await admitForSignUp(testEmail);
+      invitationToken = await admitForSignUp(testEmail);
     });
 
     test.afterAll(async () => {
@@ -28,7 +29,15 @@ if (hasDb) {
     });
 
     test('user can sign up and reach the email verification notice', async ({ page }) => {
-      await page.goto('/sign-up');
+      // Enter through the invitation link where the project has one, which is
+      // the real path an invitee takes: it is what parks the token in the
+      // cookie the admission check reads (ADR 65).
+      if (invitationToken) {
+        await page.goto(`/invite/${invitationToken}`);
+        await expect(page).toHaveURL('/sign-up');
+      } else {
+        await page.goto('/sign-up');
+      }
 
       await page.getByLabel('Name').fill('E2E Test User');
       await page.getByLabel('Email').fill(testEmail);

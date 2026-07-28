@@ -132,13 +132,18 @@ whether Better Auth's user-create hooks consult the `invitations` ledger. Becaus
 and not an environment variable, reopening an invite-only project requires changing the manifest and
 redeploying rather than editing a provider dashboard.
 
-In that mode an account is created only for the bootstrap administrator or for an address holding a
-pending, unexpired, unrevoked invitation. The check runs in the user-create hook, so it covers email
-sign-up, magic link and social callbacks alike. Invitations are issued and revoked from
-`/admin/invitations`, a surface the factory prunes on any other mode; only the SHA-256 digest of the
-token is stored, so the link shown at issuance is not recoverable afterwards. `invite_only` requires
-the Better Auth provider -- a manifest selecting it on Clerk is rejected rather than silently
-unenforced.
+In that mode an account is created only for the bootstrap administrator, or for an address that both
+holds a pending, unexpired, unrevoked invitation and presents the token it was issued with (ADR 65).
+The token reaches the request through a short-lived `httpOnly` cookie parked by `/invite/<token>`,
+which is why the check can live in the single user-create hook and still cover email sign-up, magic
+link and social callbacks alike. Requiring the token is what makes the invitation a credential
+rather than a list membership: admitting on the address alone would let anyone who guesses an
+invited address create that account first and burn the invitation.
+
+Invitations are issued and revoked from `/admin/invitations`, a surface the factory prunes on any
+other mode. The screen shows a complete link exactly once; only the SHA-256 digest of the token is
+stored, so it is not recoverable afterwards. `invite_only` requires the Better Auth provider -- a
+manifest selecting it on Clerk is rejected rather than silently unenforced.
 
 `public_signup_gated_activation` is declared in the schema but not yet materialized: it currently
 generates the same project as `public_verified`.

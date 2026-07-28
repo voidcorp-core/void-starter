@@ -47,35 +47,46 @@ export async function closeTestSql(): Promise<void> {
 const isInviteOnlyProject = ACCESS_MODE === 'invite_only';
 
 /**
- * Make an address eligible for account creation, and nothing more.
+ * Make an address eligible for account creation, and return the token that
+ * makes it so.
  *
- * On an invite-only project (ADR 63) the user-create hook refuses any address
- * the `invitations` ledger does not list, so every suite that needs a
- * pre-existing user must admit it first. On any other access mode this is a
- * no-op and sign-up is open.
+ * On an invite-only project the user-create hook refuses any address that does
+ * not hold a pending invitation AND present its token (ADR 65), so a fixture
+ * needs both halves: the ledger row, and the token to carry back. Returns
+ * undefined on any other access mode, where sign-up is open and no token
+ * exists to present.
  *
  * The row is seeded directly rather than through `issueInvitationForAdmin`
  * because that service sits behind `server-only`, for the same reason the rest
- * of this file talks to Postgres directly. Only the digest column is filled: the
- * token is never redeemed here, admission is keyed on the address.
+ * of this file talks to Postgres directly.
  *
  * This is fixture setup, not coverage of the invitation contract itself --
- * that lives in `invite-only.spec.ts`, which asserts the refusal.
+ * that lives in `invite-only.spec.ts`.
  */
-export async function admitForSignUp(email: string): Promise<void> {
-  if (!isInviteOnlyProject) return;
-  const tokenHash = createHash('sha256').update(randomBytes(32)).digest('hex');
+export async function admitForSignUp(email: string): Promise<string | undefined> {
+  if (!isInviteOnlyProject) return undefined;
+  const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   await getTestSql()`
     INSERT INTO invitations (id, email, token_hash, expires_at, invited_by)
     VALUES (
       ${randomUUID()},
       ${email.trim().toLowerCase()},
-      ${tokenHash},
+      ${createHash('sha256').update(token).digest('hex')},
       ${expiresAt},
       ${'e2e-helper'}
     )
   `;
+  return token;
+}
+
+/**
+ * The `Cookie` header an invitee carries after opening their invitation link.
+ * Empty on an access mode that issues no token, so callers can spread it
+ * unconditionally.
+ */
+export function invitationCookie(token: string | undefined): Record<string, string> {
+  return token ? { cookie: `void_invitation=${token}` } : {};
 }
 
 /**
@@ -118,9 +129,10 @@ export async function signUpViaHttp(
   request: APIRequestContext,
   body: { email: string; password: string; name: string },
 ) {
-  await admitForSignUp(body.email);
+  const token = await admitForSignUp(body.email);
   return await request.post('/api/auth/sign-up/email', {
     data: body,
+    headers: invitationCookie(token),
     failOnStatusCode: true,
   });
 }

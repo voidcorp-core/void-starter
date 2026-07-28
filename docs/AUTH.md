@@ -181,21 +181,34 @@ The factory writes it from `auth.access_mode` in the manifest; it is code rather
 variable so an invite-only project cannot be reopened from a provider dashboard (ADR 63).
 
 When it reads `invite_only`, the same user-create hook that assigns the bootstrap role first calls
-`assertSignUpAdmitted`. An account is created only for the bootstrap address or for an address
-holding a pending, unexpired, unrevoked row in `invitations`. Because the check sits in the hook and
-not on the form, it covers email sign-up, magic link for an unknown address and social callbacks
-alike. The invitation is consumed in the `after` hook, so a failed creation does not burn it.
+`assertSignUpAdmitted`. An account is created only for the bootstrap address, or for an address that
+both holds a pending, unexpired, unrevoked row in `invitations` and presents the token that row was
+issued with (ADR 65). The token arrives in a short-lived `httpOnly` cookie that `/invite/<token>`
+parks before redirecting to the sign-up form, and the digests are compared in constant time.
 
-Every refusal returns the same message. Distinguishing "never invited" from "revoked" or "expired"
-would turn the endpoint into an oracle for who works at the company; the specific state goes to the
-structured log instead.
+Requiring the token is the difference between a credential and a list membership. With email-only
+admission, anyone who guesses an invited address -- trivial where addresses follow a company pattern
+-- creates that account first; verification stops them signing in, but the `after` hook consumes the
+invitation, so the real invitee finds their address taken and their invitation spent.
+
+Because the check sits in the hook and not on the form, it covers email sign-up, magic link for an
+unknown address and social callbacks alike -- the last of which returns from an external redirect and
+can carry nothing but a cookie. The invitation is consumed in the `after` hook, so a failed creation
+does not burn it.
+
+Every refusal returns the same message, whether the address was never invited, was revoked, expired,
+or presented no token or a wrong one. Distinguishing them would turn the endpoint into an oracle for
+who works at the company; the specific state and reason go to the structured log instead. The
+`/invite` route is equally silent: it never checks the ledger, so it cannot reveal which invitations
+exist.
 
 Operationally:
 
 1. Sign in as the bootstrap administrator, who needs no invitation.
 2. Open `/admin/invitations` and issue one per address.
-3. Hand the displayed token to the invitee. Only its SHA-256 digest is stored, so the value cannot
-   be recovered afterwards -- reissue instead, after revoking.
+3. Send the displayed link to the invitee. Only the token's SHA-256 digest is stored, so the value
+   cannot be recovered afterwards -- reissue instead, after revoking. Opening that link is what lets
+   the address create an account; the form alone will refuse it.
 4. Revoke from the same screen to close an address; an address may hold at most one pending
    invitation, enforced by a partial unique index.
 
