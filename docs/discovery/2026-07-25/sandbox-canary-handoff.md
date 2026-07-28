@@ -430,3 +430,79 @@ Deux défauts réels ont été trouvés par ce canari et corrigés :
   faisait échouer la publication en `LOCAL_GIT_PREPARE_FAILED`. Ces artefacts sont désormais exclus
   de la copie sans devenir des chemins interdits en sortie, car ils sont légitimes dans un projet
   généré une fois construit; `doctor` aurait sinon rejeté tout projet buildé.
+
+## Profil invite-only validé
+
+`DEV-474` est prouvé en live le 2026-07-28. Contrairement aux jalons précédents, ce canari ne
+réutilise aucune ressource : le manifeste porte un autre nom de projet, donc la Factory a créé une
+pile complète, ce qui a aussi fait de ce canari le premier à exercer la génération de bout en bout
+sur un projet neuf plutôt qu'une extension du canari historique.
+
+Ressources créées, une tentative par action :
+
+- GitHub repository `R_kgDOTmKAkQ` (`void-sandbox/void-starter-canary-internal-20260728`);
+- Vercel project `prj_uxrRlmEczknYUiIFbNVkXFAoZlB7`, région `fra1`;
+- Neon project `solitary-night-55401805`, région `aws-eu-central-1`;
+- liaison `DATABASE_URL` `inquPpjkYicPQzg4`;
+- Sentry project `4511813405442128` en région `de`, organisation `void-corp-md`;
+- liaison Sentry `y1K29YYD10LdV50e`.
+
+Deux générations fraîches successives ont ensuite adopté ces six ressources aux mêmes identifiants,
+une tentative chacune, sans doublon.
+
+Séquence : source initiale `5891bac5f369cc0effa03b47aca0bde06c23d2f8`, puis deux mises à jour
+protégées en fast-forward jusqu'à `493c7f4949c3b139ebee2d080ab92605a6620f17`, 248 fichiers,
+893 508 octets, SHA-256 source
+`9251137108cda8da5f9255d916238fc437c3cd938236e79a5d5b91b98f3676be`. Six migrations Drizzle
+appliquées sur Neon, zéro en attente, puis attestation liée au commit final sans modification de
+schéma. Workflow GitHub Actions `30370089089` entièrement vert : audit, lint, type-check,
+migrations, tests, build, Knip, gitleaks, puis les neuf scénarios Playwright.
+
+Le plan auth `89451a2fe4ef29931a756828746c0b517f608bd51c4b86fd514e296168bd351c` a lié huit variables
+Production, dont `BETTER_AUTH_SECRET` et `RESEND_API_KEY` en Sensitive, marker `hwsjx59QDqnBpZiG`,
+et envoyé l'e-mail de configuration `badba0ca-317e-4d54-bcc3-6b5c25b91572` depuis le domaine vérifié
+`updates.voidcorp.io`. Après redéploiement forcé du même commit, le déploiement Production
+`dpl_5HPPpw1t4zs66wZVNKZMHAbsbDGE` a passé le smoke protégé en HTTP 200, 14 151 octets, SHA-256
+`5afef9d747b24bbdfcb9bca863673bc6564ef07dcfc652bab4bdbbedecfd2289`. `doctor` final vert sur ses
+quinze contrôles, reçus en mode `0600`.
+
+Le contrat d'accès lui-même est prouvé sur le déploiement Production réel :
+
+- `fp+stranger@voidcorp.io` est refusé en HTTP 422 `FAILED_TO_CREATE_USER`;
+- une adresse jamais invitée reçoit un statut et un corps strictement identiques, donc l'endpoint
+  n'est pas un oracle sur qui a été invité;
+- après le chemin magic link, aucune connexion par mot de passe n'est possible, donc aucun compte
+  n'a été créé sur aucun chemin;
+- l'identité bootstrap `fp@voidcorp.io`, qui ne détient aucune invitation, est admise en HTTP 200
+  avec `role: admin` et `emailVerified: false`. C'est l'exception qui rend le profil utilisable :
+  sans elle, aucun premier compte ne pourrait exister et le projet serait définitivement fermé,
+  alors que les tests de refus continueraient de passer.
+
+Limite assumée : le refus anonyme sur `/admin/invitations` n'a pas été distingué en live du refus de
+la Deployment Protection Vercel, les deux répondant par une redirection. Ce garde est couvert sans
+ambiguïté par `invite-only.spec.ts` en CI, où la protection plateforme n'existe pas.
+
+Trois défauts réels ont été trouvés par ce canari et corrigés :
+
+- le générateur inlinait `project.name` dans le JSX de la page d'accueil, à huit colonnes
+  d'indentation. Au-delà de 34 caractères, la ligne dépassait la largeur Biome et le projet généré
+  échouait son propre `bun run lint` au premier commit, CI rouge avant la première ligne de code du
+  consommateur. Tous les canaris précédents passaient par chance, `void-starter-canary-20260725`
+  faisant 28 caractères. Le nom passe désormais par une constante `PROJECT_NAME`, et un test de
+  composition exécute le vrai binaire Biome sur chaque fichier TypeScript généré, pour quatre
+  profils, avec un nom à la longueur maximale du schéma (ADR 64);
+- `auth.integration.test.ts` effectuait une inscription ouverte, que le mode refuse par construction.
+  La suite exige `DATABASE_URL` et `BETTER_AUTH_SECRET`, donc elle ne s'exécute qu'en CI : générer et
+  valider le profil en local ne pouvait pas la révéler. Elle lit désormais `ACCESS_MODE`, sème une
+  invitation quand le projet l'exige, et un second cas vérifie qu'une adresse non invitée est
+  refusée sans laisser de ligne `users`;
+- trois suites Playwright créaient leur utilisateur de fixture par la même inscription publique.
+  `signUpViaHttp` admet désormais l'adresse au préalable selon `ACCESS_MODE`, le nettoyage supprime
+  la ligne du ledger avec le compte, et les marqueurs `test.skip` ont été remplacés par la garde
+  `if (hasDb)` déjà utilisée par `invite-only.spec.ts`.
+
+Le point commun des deux derniers est structurant : ADR 63 a matérialisé `invite_only` avec sa
+propre spec de refus, mais aucune suite préexistante n'a été revisitée alors que le mode change le
+contrat d'un endpoint que la moitié du harnais de test utilise comme fixture. Toute future option de
+manifeste qui restreint un chemin déjà exercé par les tests doit faire l'objet du même passage en
+revue.

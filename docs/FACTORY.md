@@ -971,8 +971,9 @@ doctors these profiles:
 The remaining remote validation target includes:
 
 - EU private documents;
-- voice/realtime control plane;
-- provisioned provider smoke tests.
+- voice/realtime control plane.
+
+The invite-only internal tool has been validated remotely as well, on its own provider stack.
 
 Each fixture must install, type-check, migrate, seed, build and pass smoke tests. Provisioning
 adapters use contract tests and dry-run fixtures; live canaries cover the provider APIs that cannot
@@ -1011,10 +1012,14 @@ be proven locally.
     canary proved a real remote run suspending and completing, a unique idempotency ledger row per
     step, a 401 on the anonymous trigger, and a green CI, migration, deployment and doctor on one
     exact commit. Selecting the workload requires an explicit non-EU processor approval (ADR 62).**
-15. Materialize the invite-only internal-tool profile. **Done locally; `auth.access_mode` now
+15. Materialize the invite-only internal-tool profile. **Done and live-validated; `auth.access_mode`
     generates `packages/auth/src/access-mode.ts` and gates account creation through the
-    `invitations` ledger in Better Auth's user-create hooks (ADR 63). The live canary remains the
-    final gate.**
+    `invitations` ledger in Better Auth's user-create hooks (ADR 63). The canary provisioned a
+    complete new provider stack rather than extending the historical one, adopted it twice without
+    duplicates, and proved on the real Production deployment that an uninvited address is refused
+    with no oracle, that no account is created on any path, and that the bootstrap administrator is
+    admitted without an invitation and receives the admin role. It also found three real defects
+    (ADR 64 and the two test-harness fixes).**
 16. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 16. Open decisions
