@@ -338,14 +338,14 @@ fusion. Il ne reste aucune PR ouverte au moment de ce point de reprise.
 
 État Linear `Void Starter` au même instant :
 
-- terminés : `DEV-466`, `DEV-467`, `DEV-468`, `DEV-470` et `DEV-471`;
+- terminés : `DEV-466`, `DEV-467`, `DEV-468`, `DEV-470`, `DEV-471` et `DEV-472`;
 - en cours : `DEV-469`; son code DNS est fusionné et contract-testé, mais la preuve live reste
   volontairement différée au premier dogfood possédant une zone Cloudflare explicitement
   autorisée;
-- backlog : `DEV-472` à `DEV-482` (profils distants, orchestration Forge/Linear, puis
+- backlog : `DEV-473` à `DEV-482` (profils distants restants, orchestration Forge/Linear, puis
   productisation et gouvernance).
 
-La prochaine action non bloquée est `DEV-472`, validation d'un profil durable-jobs. `DEV-469` ne
+La prochaine action non bloquée est `DEV-474`, validation d'un profil outil interne sur invitation. `DEV-469` ne
 doit reprendre que lorsqu'une vraie zone DNS est fournie sans achat artificiel, déplacement de
 nameservers ni exposition d'une zone de production. Les états sous `/tmp` sont des artefacts de
 canari et ne sont pas la source de vérité; les preuves sans secret sont dans ce document, le code
@@ -370,3 +370,63 @@ nameserver. Le canari live sur une zone isolée reste à exécuter avant de clor
 
 Void Harness reste un outil externe de développement et ne doit jamais entrer dans le template ou
 le projet généré.
+
+## Durable jobs validés
+
+`DEV-472` est prouvé en live le 2026-07-28. Contrairement aux adaptateurs précédents, ce jalon ne
+provisionne rien : le Vercel World est sélectionné automatiquement au déploiement et fournit
+stockage, files d'attente et authentification OIDC sans configuration ni secret. Le jalon ajoute
+donc un module runtime et une preuve d'exécution, pas un adaptateur de provisioning.
+
+La contrainte structurante est la résidence des données. Le Vercel World stocke les données de run
+en `iad1` quelle que soit la région de déploiement, alors que tout manifeste porte `eu_primary` et
+`personal_data: eu_required`. Les charges utiles sont chiffrées de bout en bout en AES-256-GCM avec
+une clé par run, et le contrat de payload n'accepte que des identifiants opaques, les données
+personnelles restant dans Neon EU. Cela ne supprime pas le transfert : le manifeste doit désormais
+approuver explicitement `vercel-workflows` sous `data_residency.approved_non_eu_processors`, sans
+quoi il est rejeté (ADR 62). Le manifeste du canari a été mis à jour en conséquence.
+
+Séquence live, une tentative par action :
+
+- adoption des dix ressources GitHub, Vercel, Neon, R2, Sentry et PostHog aux mêmes IDs
+  historiques, sans doublon;
+- publication source `3a85ad02e15d0328c02e66bcb7ba67550a8a5fa3`, enfant direct de
+  `b72382505f6205d7e24a90a1b30970ca88fa604c`, avec 262 fichiers, 1 091 468 octets et le SHA-256
+  source `a7c2616395e8b5acb8f45a0e700bb1828935022cffd62bfc688a1c95a77def10`;
+- migration Neon `0004_rainy_blink` appliquée sur `dark-mountain-89324488`, quatre migrations déjà
+  présentes et zéro en attente après coup;
+- workflow GitHub Actions `30352666173` entièrement vert, qualité et E2E;
+- déploiement Production `dpl_C16qQGUHy2ZCepbupPjQqb1bpBPQ` en `READY`, smoke protégé HTTP 200,
+  14 427 octets, SHA-256 `bd01f7d576d4823c7e17fa0a11a371f43c2387c869ad6c62971a93f508caaee4`;
+- `doctor` final vert sur ses quinze contrôles, reçus en mode `0600`, et aucun des onze credentials
+  du trousseau ni URI PostgreSQL présent dans les reçus.
+
+L'endpoint `/api/jobs/canary` refuse un appelant anonyme en HTTP 401 sur `POST` et sur `GET` en
+production. Après ouverture d'une session réelle par magic link sur l'identité bootstrap, deux jobs
+distants ont été exécutés avec la même référence opaque `canary-jobs-20260728` :
+
+- `wrun_01KYM8X57HYKZY5VGKD4D3P4D1`, observé `running` à 0,3 s puis 3,7 s et `completed` à 6,9 s,
+  clé d'idempotence `step_01KYM8X72YP0HPT1JPXXP0B2GS`, `attempts` 1 et une seule ligne de ledger;
+- `wrun_01KYM8Y5PXSTVSR74BDFTKY592`, clé `step_01KYM8Y6FBW7FGB4VW04KRFCP7`, `attempts` 1 et une
+  seule ligne de ledger.
+
+Le franchissement du `sleep` prouve la durabilité et la reprise : le run se suspend, puis se termine
+sur une invocation ultérieure sans qu'aucune requête ne soit restée ouverte. Les deux runs partagent
+la référence sans se contaminer, chacun possédant son propre `stepId`. Le step de vérification relit
+le ledger et échoue en `FatalError` si la ligne manque, ne correspond pas ou a été dupliquée, donc
+un `completed` vaut assertion d'unicité.
+
+Limite assumée : le rejeu réel d'un step n'a pas été déclenché en production, car cela supposerait
+d'ajouter un chemin d'échec artificiel au code produit. Le rejeu, la ligne manquante, la référence
+divergente et la ligne dupliquée sont couverts par les tests unitaires du workflow.
+
+Deux défauts réels ont été trouvés par ce canari et corrigés :
+
+- le matcher du proxy Next 16 interceptait `/.well-known/workflow/v1/*`, ce qui corrompt la charge
+  utile de reprise des runs. `apps/web/src/proxy.test.ts` interdit désormais la régression, que la
+  compilation rend visible en enregistrant les trois routes internes du SDK;
+- le Workflow SDK écrit ses handlers dans l'arborescence source et y dépose un `.gitignore`
+  contenant `*`. La génération les copiait, et Git refusait ensuite d'indexer le snapshot, ce qui
+  faisait échouer la publication en `LOCAL_GIT_PREPARE_FAILED`. Ces artefacts sont désormais exclus
+  de la copie sans devenir des chemins interdits en sortie, car ils sont légitimes dans un projet
+  généré une fois construit; `doctor` aurait sinon rejeté tout projet buildé.
