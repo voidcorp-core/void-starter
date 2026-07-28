@@ -81,12 +81,24 @@ export async function admitForSignUp(email: string): Promise<string | undefined>
 }
 
 /**
- * The `Cookie` header an invitee carries after opening their invitation link.
- * Empty on an access mode that issues no token, so callers can spread it
+ * Walks the invitation link so the context holds the cookie an invitee carries
+ * into sign-up. No-op when no token exists, so callers can await it
  * unconditionally.
+ *
+ * The link is opened for real rather than forging a `Cookie` header, because
+ * `APIRequestContext` "will populate request cookies from the context" -- it
+ * owns its cookie jar, and a hand-written header does not reach the server.
+ * That is what made every admission fail in the canary CI while the production
+ * code was correct: the fixture, not the rule, was dropping the token.
+ * Entering through `/invite/<token>` also matches what an invitee actually
+ * does, and covers the route that parks the cookie.
  */
-export function invitationCookie(token: string | undefined): Record<string, string> {
-  return token ? { cookie: `void_invitation=${token}` } : {};
+export async function enterThroughInvitationLink(
+  request: APIRequestContext,
+  token: string | undefined,
+): Promise<void> {
+  if (!token) return;
+  await request.get(`/invite/${token}`, { failOnStatusCode: false });
 }
 
 /**
@@ -130,9 +142,9 @@ export async function signUpViaHttp(
   body: { email: string; password: string; name: string },
 ) {
   const token = await admitForSignUp(body.email);
+  await enterThroughInvitationLink(request, token);
   return await request.post('/api/auth/sign-up/email', {
     data: body,
-    headers: invitationCookie(token),
     failOnStatusCode: true,
   });
 }

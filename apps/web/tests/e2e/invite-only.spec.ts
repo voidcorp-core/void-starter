@@ -4,7 +4,12 @@ import { expect, test } from '@playwright/test';
 // `next/headers` and is unresolvable outside the Next runtime. `access-mode.ts`
 // has no imports at all, so it is safe to read from any context.
 import { ACCESS_MODE } from '@repo/auth/access-mode';
-import { admitForSignUp, closeTestSql, deleteTestUser, invitationCookie } from './_helpers';
+import {
+  admitForSignUp,
+  closeTestSql,
+  deleteTestUser,
+  enterThroughInvitationLink,
+} from './_helpers';
 
 /**
  * The invite-only account creation contract (ADR 63).
@@ -106,10 +111,10 @@ if (hasDb && isInviteOnlyProject) {
       // A real token, issued for a different address: a leaked link must not
       // open an account it was not issued for.
       const foreignToken = await admitForSignUp(other);
+      await enterThroughInvitationLink(request, foreignToken);
 
       const response = await request.post('/api/auth/sign-up/email', {
         data: { email: invited, password, name: 'Wrong Token' },
-        headers: invitationCookie(foreignToken),
         failOnStatusCode: false,
       });
 
@@ -121,10 +126,10 @@ if (hasDb && isInviteOnlyProject) {
     test('admits an invited address that presents its own token', async ({ request }) => {
       const invited = `e2e-goodtoken-${Date.now()}@example.test`;
       const token = await admitForSignUp(invited);
+      await enterThroughInvitationLink(request, token);
 
       const response = await request.post('/api/auth/sign-up/email', {
         data: { email: invited, password, name: 'Good Token' },
-        headers: invitationCookie(token),
         failOnStatusCode: false,
       });
 
