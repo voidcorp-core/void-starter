@@ -352,6 +352,32 @@ describe('renderProject', () => {
     );
   });
 
+  // `.mcp.json` points agents at the void-starter team's own Linear workspace. It is
+  // development governance, like CLAUDE.md, and must never reach a generated project.
+  it('excludes the project MCP configuration from generated output', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    await writeFile(
+      join(sourceRoot, '.mcp.json'),
+      '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp"}}}',
+      'utf8',
+    );
+
+    const receipt = await renderProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+
+    expect(receipt.generated_files.map((file) => file.path)).not.toContain('.mcp.json');
+    await expect(readFile(join(targetRoot, '.mcp.json'))).rejects.toThrow();
+
+    // And doctor must flag it as a development artifact if it ever reappears.
+    await writeFile(join(targetRoot, '.mcp.json'), '{}', 'utf8');
+    const report = await doctorProject(targetRoot);
+    const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
+    expect(artifactCheck?.status).toBe('fail');
+  });
+
   // The Workflow SDK writes its route handlers into the SOURCE tree during a build
   // and drops a `.gitignore` containing `*` next to them. Copying those artifacts
   // produces a snapshot git then refuses to stage, which fails source publication.

@@ -26,6 +26,9 @@ const EXCLUDED_SOURCE_PATHS = [
   '.agents',
   '.codex',
   '.git',
+  // Points agents at the void-starter team's own Linear workspace: development
+  // governance, like CLAUDE.md, never a dependency of a generated project.
+  '.mcp.json',
   '.void',
   'AGENTS.md',
   'CLAUDE.md',
