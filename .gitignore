@@ -46,6 +46,9 @@ bun-debug.log*
 # Claude Code per-user state
 .claude/settings.local.json
 
+# void-harness local telemetry (observation only, never shipped)
+.void/
+
 # Void Starter local operation state
 .void-starter/apply-state.json
 .void-starter/apply.lock

@@ -34,7 +34,8 @@ For specific tasks:
 - Any new convention MUST be added to the matching `docs/*.md` in the same commit
 - Any non-obvious decision (where a credible alternative exists) MUST be logged in `docs/DECISIONS.md`
 - Removed concepts must be removed from the docs at the same time
-- Tests use `bunx vitest run` (unit) and `bunx playwright test` (E2E); do not skip TDD when adding business logic
+- Unit tests run through `bun run test` from the root (Turborepo fans out to each workspace's own vitest config); `bunx vitest run` only works from inside a package, never from the root, where it would collect the Playwright specs and the jsdom suites with no environment
+- E2E tests run through `bun run test:e2e` from `apps/web`; do not skip TDD when adding business logic
 
 ## gstack note
 
