@@ -1,6 +1,7 @@
 import { defaultSecurityHeaders } from '@repo/core/security-headers';
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
+import { withWorkflow } from 'workflow/next';
 
 const config: NextConfig = {
   // cacheComponents was promoted from experimental to stable in Next 16.0.0.
@@ -47,6 +48,7 @@ const config: NextConfig = {
     '@repo/auth',
     '@repo/core',
     '@repo/db',
+    '@repo/jobs-vercel-workflow',
     '@repo/notes',
     '@repo/posthog',
     '@repo/sentry',
@@ -59,7 +61,10 @@ const config: NextConfig = {
 // Source-map upload requires SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT and
 // silently no-ops without them. The tunnel route is auto-wired by Sentry's
 // webpack plugin from the tunnelRoute option below.
-export default withSentryConfig(config, {
+// withWorkflow enables the "use workflow" / "use step" directives and registers
+// the step handlers so only Vercel Queue can deliver to them. It wraps the
+// config before Sentry so Sentry still sees the final Next config.
+export default withSentryConfig(withWorkflow(config), {
   tunnelRoute: '/sentry-tunnel',
   silent: !process.env['CI'],
 });

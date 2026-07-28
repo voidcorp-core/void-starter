@@ -63,10 +63,18 @@ const operationsSchema = z.strictObject({
   email: z.enum(['resend', 'none']),
 });
 
+// Processors that store project data outside the EU. Selecting one is never implicit:
+// the manifest must name it under `approved_non_eu_processors` so the DPA and transfer
+// assessment demanded by `non_eu_processor` are a written decision, not a side effect.
+const nonEuProcessorSchema = z.enum(['vercel-workflows']);
+
+type NonEuProcessor = z.infer<typeof nonEuProcessorSchema>;
+
 const dataResidencySchema = z.strictObject({
   policy: z.literal('eu_primary'),
   personal_data: z.literal('eu_required'),
   public_assets: z.enum(['global_allowed', 'eu_required']),
+  approved_non_eu_processors: z.array(nonEuProcessorSchema).optional(),
   non_eu_processor: z.strictObject({
     requires_approval: z.literal(true),
     requires_dpa: z.literal(true),
@@ -179,6 +187,70 @@ export const buildManifestSchema = z
         path: ['dns', 'provider'],
         message: 'The current DNS adapter requires the Next.js web surface',
       });
+    }
+
+    // The durable-jobs runtime writes an idempotency ledger through the database
+    // and its trigger endpoint authenticates the caller, so the workload cannot
+    // stand on its own.
+    if (manifest.workloads.durable_jobs === 'vercel-workflows') {
+      if (!hasWeb) {
+        context.addIssue({
+          code: 'custom',
+          path: ['workloads', 'durable_jobs'],
+          message: 'The durable-jobs adapter requires the Next.js web surface',
+        });
+      }
+      if (!hasDatabase) {
+        context.addIssue({
+          code: 'custom',
+          path: ['workloads', 'durable_jobs'],
+          message: 'The durable-jobs adapter requires a selected database for its ledger',
+        });
+      }
+      if (manifest.auth.provider !== 'better-auth') {
+        context.addIssue({
+          code: 'custom',
+          path: ['workloads', 'durable_jobs'],
+          message: 'The durable-jobs adapter requires the Better Auth provider',
+        });
+      }
+    }
+
+    const approvedNonEuProcessors = manifest.data_residency.approved_non_eu_processors ?? [];
+    const duplicatedApproval = approvedNonEuProcessors.find(
+      (processor, index) => approvedNonEuProcessors.indexOf(processor) !== index,
+    );
+    if (duplicatedApproval) {
+      context.addIssue({
+        code: 'custom',
+        path: ['data_residency', 'approved_non_eu_processors'],
+        message: `Duplicate non-EU processor approval: ${duplicatedApproval}`,
+      });
+    }
+
+    // The Vercel World stores workflow run data in iad1 regardless of the deployment
+    // region, so durable jobs are a non-EU transfer even on an eu_primary project.
+    const requiredNonEuProcessors: NonEuProcessor[] =
+      manifest.workloads.durable_jobs === 'vercel-workflows' ? ['vercel-workflows'] : [];
+
+    for (const processor of requiredNonEuProcessors) {
+      if (!approvedNonEuProcessors.includes(processor)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['data_residency', 'approved_non_eu_processors'],
+          message: `Durable jobs on ${processor} store run data outside the EU; approve it in data_residency.approved_non_eu_processors`,
+        });
+      }
+    }
+
+    for (const processor of approvedNonEuProcessors) {
+      if (!requiredNonEuProcessors.includes(processor)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['data_residency', 'approved_non_eu_processors'],
+          message: `data_residency.approved_non_eu_processors lists ${processor}, but no selected workload uses it`,
+        });
+      }
     }
   });
 

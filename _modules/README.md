@@ -6,7 +6,7 @@ The catalogue lives under `_modules/` rather than `packages/` to keep the depend
 
 ## Real workspace packages
 
-These four modules ship real code under `_modules/<name>/src/`, are type-checked + tested + built by Turborepo, and activate through the selected composition plus environment bindings.
+These five modules ship real code under `_modules/<name>/src/`, are type-checked + tested + built by Turborepo, and activate through the selected composition plus environment bindings.
 
 ### @repo/sentry -- Sentry observability
 
@@ -45,6 +45,20 @@ The starter ships Better-Auth as default for data sovereignty, brand integrity, 
 Delivers Better Auth verification, password-reset and magic-link messages through Resend's HTTPS
 API. Local development may log links only when the Resend pair is completely absent; production
 fails closed on missing or partial configuration.
+
+### @repo/jobs-vercel-workflow -- Durable jobs on the Vercel Workflow DevKit
+
+- **State:** real package, type-checked + tested, wired into `apps/web` when selected
+- **Env vars:** none -- the Vercel World self-configures on deployment
+- **Install:** see [`jobs-vercel-workflow/README.md`](./jobs-vercel-workflow/README.md)
+- **Pattern:** A. Selected by `workloads.durable_jobs: vercel-workflows`; the `"use workflow"` /
+  `"use step"` files live in `apps/web/src/workflows/` because the Next compiler transforms them.
+
+Durable background jobs that survive suspension, retries and redeploys. Idempotence is enforced by
+the database: each step writes `job_executions` keyed by its Workflow `stepId` under a unique index,
+so a replay increments `attempts` instead of duplicating the side effect. Selecting this workload is
+a transfer outside the EU -- the Vercel World stores run data in `iad1` -- so the manifest must
+approve it explicitly under `data_residency.approved_non_eu_processors` (see [ADR 62](../docs/DECISIONS.md)).
 
 ## Placeholders
 

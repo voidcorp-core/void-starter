@@ -15,18 +15,20 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
-    "@sentry/nextjs": "^10.68.0",
     "@repo/auth": "workspace:*",
     "@repo/core": "workspace:*",
+    "@repo/jobs-vercel-workflow": "workspace:*",
     "@repo/notes": "workspace:*",
     "@repo/posthog": "workspace:*",
     "@repo/sentry": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@sentry/nextjs": "^10.68.0",
     "better-auth": "^1.6.25",
     "next": "^16.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.83.0",
+    "workflow": "^4.6.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

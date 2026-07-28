@@ -34,6 +34,7 @@ The full catalogue (with env vars, install steps, removal, upstream docs) lives 
 | `@repo/auth-clerk` | A | scaffold (alternative repository) | manual swap, see `docs/AUTH.md` section 6 |
 | `@repo/payment-stripe` | A or B | placeholder | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
 | `@repo/email-resend` | A | wired into `@repo/auth` | `RESEND_API_KEY` plus `EMAIL_FROM` |
+| `@repo/jobs-vercel-workflow` | A | wired into `apps/web` when selected | `workloads.durable_jobs: vercel-workflows` (no env var) |
 | `@repo/cms-payload` | B | placeholder | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI` |
 | `@repo/audit-log` | B | placeholder | always-on once mounted |
 | `@repo/cookie-consent` | B | placeholder | always-on once mounted (cookie-driven state) |

@@ -78,6 +78,24 @@ describe('factory preview fixtures', () => {
     expect(clerk.files.removals).toContain('packages/auth');
   });
 
+  it('previews the durable-jobs fixture with its workload and runtime wiring', () => {
+    const preview = previewFixture('web-durable-jobs');
+
+    expect(preview.composition.units).toContainEqual({
+      kind: 'workload',
+      id: 'durable_jobs',
+      adapter: 'vercel-workflows',
+    });
+    expect(preview.files.removals).not.toContain('_modules/jobs-vercel-workflow');
+    expect(preview.files.removals).not.toContain('apps/web/src/workflows');
+    expect(preview.files.removals).toContain('apps/mobile');
+
+    const nextConfig = preview.files.writes.find(
+      (file) => file.path === 'apps/web/next.config.ts',
+    )?.content;
+    expect(nextConfig).toContain('withWorkflow(config)');
+  });
+
   it('accepts JSON input and rejects unsupported manifest formats', () => {
     const yamlSource = readFileSync(fixtureUrl('web-only'), 'utf8');
     const manifest = parseManifestSource(yamlSource, 'web-only.yaml');
