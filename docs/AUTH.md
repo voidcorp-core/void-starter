@@ -174,6 +174,36 @@ it deliberately through Better Auth's admin API or a reviewed database operation
 environment variable does not rewrite existing roles. Remove or rotate the bootstrap identity
 only through a new reviewed Factory auth plan.
 
+### Invite-only projects
+
+`ACCESS_MODE` in `packages/auth/src/access-mode.ts` carries the mode the project was generated with.
+The factory writes it from `auth.access_mode` in the manifest; it is code rather than an environment
+variable so an invite-only project cannot be reopened from a provider dashboard (ADR 63).
+
+When it reads `invite_only`, the same user-create hook that assigns the bootstrap role first calls
+`assertSignUpAdmitted`. An account is created only for the bootstrap address or for an address
+holding a pending, unexpired, unrevoked row in `invitations`. Because the check sits in the hook and
+not on the form, it covers email sign-up, magic link for an unknown address and social callbacks
+alike. The invitation is consumed in the `after` hook, so a failed creation does not burn it.
+
+Every refusal returns the same message. Distinguishing "never invited" from "revoked" or "expired"
+would turn the endpoint into an oracle for who works at the company; the specific state goes to the
+structured log instead.
+
+Operationally:
+
+1. Sign in as the bootstrap administrator, who needs no invitation.
+2. Open `/admin/invitations` and issue one per address.
+3. Hand the displayed token to the invitee. Only its SHA-256 digest is stored, so the value cannot
+   be recovered afterwards -- reissue instead, after revoking.
+4. Revoke from the same screen to close an address; an address may hold at most one pending
+   invitation, enforced by a partial unique index.
+
+`listInvitationsForAdmin`, `issueInvitationForAdmin` and `revokeInvitationFor` are the exported
+service entry points. The `invitations` table ships in every Better Auth project regardless of mode,
+so published Drizzle migrations stay in sync; only the admin surfaces are pruned on a public
+project.
+
 The same logic works inside Server Actions via the auth-aware factory:
 
 ```ts

@@ -14,6 +14,12 @@ import {
 import { betterAuth } from 'better-auth';
 import { admin, magicLink } from 'better-auth/plugins';
 import { z } from 'zod';
+import { isInviteOnly } from './access-mode';
+import {
+  assertSignUpAdmitted,
+  consumeInvitationFor,
+  defaultInvitationGateway,
+} from './invitation.service';
 
 /**
  * Better-Auth wiring for `@repo/auth`.
@@ -183,9 +189,34 @@ function initAuth() {
     databaseHooks: {
       user: {
         create: {
+          // Runs for every path that would create a user: signUpEmail, a magic
+          // link for an unknown address, and a social provider callback. The
+          // admission check therefore closes all three at once rather than
+          // guarding the sign-up form alone, which would leave magic link as an
+          // open side door (ADR 63).
           before: async (user) => {
+            if (isInviteOnly()) {
+              await assertSignUpAdmitted({
+                email: user.email,
+                bootstrapAdminEmail: bootstrapAdministrator,
+                now: new Date(),
+                gateway: defaultInvitationGateway,
+              });
+            }
             const role = bootstrapRoleForEmail(user.email, bootstrapAdministrator);
             return role ? { data: { ...user, role } } : { data: user };
+          },
+          // Consumption happens only once the account exists. Doing it in the
+          // `before` hook would burn the invitation on any creation that then
+          // failed, locking a legitimate invitee out.
+          after: async (user) => {
+            if (!isInviteOnly()) return;
+            await consumeInvitationFor({
+              email: user.email,
+              bootstrapAdminEmail: bootstrapAdministrator,
+              now: new Date(),
+              gateway: defaultInvitationGateway,
+            });
           },
         },
       },

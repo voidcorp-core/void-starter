@@ -96,6 +96,43 @@ describe('factory preview fixtures', () => {
     expect(nextConfig).toContain('withWorkflow(config)');
   });
 
+  it('writes the invite_only access mode into @repo/auth as code, not configuration', () => {
+    const preview = previewFixture('web-internal-tool');
+
+    const accessMode = preview.files.writes.find(
+      (file) => file.path === 'packages/auth/src/access-mode.ts',
+    )?.content;
+
+    expect(accessMode).toContain("export const ACCESS_MODE: AccessMode = 'invite_only';");
+    expect(preview.composition.policies.authentication.accessMode).toBe('invite_only');
+  });
+
+  it('keeps the invitation admin surfaces on an invite_only project', () => {
+    const preview = previewFixture('web-internal-tool');
+
+    expect(preview.files.removals).not.toContain('apps/web/src/app/admin/invitations');
+    expect(preview.files.removals).not.toContain('apps/web/src/actions/invitations.actions.ts');
+  });
+
+  it('prunes the invitation admin surfaces on a public project, which never writes to the ledger', () => {
+    const preview = previewFixture('web-only');
+
+    expect(preview.files.removals).toContain('apps/web/src/app/admin/invitations');
+    expect(preview.files.removals).toContain('apps/web/src/actions/invitations.actions.ts');
+
+    const accessMode = preview.files.writes.find(
+      (file) => file.path === 'packages/auth/src/access-mode.ts',
+    )?.content;
+    expect(accessMode).toContain("export const ACCESS_MODE: AccessMode = 'public_verified';");
+  });
+
+  it('keeps the invitations schema on a public project, so published migrations stay in sync', () => {
+    const preview = previewFixture('web-only');
+
+    expect(preview.files.removals).not.toContain('packages/db/src/schema/invitations.ts');
+    expect(preview.files.removals).not.toContain('packages/auth/src/invitation.service.ts');
+  });
+
   it('accepts JSON input and rejects unsupported manifest formats', () => {
     const yamlSource = readFileSync(fixtureUrl('web-only'), 'utf8');
     const manifest = parseManifestSource(yamlSource, 'web-only.yaml');

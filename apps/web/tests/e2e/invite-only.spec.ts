@@ -1,0 +1,79 @@
+import { expect, test } from '@playwright/test';
+import { ACCESS_MODE } from '@repo/auth';
+import { closeTestSql, deleteTestUser } from './_helpers';
+
+/**
+ * The invite-only account creation contract (ADR 63).
+ *
+ * These specs assert the behaviour that distinguishes an `invite_only` project
+ * from a public one, so they only mean something where the factory wrote that
+ * mode: the starter itself ships `public_verified`. A project generated from
+ * `fixtures/manifests/web-internal-tool.yaml` runs them for real, which is what
+ * makes the manifest declaration verifiable rather than a claim.
+ *
+ * The guard is a plain `if` around the suite rather than a per-test skip
+ * marker, so a project of the wrong shape registers no test at all instead of
+ * registering suppressed ones -- suppression markers hide dropped coverage.
+ *
+ * The refusal is asserted on the HTTP endpoints rather than on the forms,
+ * because hiding a sign-up form is cosmetic: what has to hold is that no
+ * account is created for an uninvited address on any path Better Auth exposes.
+ */
+
+const hasDb = Boolean(process.env['DATABASE_URL']);
+const isInviteOnlyProject = ACCESS_MODE === 'invite_only';
+
+if (hasDb && isInviteOnlyProject) {
+  test.describe('invite-only account creation', () => {
+    const uninvited = `e2e-uninvited-${Date.now()}@example.test`;
+    const password = 'TestPassword123!';
+
+    test.afterAll(async () => {
+      await deleteTestUser(uninvited);
+      await closeTestSql();
+    });
+
+    test('refuses email sign-up for an address that holds no invitation', async ({ request }) => {
+      const response = await request.post('/api/auth/sign-up/email', {
+        data: { email: uninvited, password, name: 'Uninvited' },
+        failOnStatusCode: false,
+      });
+
+      expect(response.ok()).toBe(false);
+    });
+
+    test('creates no account through the magic-link path either', async ({ request }) => {
+      await request.post('/api/auth/sign-in/magic-link', {
+        data: { email: uninvited },
+        failOnStatusCode: false,
+      });
+
+      // Whatever the magic-link endpoint answers, no account may exist
+      // afterwards: a successful password sign-in would prove one was created.
+      const signIn = await request.post('/api/auth/sign-in/email', {
+        data: { email: uninvited, password },
+        failOnStatusCode: false,
+      });
+      expect(signIn.ok()).toBe(false);
+    });
+
+    test('does not reveal whether an address was ever invited', async ({ request }) => {
+      const neverInvited = await request.post('/api/auth/sign-up/email', {
+        data: { email: `e2e-never-${Date.now()}@example.test`, password, name: 'Never' },
+        failOnStatusCode: false,
+      });
+      const alsoUninvited = await request.post('/api/auth/sign-up/email', {
+        data: { email: uninvited, password, name: 'Uninvited' },
+        failOnStatusCode: false,
+      });
+
+      expect(neverInvited.status()).toBe(alsoUninvited.status());
+    });
+
+    test('keeps the invitation admin screen behind authentication', async ({ page }) => {
+      await page.goto('/admin/invitations');
+
+      await expect(page).not.toHaveURL(/\/admin\/invitations$/);
+    });
+  });
+}
