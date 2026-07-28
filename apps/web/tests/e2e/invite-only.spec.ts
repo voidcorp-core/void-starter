@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { ACCESS_MODE } from '@repo/auth';
+// The dedicated subpath, never the `@repo/auth` barrel: Playwright loads specs
+// in plain Node, and the barrel re-exports `auth.service.ts`, which imports
+// `next/headers` and is unresolvable outside the Next runtime. `access-mode.ts`
+// has no imports at all, so it is safe to read from any context.
+import { ACCESS_MODE } from '@repo/auth/access-mode';
 import { closeTestSql, deleteTestUser } from './_helpers';
 
 /**
