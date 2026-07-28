@@ -84,19 +84,28 @@ describe.skipIf(!databaseUrl || !authSecret)('auth integration', () => {
     //    suite exercises the real admission path rather than asserting a
     //    behaviour the manifest forbids. On any other access mode this is a
     //    no-op and the sign-up below is the open one.
+    //
+    //    The token has to travel with the request too: admission requires the
+    //    credential, not just the address (ADR 65). It normally arrives in the
+    //    cookie `/invite/<token>` parks, which is what these headers stand in
+    //    for -- there is no HTTP layer under a direct `auth.api` call.
+    const admissionHeaders = new Headers();
     if (isInviteOnly()) {
       const { issueInvitationForAdmin } = await import('./invitation.service');
+      const { INVITATION_COOKIE_NAME } = await import('./invitation.helper');
       const invitation = await issueInvitationForAdmin({
         email,
         invitedBy: 'auth-integration-test',
       });
       expect(invitation.email).toBe(email);
+      admissionHeaders.set('cookie', `${INVITATION_COOKIE_NAME}=${invitation.token}`);
     }
 
     // 1. Sign up: Better-Auth hashes the password and inserts both the
     //    `users` row and the `accounts` row (provider='credential').
     const signUpResult = await auth.api.signUpEmail({
       body: { email, password, name },
+      headers: admissionHeaders,
     });
     expect(signUpResult).toBeDefined();
     expect(signUpResult.user).toBeDefined();
