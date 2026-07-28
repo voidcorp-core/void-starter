@@ -1,3 +1,4 @@
+export { ACCESS_MODE, type AccessMode, isInviteOnly } from './access-mode';
 export { authClient } from './auth.client';
 export {
   EmailAlreadyTakenError,
@@ -20,5 +21,11 @@ export {
   defineFormAction,
   initialActionState,
 } from './auth-action';
+export type { InvitationState } from './invitation.helper';
+export {
+  issueInvitationForAdmin,
+  listInvitationsForAdmin,
+  revokeInvitationFor,
+} from './invitation.service';
 export type { AdminUser } from './users.repository';
 export { listUsers } from './users.service';

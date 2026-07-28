@@ -144,6 +144,18 @@ export const buildManifestSchema = z
       });
     }
 
+    // The invitation ledger and its user-create hooks live in `@repo/auth`, so
+    // the mode is only materialized for Better Auth. Accepting it on Clerk
+    // would let a manifest declare a restriction the generated project does not
+    // enforce, which is exactly the gap ADR 63 closes.
+    if (manifest.auth.access_mode === 'invite_only' && manifest.auth.provider !== 'better-auth') {
+      context.addIssue({
+        code: 'custom',
+        path: ['auth', 'access_mode'],
+        message: 'The invite_only access mode requires the Better Auth provider',
+      });
+    }
+
     const hasAuthOptions =
       manifest.auth.access_mode !== 'none' ||
       manifest.auth.passkeys !== 'disabled' ||

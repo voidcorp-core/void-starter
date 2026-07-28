@@ -146,6 +146,32 @@ describe('parseBuildManifest', () => {
     expect(manifest.data_residency.approved_non_eu_processors).toEqual(['vercel-workflows']);
   });
 
+  it('rejects invite_only on Clerk, whose generated project would not enforce it', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        auth: {
+          ...canonicalManifest.auth,
+          provider: 'clerk',
+          access_mode: 'invite_only',
+        },
+      }),
+    ).toThrow(/invite_only/i);
+  });
+
+  it('accepts invite_only on Better Auth, where the invitation ledger is materialized', () => {
+    const manifest = parseBuildManifest({
+      ...canonicalManifest,
+      auth: {
+        ...canonicalManifest.auth,
+        provider: 'better-auth',
+        access_mode: 'invite_only',
+      },
+    });
+
+    expect(manifest.auth.access_mode).toBe('invite_only');
+  });
+
   it('rejects an approval that no selected workload actually requires', () => {
     expect(() =>
       parseBuildManifest({

@@ -483,6 +483,9 @@ describe('renderProject', () => {
       'apps/web/src/app/layout.tsx',
       'apps/web/src/app/page.tsx',
       'apps/web/vercel.json',
+      // Every Better Auth project carries its access mode as generated code, so
+      // the invite-only restriction cannot be lifted without a redeploy (ADR 63).
+      'packages/auth/src/access-mode.ts',
     ]);
     await expect(
       readFile(join(minimal.targetRoot, '.void-starter/receipt.json'), 'utf8'),

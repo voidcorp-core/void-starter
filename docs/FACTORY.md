@@ -126,6 +126,23 @@ auth:
 The available access modes are `public_verified`, `invite_only`, and
 `public_signup_gated_activation`.
 
+`invite_only` is materialized (ADR 63). The factory writes the selected mode into
+`packages/auth/src/access-mode.ts` as a constant, and `auth.repository.ts` reads it to decide
+whether Better Auth's user-create hooks consult the `invitations` ledger. Because the mode is code
+and not an environment variable, reopening an invite-only project requires changing the manifest and
+redeploying rather than editing a provider dashboard.
+
+In that mode an account is created only for the bootstrap administrator or for an address holding a
+pending, unexpired, unrevoked invitation. The check runs in the user-create hook, so it covers email
+sign-up, magic link and social callbacks alike. Invitations are issued and revoked from
+`/admin/invitations`, a surface the factory prunes on any other mode; only the SHA-256 digest of the
+token is stored, so the link shown at issuance is not recoverable afterwards. `invite_only` requires
+the Better Auth provider -- a manifest selecting it on Clerk is rejected rather than silently
+unenforced.
+
+`public_signup_gated_activation` is declared in the schema but not yet materialized: it currently
+generates the same project as `public_verified`.
+
 The production baseline includes a real verification sender, password reset or magic-link flow,
 enumeration protection, rate limiting and a deterministic seed/bootstrap path. A starter is not
 turnkey while production email throws or an administrator must be promoted manually in SQL.
@@ -948,11 +965,11 @@ doctors these profiles:
 - Clerk web;
 - Expo mobile-only;
 - Better Auth + PostHog + Sentry web and Expo;
-- Better Auth + durable jobs web.
+- Better Auth + durable jobs web;
+- Better Auth invite-only internal tool.
 
 The remaining remote validation target includes:
 
-- web invite-only internal tool;
 - EU private documents;
 - voice/realtime control plane;
 - provisioned provider smoke tests.
@@ -994,7 +1011,11 @@ be proven locally.
     canary proved a real remote run suspending and completing, a unique idempotency ledger row per
     step, a 401 on the anonymous trigger, and a green CI, migration, deployment and doctor on one
     exact commit. Selecting the workload requires an explicit non-EU processor approval (ADR 62).**
-15. Connect Forge as manifest producer and Linear as project bootstrap.
+15. Materialize the invite-only internal-tool profile. **Done locally; `auth.access_mode` now
+    generates `packages/auth/src/access-mode.ts` and gates account creation through the
+    `invitations` ledger in Better Auth's user-create hooks (ADR 63). The live canary remains the
+    final gate.**
+16. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 16. Open decisions
 
