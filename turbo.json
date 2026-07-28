@@ -20,7 +20,8 @@
     },
     "test": {
       "dependsOn": ["^test"],
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL", "BETTER_AUTH_SECRET"]
     }
   }
 }
