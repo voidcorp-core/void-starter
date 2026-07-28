@@ -1,15 +1,13 @@
 schema_version: 1
 
 project:
-  name: web-expo
+  name: web-durable-jobs
   profile: saas
 
 surfaces:
   web: next-vercel
   mobile:
-    adapter: expo-eas
-    ios_bundle_identifier: com.example.webexpo
-    android_package: com.example.webexpo
+    adapter: none
   worker: none
 
 workloads:
@@ -21,7 +19,7 @@ workloads:
 data:
   database: neon-eu
   orm: drizzle
-  files: cloudflare-r2-eu
+  files: none
 
 auth:
   provider: better-auth
@@ -31,15 +29,17 @@ auth:
 
 operations:
   errors: sentry
-  analytics: posthog
+  analytics: none
   email: resend
 
 data_residency:
   policy: eu_primary
   personal_data: eu_required
   public_assets: global_allowed
-  # The Vercel World stores workflow run data in iad1 whatever the deployment region.
-  # Payloads are encrypted end-to-end, and the job contract keeps personal data in Neon EU.
+  # The Vercel World stores workflow run data in iad1 whatever the deployment
+  # region, so durable jobs are a non-EU transfer even on an eu_primary project.
+  # Payloads are encrypted end to end and the job contract carries only opaque
+  # references, with personal data staying in Neon EU.
   approved_non_eu_processors:
     - vercel-workflows
   non_eu_processor:

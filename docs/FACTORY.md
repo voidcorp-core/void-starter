@@ -83,7 +83,7 @@ single RPC abstraction.
 |---|---|---|
 | Next.js web, SSR, RSC | Vercel | Framework incompatible with Vercel |
 | HTTP API and BFF | Vercel Functions | Persistent process or native runtime |
-| Durable jobs and agent workflows | Vercel Workflows | Container, Python or specialized compute |
+| Durable jobs and agent workflows | Vercel Workflows (US `iad1` backend, see section 8) | Container, Python or specialized compute |
 | Critical schedules | Vercel Cron -> idempotent Workflow | External scheduler required |
 | Continuous voice | Client -> provider WebRTC | Provider constraint |
 | Shared realtime state | Cloudflare Durable Objects EU | No shared state: do not provision |
@@ -140,11 +140,24 @@ data_residency:
   policy: eu_primary
   personal_data: eu_required
   public_assets: global_allowed
+  approved_non_eu_processors: []
   non_eu_processor:
     requires_approval: true
     requires_dpa: true
     requires_transfer_assessment: true
 ```
+
+`approved_non_eu_processors` is where the approval demanded by `non_eu_processor` is actually
+recorded. It is optional and empty by default, and it is not decoration: a workload whose provider
+stores data outside the EU is rejected unless it is named there, and an approval no selected
+workload requires is rejected too, so dead approvals cannot accumulate (ADR 62).
+
+Today the only such processor is `vercel-workflows`. The Vercel World stores workflow run data in
+`iad1` whatever the deployment region, so selecting `workloads.durable_jobs: vercel-workflows` on an
+`eu_primary` project is a transfer outside the EU. Payloads are encrypted end to end with a per-run
+key, and the job payload contract carries only opaque references while personal data stays in Neon
+EU, but neither removes the transfer. The approval must be a deliberate, versioned decision, which
+is also what forces Forge to put the question to a human rather than resolve it silently.
 
 Factory enforcement includes:
 
@@ -215,6 +228,10 @@ data_residency:
   policy: eu_primary
   personal_data: eu_required
   public_assets: global_allowed
+  # Required because durable_jobs is selected above: the Vercel World stores run
+  # data in iad1 whatever the deployment region. See section 8.
+  approved_non_eu_processors:
+    - vercel-workflows
   non_eu_processor:
     requires_approval: true
     requires_dpa: true
@@ -929,12 +946,12 @@ doctors these profiles:
 - Better Auth + Neon/Drizzle web;
 - Clerk web;
 - Expo mobile-only;
-- Better Auth + PostHog + Sentry web and Expo.
+- Better Auth + PostHog + Sentry web and Expo;
+- Better Auth + durable jobs web.
 
 The remaining remote validation target includes:
 
 - web invite-only internal tool;
-- durable jobs;
 - EU private documents;
 - voice/realtime control plane;
 - provisioned provider smoke tests.
@@ -972,9 +989,13 @@ be proven locally.
 13. Complete cross-provider smoke coverage. **Done for GitHub/Vercel/Neon/R2/Sentry/PostHog/EAS,
     local builds, remote CI/E2E, migrations, final doctor and protected HTTP smoke on one exact
     commit. DNS live is intentionally deferred until a dedicated zone exists.**
-14. Connect Forge as manifest producer and Linear as project bootstrap.
+14. Add the durable-jobs workload. **Done; the Vercel World needs no provisioning, and the live
+    canary proved a real remote run suspending and completing, a unique idempotency ledger row per
+    step, a 401 on the anonymous trigger, and a green CI, migration, deployment and doctor on one
+    exact commit. Selecting the workload requires an explicit non-EU processor approval (ADR 62).**
+15. Connect Forge as manifest producer and Linear as project bootstrap.
 
-## 15. Open decisions
+## 16. Open decisions
 
 - CLI/package name and distribution model.
 - GitHub Actions secret-binding policy for unattended EAS builds; the local lifecycle now reads EAS

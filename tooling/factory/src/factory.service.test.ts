@@ -116,6 +116,91 @@ describe('parseBuildManifest', () => {
       }),
     ).toThrow(/android package/i);
   });
+
+  it('rejects durable jobs when the non-EU processor was never approved', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        workloads: {
+          ...canonicalManifest.workloads,
+          durable_jobs: 'vercel-workflows',
+        },
+      }),
+    ).toThrow(/approved_non_eu_processors/i);
+  });
+
+  it('accepts durable jobs once the non-EU processor is explicitly approved', () => {
+    const manifest = parseBuildManifest({
+      ...canonicalManifest,
+      workloads: {
+        ...canonicalManifest.workloads,
+        durable_jobs: 'vercel-workflows',
+      },
+      data_residency: {
+        ...canonicalManifest.data_residency,
+        approved_non_eu_processors: ['vercel-workflows'],
+      },
+    });
+
+    expect(manifest.workloads.durable_jobs).toBe('vercel-workflows');
+    expect(manifest.data_residency.approved_non_eu_processors).toEqual(['vercel-workflows']);
+  });
+
+  it('rejects an approval that no selected workload actually requires', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        data_residency: {
+          ...canonicalManifest.data_residency,
+          approved_non_eu_processors: ['vercel-workflows'],
+        },
+      }),
+    ).toThrow(/approved_non_eu_processors/i);
+  });
+
+  it('rejects durable jobs without the database backing their ledger', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        workloads: { ...canonicalManifest.workloads, durable_jobs: 'vercel-workflows' },
+        data: { ...canonicalManifest.data, database: 'none', orm: 'none' },
+        data_residency: {
+          ...canonicalManifest.data_residency,
+          approved_non_eu_processors: ['vercel-workflows'],
+        },
+      }),
+    ).toThrow(/ledger/i);
+  });
+
+  it('rejects durable jobs without the auth provider its trigger endpoint uses', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        workloads: { ...canonicalManifest.workloads, durable_jobs: 'vercel-workflows' },
+        auth: { ...canonicalManifest.auth, provider: 'clerk' },
+        data_residency: {
+          ...canonicalManifest.data_residency,
+          approved_non_eu_processors: ['vercel-workflows'],
+        },
+      }),
+    ).toThrow(/better auth/i);
+  });
+
+  it('rejects a duplicated non-EU processor approval', () => {
+    expect(() =>
+      parseBuildManifest({
+        ...canonicalManifest,
+        workloads: {
+          ...canonicalManifest.workloads,
+          durable_jobs: 'vercel-workflows',
+        },
+        data_residency: {
+          ...canonicalManifest.data_residency,
+          approved_non_eu_processors: ['vercel-workflows', 'vercel-workflows'],
+        },
+      }),
+    ).toThrow(/duplicate/i);
+  });
 });
 
 describe('createCompositionPlan', () => {
@@ -256,7 +341,10 @@ describe('createCompositionPlan', () => {
         dns: {
           provider: 'cloudflare',
         },
-        data_residency: canonicalManifest.data_residency,
+        data_residency: {
+          ...canonicalManifest.data_residency,
+          approved_non_eu_processors: ['vercel-workflows'],
+        },
         operations: canonicalManifest.operations,
         data: {
           files: 'aws-s3-eu-worm',
@@ -267,7 +355,9 @@ describe('createCompositionPlan', () => {
           mfa: 'optional',
           passkeys: 'optional',
           access_mode: 'invite_only',
-          provider: 'clerk',
+          // Better Auth rather than Clerk: the durable-jobs unit below requires it,
+          // because the jobs trigger endpoint authenticates through @repo/auth.
+          provider: 'better-auth',
         },
         workloads: {
           persistent_service: 'fly',

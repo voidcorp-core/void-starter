@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalManifest,
   clerkManifest,
+  durableJobsManifest,
   minimalManifest,
   mobileOnlyManifest,
 } from './__fixtures__/manifest.fixture';
@@ -103,6 +104,43 @@ describe('createCapabilityFilePlan', () => {
     expect(webPackage.devDependencies).toHaveProperty('postgres');
     expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).toContain("'@repo/email-resend'");
     expect(readGeneratedFile(plan, '.env.example')).toContain('EMAIL_APP_NAME=example-saas');
+  });
+
+  it('prunes the durable-jobs runtime when no jobs workload is selected', () => {
+    const plan = createCapabilityFilePlan(parseBuildManifest(canonicalManifest));
+    const webPackage = readGeneratedJson(plan, 'apps/web/package.json') as {
+      dependencies: Record<string, string>;
+    };
+
+    expect(plan.removals).toEqual(
+      expect.arrayContaining([
+        '_modules/jobs-vercel-workflow',
+        'apps/web/src/app/api/jobs',
+        'apps/web/src/workflows',
+      ]),
+    );
+    expect(webPackage.dependencies).not.toHaveProperty('workflow');
+    expect(webPackage.dependencies).not.toHaveProperty('@repo/jobs-vercel-workflow');
+    expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).not.toContain('withWorkflow');
+  });
+
+  it('keeps and wires the durable-jobs runtime when the jobs workload is selected', () => {
+    const plan = createCapabilityFilePlan(parseBuildManifest(durableJobsManifest));
+    const webPackage = readGeneratedJson(plan, 'apps/web/package.json') as {
+      dependencies: Record<string, string>;
+    };
+    const nextConfig = readGeneratedFile(plan, 'apps/web/next.config.ts');
+
+    expect(plan.removals).not.toContain('_modules/jobs-vercel-workflow');
+    expect(plan.removals).not.toContain('apps/web/src/workflows');
+    expect(plan.removals).not.toContain('apps/web/src/app/api/jobs');
+    expect(webPackage.dependencies).toMatchObject({
+      '@repo/jobs-vercel-workflow': 'workspace:*',
+      workflow: '^4.6.2',
+    });
+    expect(nextConfig).toContain("import { withWorkflow } from 'workflow/next';");
+    expect(nextConfig).toContain('withWorkflow(config)');
+    expect(nextConfig).toContain("'@repo/jobs-vercel-workflow'");
   });
 
   it('materializes Clerk directly and removes the non-runtime scaffold and Better Auth graph', () => {

@@ -352,6 +352,47 @@ describe('renderProject', () => {
     );
   });
 
+  // The Workflow SDK writes its route handlers into the SOURCE tree during a build
+  // and drops a `.gitignore` containing `*` next to them. Copying those artifacts
+  // produces a snapshot git then refuses to stage, which fails source publication.
+  it('excludes build artifacts the Workflow SDK writes into the source tree', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    const workflowRoot = join(sourceRoot, 'apps/web/src/app/.well-known/workflow/v1');
+    await mkdir(join(workflowRoot, 'flow'), { recursive: true });
+    await mkdir(join(sourceRoot, 'apps/web/.swc/plugins'), { recursive: true });
+    await writeFile(join(workflowRoot, '.gitignore'), '*');
+    await writeFile(join(workflowRoot, 'manifest.json'), '{}');
+    await writeFile(join(workflowRoot, 'flow/route.js'), 'export {};');
+    await writeFile(join(sourceRoot, 'apps/web/.swc/plugins/cache.wasmer'), 'binary');
+
+    const receipt = await renderProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+
+    expect(receipt.generated_files.map((file) => file.path)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('.well-known/workflow')]),
+    );
+    await expect(
+      readFile(join(targetRoot, 'apps/web/.swc/plugins/cache.wasmer')),
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(targetRoot, 'apps/web/src/app/.well-known/workflow/v1/manifest.json')),
+    ).rejects.toThrow();
+
+    // Those same paths are legitimate once the generated project builds itself, so
+    // doctor must not report them as leftover development artifacts.
+    await mkdir(join(targetRoot, 'apps/web/src/app/.well-known/workflow/v1'), { recursive: true });
+    await writeFile(
+      join(targetRoot, 'apps/web/src/app/.well-known/workflow/v1/manifest.json'),
+      '{}',
+    );
+    const report = await doctorProject(targetRoot);
+    const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
+    expect(artifactCheck?.status).toBe('pass');
+  });
+
   it('refuses existing, nested, and symlinked targets without leaving partial output', async () => {
     const existing = await createBaseline();
     await mkdir(existing.targetRoot);

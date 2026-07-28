@@ -15,6 +15,10 @@ export function proxy(request: NextRequest) {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
+// `.well-known/workflow/` MUST stay excluded: the Workflow SDK resumes durable
+// runs by POSTing to its own internal endpoint, and a proxy that intercepts it
+// corrupts the queued payload. Next 16 renamed middleware.ts to proxy.ts, which
+// makes this exclusion easy to lose in a migration -- src/proxy.test.ts pins it.
 export const config = {
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|.well-known/workflow/).*)'],
 };

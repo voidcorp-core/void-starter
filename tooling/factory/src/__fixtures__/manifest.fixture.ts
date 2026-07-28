@@ -64,6 +64,24 @@ export const expoManifest = {
   },
 } as const;
 
+// Durable jobs run on the Vercel World, which stores run data in iad1, so the
+// manifest must carry the explicit non-EU processor approval (ADR 47).
+export const durableJobsManifest = {
+  ...canonicalManifest,
+  project: {
+    name: 'durable-jobs',
+    profile: 'saas',
+  },
+  workloads: {
+    ...canonicalManifest.workloads,
+    durable_jobs: 'vercel-workflows',
+  },
+  data_residency: {
+    ...canonicalManifest.data_residency,
+    approved_non_eu_processors: ['vercel-workflows'],
+  },
+} as const;
+
 export const minimalManifest = {
   ...canonicalManifest,
   project: {

@@ -10,6 +10,8 @@ const METADATA_DIRECTORY = '.void-starter';
 const EXCLUDED_DIRECTORY_NAMES = new Set([
   '.expo',
   '.next',
+  // The Workflow SDK compiler caches SWC plugins here during a build.
+  '.swc',
   '.turbo',
   'build',
   'coverage',
@@ -33,6 +35,19 @@ const EXCLUDED_SOURCE_PATHS = [
   'docs/superpowers',
   'tooling/factory',
 ].toSorted();
+
+/**
+ * Build artifacts that a tool writes INSIDE the source tree rather than into a
+ * conventional output directory. They are never copied, but unlike
+ * `EXCLUDED_SOURCE_PATHS` they are legitimate in a generated project once it has
+ * been built, so they must not count as development artifacts in `doctor`.
+ *
+ * The Workflow SDK emits its route handlers under `.well-known/workflow` and drops
+ * a `.gitignore` containing `*` beside them. Copying those files produces a
+ * snapshot git refuses to stage, which breaks source publication; the generated
+ * project regenerates them from its own `use workflow` directives.
+ */
+const EXCLUDED_BUILD_ARTIFACT_PATHS = ['apps/web/src/app/.well-known/workflow'].toSorted();
 
 export const FORBIDDEN_OUTPUT_PATHS = EXCLUDED_SOURCE_PATHS.filter((path) => path !== 'bun.lock');
 
@@ -59,7 +74,7 @@ function isExcludedSourcePath(relativePath: string): boolean {
 
   const normalizedPath = relativePath.split(sep).join('/');
   if (
-    EXCLUDED_SOURCE_PATHS.some(
+    [...EXCLUDED_SOURCE_PATHS, ...EXCLUDED_BUILD_ARTIFACT_PATHS].some(
       (excludedPath) =>
         normalizedPath === excludedPath || normalizedPath.startsWith(`${excludedPath}/`),
     )

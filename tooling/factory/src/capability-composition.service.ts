@@ -17,6 +17,7 @@ const OPTIONAL_MODULES = [
   '_modules/db-self-hosted-postgres',
   '_modules/email-resend',
   '_modules/i18n-next-intl',
+  '_modules/jobs-vercel-workflow',
   '_modules/observability-sentry',
   '_modules/payment-stripe',
   '_modules/rate-limit-upstash',
@@ -37,6 +38,11 @@ const BETTER_AUTH_WEB_PATHS = [
 const NOTES_WEB_PATHS = [
   `${WEB_ROOT}/src/actions/notes.actions.ts`,
   `${WEB_ROOT}/src/app/notes`,
+] as const;
+
+const DURABLE_JOBS_WEB_PATHS = [
+  `${WEB_ROOT}/src/app/api/jobs`,
+  `${WEB_ROOT}/src/workflows`,
 ] as const;
 
 const SENTRY_WEB_PATHS = [
@@ -65,6 +71,7 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
   const usesClerk = manifest.auth.provider === 'clerk';
   const usesPosthog = manifest.operations.analytics === 'posthog';
   const usesSentry = manifest.operations.errors === 'sentry';
+  const usesDurableJobs = manifest.workloads.durable_jobs === 'vercel-workflows';
 
   const dependencies: Record<string, string> = {
     '@repo/core': 'workspace:*',
@@ -75,6 +82,9 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
     dependencies['@hookform/resolvers'] = '^5.4.0';
     dependencies['@repo/auth'] = 'workspace:*';
     dependencies['@repo/notes'] = 'workspace:*';
+  }
+  if (usesDurableJobs) {
+    dependencies['@repo/jobs-vercel-workflow'] = 'workspace:*';
   }
   if (usesPosthog) {
     dependencies['@repo/posthog'] = 'workspace:*';
@@ -94,6 +104,11 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
   dependencies['react-dom'] = '^19.2.8';
   if (usesBetterAuth) {
     dependencies['react-hook-form'] = '^7.82.0';
+  }
+  if (usesDurableJobs) {
+    dependencies['workflow'] = '^4.6.2';
+  }
+  if (usesBetterAuth || usesDurableJobs) {
     dependencies['zod'] = '^4.4.3';
   }
 
@@ -156,10 +171,14 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
   const usesPosthog = manifest.operations.analytics === 'posthog';
   const usesSentry = manifest.operations.errors === 'sentry';
   const usesResend = manifest.operations.email === 'resend';
+  const usesDurableJobs = manifest.workloads.durable_jobs === 'vercel-workflows';
   const transpilePackages = ['@repo/core', '@repo/ui'];
 
   if (usesBetterAuth) {
     transpilePackages.push('@repo/auth', '@repo/db', '@repo/notes');
+  }
+  if (usesDurableJobs) {
+    transpilePackages.push('@repo/jobs-vercel-workflow');
   }
   if (usesPosthog) {
     transpilePackages.push('@repo/posthog');
@@ -176,6 +195,7 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
     "import { defaultSecurityHeaders } from '@repo/core/security-headers';",
     ...(usesSentry ? ["import { withSentryConfig } from '@sentry/nextjs';"] : []),
     "import type { NextConfig } from 'next';",
+    ...(usesDurableJobs ? ["import { withWorkflow } from 'workflow/next';"] : []),
   ].join('\n');
 
   const analyticsConfig = usesPosthog
@@ -199,13 +219,17 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
 `
     : '';
 
+  // withWorkflow enables the "use workflow" / "use step" directives and registers
+  // the step handlers so only Vercel Queue can deliver to them. It wraps the base
+  // config first so Sentry still observes the final Next config.
+  const baseConfigSource = usesDurableJobs ? 'withWorkflow(config)' : 'config';
   const exportSource = usesSentry
-    ? `export default withSentryConfig(config, {
+    ? `export default withSentryConfig(${baseConfigSource}, {
   tunnelRoute: '/sentry-tunnel',
   silent: !process.env['CI'],
 });
 `
-    : 'export default config;\n';
+    : `export default ${baseConfigSource};\n`;
 
   return {
     path: `${WEB_ROOT}/next.config.ts`,
@@ -577,11 +601,13 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
   const usesPosthog = hasWeb && manifest.operations.analytics === 'posthog';
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
   const usesResend = hasWeb && manifest.operations.email === 'resend';
+  const usesDurableJobs = hasWeb && manifest.workloads.durable_jobs === 'vercel-workflows';
 
   for (const modulePath of OPTIONAL_MODULES) {
     const selected =
       (modulePath === '_modules/analytics-posthog' && usesPosthog) ||
       (modulePath === '_modules/observability-sentry' && usesSentry) ||
+      (modulePath === '_modules/jobs-vercel-workflow' && usesDurableJobs) ||
       (modulePath === '_modules/email-resend' && usesResend);
     if (!selected) {
       removals.add(modulePath);
@@ -632,6 +658,12 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
 
   if (!usesSentry) {
     for (const path of SENTRY_WEB_PATHS) {
+      removals.add(path);
+    }
+  }
+
+  if (!usesDurableJobs) {
+    for (const path of DURABLE_JOBS_WEB_PATHS) {
       removals.add(path);
     }
   }
