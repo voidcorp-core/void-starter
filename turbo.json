@@ -21,7 +21,14 @@
     "test": {
       "dependsOn": ["^test"],
       "outputs": [],
-      "env": ["DATABASE_URL", "BETTER_AUTH_SECRET"]
+      "env": [
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "DATABASE_URL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "NEXT_PUBLIC_APP_URL"
+      ]
     }
   }
 }
