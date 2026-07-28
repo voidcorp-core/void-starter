@@ -341,11 +341,13 @@ function createPublicHomePage(manifest: BuildManifest): GeneratedFile {
     path: `${WEB_ROOT}/src/app/page.tsx`,
     content: `import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 
+const PROJECT_NAME = '${manifest.project.name}';
+
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 space-y-8">
       <header className="space-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight">${manifest.project.name}</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">{PROJECT_NAME}</h1>
         <p className="text-muted-foreground">Production-grade Next.js 16 starter.</p>
       </header>
       <Card>
@@ -405,13 +407,15 @@ function createBetterAuthHomePage(manifest: BuildManifest): GeneratedFile {
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import Link from 'next/link';
 
+const PROJECT_NAME = '${manifest.project.name}';
+
 export default async function HomePage() {
   const user = await getCurrentUser();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 space-y-8">
       <header className="space-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight">${manifest.project.name}</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">{PROJECT_NAME}</h1>
         <p className="text-muted-foreground">Production-grade Next.js 16 starter.</p>
       </header>
       <Card>
@@ -476,12 +480,14 @@ export default async function DashboardPage() {
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import Link from 'next/link';
 
+const PROJECT_NAME = '${manifest.project.name}';
+
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 space-y-8">
       <header className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-4xl font-semibold tracking-tight">${manifest.project.name}</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">{PROJECT_NAME}</h1>
           <p className="text-muted-foreground">Production-grade Next.js 16 starter.</p>
         </div>
         <Show when="signed-in">
