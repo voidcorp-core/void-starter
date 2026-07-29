@@ -104,11 +104,20 @@ provider. A third compute provider requires a concrete workload and an explicit 
 
 Application code depends on project-owned ports such as `ObjectStorage`, not directly on a
 provider throughout the codebase. Provider adapters must be replaceable without rewriting domain
-services.
+services. `data.files: cloudflare-r2-eu` materializes exactly that: `@repo/storage-r2` holds the
+port, the R2 adapter is the only file naming the provider, and both are pruned with the documents
+surfaces when another value is selected.
 
-Private documents use immutable object keys, hashes and metadata in Postgres. Retention classes,
-deletion workflows and locks are selected per data category. The factory never locks all personal
-data indefinitely because durability and the right to erasure are separate concerns.
+Private documents use immutable object keys, hashes and metadata in Postgres. Keys are derived from
+owner and document identity, never from a filename. The browser uploads straight to the bucket
+against a presigned URL, so the server never handles a file; what it would have checked on the way
+in is enforced instead by the signature and by a post-upload HEAD (ADR 68). Browser access also
+requires a CORS rule naming the application's origins, provisioned as its own action.
+
+Erasure removes the object before the row, immediately, and a user cascade is deliberately not an
+erasure path (ADR 69). Retention classes, deletion workflows and locks remain selected per data
+category, and are not yet materialized. The factory never locks all personal data indefinitely
+because durability and the right to erasure are separate concerns.
 
 ## 7. Authentication profiles
 
@@ -383,6 +392,14 @@ neon:
 
 cloudflare:
   account_id: 0123456789abcdef0123456789abcdef
+  # Optional. Origins allowed to upload and download directly from the browser.
+  # Absent means no CORS rule is planned at all, which is right for a bucket read
+  # only server-side. There is no default: the alternative to naming origins is a
+  # wildcard, which opens the bucket to every site the browser visits. Preview
+  # deployments have per-deployment URLs and are therefore not covered.
+  browser_origins:
+    - https://app.example.com
+    - http://localhost:3000
 
 sentry:
   organization_slug: void-sandbox
@@ -973,11 +990,11 @@ doctors these profiles:
 - Expo mobile-only;
 - Better Auth + PostHog + Sentry web and Expo;
 - Better Auth + durable jobs web;
-- Better Auth invite-only internal tool.
+- Better Auth invite-only internal tool;
+- Better Auth + EU private documents web.
 
 The remaining remote validation target includes:
 
-- EU private documents;
 - voice/realtime control plane.
 
 The invite-only internal tool has been validated remotely as well, on its own provider stack.

@@ -1500,3 +1500,71 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 - **When to revisit:** If Better Auth extends its transport requirements -- the `Sec-Fetch-*`
   handling in the same middleware is the obvious candidate -- the helper is where that is taught,
   and the refusal-code list is where the new failure mode is excluded.
+
+### 68. Upload documents straight to the bucket, then verify what landed
+
+- **Date:** 2026-07-29
+- **Decision:** Under `data.files: cloudflare-r2-eu`, the browser PUTs the bytes directly to R2
+  against a presigned URL the server issues after an authorization check. The server never handles
+  the file. The content type is baked into the signature, the row is written before the URL is
+  handed out and stays `pending`, and a confirmation step HEADs the object and compares its real
+  size and content type to what was claimed before anything is listed or downloadable. Download
+  URLs are minted per click and live for a minute. Reaching the bucket from a browser also requires
+  a CORS rule, provisioned as its own action and naming the allowed origins explicitly.
+- **Why:** A proxied upload through a Server Action is capped by the Vercel request body limit of
+  4.5 MB, which makes the profile useless for the documents it exists to hold, and bills compute for
+  every byte. Uploading directly costs the server its sight of the file, so each thing the server
+  would have checked while receiving it is replaced by something enforceable: the type by the
+  signature, which R2 itself rejects on mismatch, and the size by the post-upload HEAD. `pending` is
+  what makes the gap safe -- an authorized upload that never happened, or happened wrong, grants
+  nothing.
+- **Rejected alternatives:**
+  - Proxying uploads through the application: full control over the bytes, at the cost of a 4.5 MB
+    ceiling and compute per megabyte. Defensible for avatars, not for documents.
+  - Trusting the declared size without the HEAD: the signature constrains the content type but
+    nothing constrains the length, so an over-sized object is possible and would be published on
+    the strength of a number the client chose.
+  - Leaving a mismatched upload `pending` instead of erasing it: it keeps an object nobody vouched
+    for in a bucket that is paid for, and a `pending` row that never resolves is indistinguishable
+    from an abandoned one.
+  - Rendering download URLs into the listing: each is a bearer token for one object, so the page
+    would hand out a working link to every document on it, to wherever that page is later cached.
+  - Allowing `https://*.vercel.app` in the CORS rule rather than naming origins: it opens a bucket
+    of personal documents to every site hosted on Vercel. Preview deployments therefore cannot
+    upload, which is the deliberate cost of the safe default.
+- **Acceptance evidence:** Unit tests cover the rules against a substituted port; the integration
+  suite covers them against the real ledger, including owner scoping in SQL and the unique object
+  key; the E2E spec drives a browser through authorize/PUT/confirm against a real bucket, which is
+  also the only place the CORS rule is exercised. The provisioning adapter reads the CORS policy
+  back and fails retryably when the bucket does not report the requested origins.
+- **When to revisit:** When a document must be readable by someone other than its owner, the
+  access check moves from "owner scope" to a sharing model and the download URL stops being a
+  per-click mint. Multipart upload for files beyond a few hundred MB is a separate mechanism and
+  would change the confirmation step.
+
+### 69. Make erasure a storage operation, object first
+
+- **Date:** 2026-07-29
+- **Decision:** Deleting a document erases the object and then the row, in that order, with no
+  deferral. If the object cannot be erased the row stays and the caller sees the failure. The
+  `documents` row cascades with its owner, but that cascade is explicitly not the erasure path.
+- **Why:** The reverse order loses the only pointer to the object. What remains is personal data in
+  a bucket that nothing can name: unerasable in practice, invisible to any later audit, and
+  undetectable by every test that looks at the database. Immediate erasure is also the only version
+  that is straightforward to defend under a right-to-erasure request -- the data is gone when the
+  request returns, rather than gone once a job runs.
+- **Rejected alternatives:**
+  - Soft delete plus a purge job: allows undo and absorbs a provider outage, but creates a window
+    where personal data still exists after an erasure request, which then has to be documented,
+    bounded and honoured by a job whose failure is silent.
+  - Deleting the row and letting the object expire through a lifecycle rule: the same window,
+    without even a record of what is owed.
+  - Treating the user cascade as erasure: it removes every row and leaves every object. The
+    integration suite pins exactly this, so the gap is visible rather than assumed.
+- **Acceptance evidence:** Service tests cover the order, and cover that a failing storage removal
+  keeps the row so the operation can be retried rather than half-applied. The integration suite
+  covers erasure against the real ledger and pins that a user cascade leaves objects behind.
+- **When to revisit:** A retention class that requires a legal hold cannot use immediate erasure,
+  and is the point at which `docs/FACTORY.md`'s retention classes stop being aspirational. A
+  reconciliation job that lists bucket objects with no matching row would close the residue a
+  cascade leaves; it needs a listing permission the runtime credentials deliberately do not hold.
