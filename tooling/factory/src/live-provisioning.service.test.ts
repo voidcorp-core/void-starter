@@ -49,6 +49,8 @@ class MockProviderApi {
   neonProjectExists = false;
   bindingMarker: string | null = null;
   r2BucketExists = false;
+  corsRules: unknown[] = [];
+  corsAppliesNothing = false;
   r2BindingMarker: string | null = null;
   r2CanaryPayload: string | null = null;
   r2PublicDomainEnabled = false;
@@ -505,6 +507,19 @@ class MockProviderApi {
           })
         : jsonResponse({}, 404);
     }
+    if (url.hostname === 'api.cloudflare.com' && url.pathname === `${r2Bucket}/cors`) {
+      if (method === 'PUT') {
+        // `corsAppliesNothing` reproduces an accepted PUT that does not take:
+        // the browser then refuses every upload, and nothing server-side sees it.
+        if (!this.corsAppliesNothing) {
+          this.corsRules = (body as { rules?: unknown[] } | undefined)?.rules ?? [];
+        }
+        return jsonResponse({ success: true, result: null });
+      }
+      if (method === 'GET') {
+        return jsonResponse({ success: true, result: { rules: this.corsRules } });
+      }
+    }
     if (url.hostname === 'api.cloudflare.com' && url.pathname === r2Base && method === 'POST') {
       if (this.failR2CreateWithNetwork) {
         throw new Error('mocked ambiguous R2 network failure');
@@ -747,6 +762,15 @@ async function createGeneratedProject() {
     plan: createProvisioningPlan(manifest, context),
   };
 }
+
+/** The same context, plus the browser origins that make the bucket reachable. */
+const corsContext = parseProvisioningContext({
+  ...JSON.parse(JSON.stringify(context)),
+  cloudflare: {
+    account_id: '0123456789abcdef0123456789abcdef',
+    browser_origins: ['https://app.example.com', 'http://localhost:3000'],
+  },
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -1326,6 +1350,80 @@ describe('LiveProvisioningAdapter', () => {
           request.url.pathname.endsWith('/r2/buckets'),
       ),
     ).toHaveLength(1);
+  });
+
+  it('applies the browser access rule and reads it back before accepting it', async () => {
+    const manifest = parseBuildManifest(canonicalManifest);
+    const root = await mkdtemp(join(tmpdir(), 'void-starter-live-cors-test-'));
+    temporaryRoots.push(root);
+    await mkdir(join(root, '.void-starter'));
+    await writeFile(
+      join(root, '.void-starter/manifest.json'),
+      serializeCanonicalJson(manifest),
+      'utf8',
+    );
+    const plan = createProvisioningPlan(manifest, corsContext);
+    const provider = new MockProviderApi();
+    provider.r2BucketExists = true;
+
+    const state = await applyProvisioning({
+      projectRoot: root,
+      plan,
+      adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+    });
+
+    expect(state.actions.find((action) => action.action_id === 'cloudflare.r2-cors')).toMatchObject(
+      { attempts: 1, status: 'succeeded' },
+    );
+    const put = provider.requests.find(
+      (request) => request.method === 'PUT' && request.url.pathname.endsWith('/cors'),
+    );
+    expect(put?.body).toEqual({
+      rules: [
+        {
+          allowed: {
+            methods: ['GET', 'HEAD', 'PUT'],
+            origins: ['https://app.example.com', 'http://localhost:3000'],
+            headers: ['content-type'],
+          },
+          maxAgeSeconds: 3600,
+        },
+      ],
+    });
+  });
+
+  it('fails when the bucket does not report the origins it just accepted', async () => {
+    // An accepted PUT is not proof. A rule that did not take makes every browser
+    // upload fail before the request leaves the page, which looks like a broken
+    // signature and is invisible to the server.
+    const manifest = parseBuildManifest(canonicalManifest);
+    const root = await mkdtemp(join(tmpdir(), 'void-starter-live-cors-fail-test-'));
+    temporaryRoots.push(root);
+    await mkdir(join(root, '.void-starter'));
+    await writeFile(
+      join(root, '.void-starter/manifest.json'),
+      serializeCanonicalJson(manifest),
+      'utf8',
+    );
+    const provider = new MockProviderApi();
+    provider.r2BucketExists = true;
+    provider.corsAppliesNothing = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: root,
+        plan: createProvisioningPlan(manifest, corsContext),
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+
+    const state = await readProvisioningState(root);
+    expect(
+      state?.actions.find((action) => action.action_id === 'cloudflare.r2-cors'),
+    ).toMatchObject({
+      error: { code: 'CLOUDFLARE_R2_CORS_NOT_APPLIED', retryable: true },
+      status: 'failed',
+    });
   });
 
   it('resumes the Sentry binding with a separate build token without recreating the project', async () => {

@@ -40,11 +40,36 @@ const neonContextSchema = z.strictObject({
   region_id: z.enum(['aws-eu-central-1']),
 });
 
+/**
+ * A browser origin allowed to talk to the bucket, in the exact form a browser
+ * sends it: scheme and host, no path, no trailing slash. R2 compares the
+ * `Origin` header literally, so a value with a path never matches anything.
+ */
+const browserOriginSchema = z
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash
+    );
+  }, 'A browser origin is a scheme and a host, with no path, query or fragment')
+  .transform((value) => new URL(value).origin);
+
 const cloudflareContextSchema = z.strictObject({
   account_id: z
     .string()
     .trim()
     .regex(/^[a-f0-9]{32}$/),
+  /**
+   * Origins allowed to upload and download directly from the browser. Absent
+   * means no CORS rule is planned at all, which is the right default: a bucket
+   * whose objects are only ever fetched server-side needs none, and a wildcard
+   * would open it to every site the browser visits.
+   */
+  browser_origins: z.array(browserOriginSchema).min(1).max(5).optional(),
 });
 
 const sentrySlugSchema = z
@@ -206,6 +231,34 @@ const cloudflareR2BucketActionSchema = z.strictObject({
   idempotency_key: idempotencyKeySchema,
 });
 
+/**
+ * The CORS rule that makes a presigned URL usable from a browser.
+ *
+ * Without it the browser refuses the request before it is sent, and the failure
+ * is indistinguishable from a bad signature at the application level -- the
+ * upload simply never happens. The methods mirror exactly what the documents
+ * surface performs: PUT to upload, GET to download, HEAD because the SDK issues
+ * one, and nothing else. DELETE is absent on purpose: erasure goes through the
+ * server, which is what makes it auditable.
+ */
+const cloudflareR2CorsActionSchema = z.strictObject({
+  id: z.literal('cloudflare.r2-cors'),
+  provider: z.literal('cloudflare'),
+  kind: z.literal('ensure-r2-cors'),
+  depends_on: z.tuple([z.literal('cloudflare.r2-bucket')]),
+  permissions: z.tuple([z.literal('r2-bucket:read'), z.literal('r2-bucket:write')]),
+  input: z.strictObject({
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    bucket_action_id: z.literal('cloudflare.r2-bucket'),
+    jurisdiction: z.literal('eu'),
+    allowed_origins: z.array(z.string().min(1)).min(1).max(5),
+    allowed_methods: z.tuple([z.literal('GET'), z.literal('HEAD'), z.literal('PUT')]),
+    allowed_headers: z.tuple([z.literal('content-type')]),
+    max_age_seconds: z.literal(3600),
+  }),
+  idempotency_key: idempotencyKeySchema,
+});
+
 const vercelR2BindingActionSchema = z.strictObject({
   id: z.literal('vercel.r2-binding'),
   provider: z.literal('vercel'),
@@ -356,6 +409,7 @@ const provisioningActionSchema = z.discriminatedUnion('id', [
   neonProjectActionSchema,
   vercelDatabaseBindingActionSchema,
   cloudflareR2BucketActionSchema,
+  cloudflareR2CorsActionSchema,
   vercelR2BindingActionSchema,
   sentryProjectActionSchema,
   vercelSentryBindingActionSchema,
@@ -416,6 +470,14 @@ export const provisionedResourceSchema = z.union([
     jurisdiction: z.literal('eu'),
     public_access: z.literal(false),
     canary_sha256: sha256Schema,
+  }),
+  z.strictObject({
+    provider: z.literal('cloudflare'),
+    resource_kind: z.literal('r2-cors'),
+    ...resourceIdentitySchema,
+    account_id: z.string().regex(/^[a-f0-9]{32}$/),
+    /** Recorded so a receipt shows who may reach the bucket from a browser. */
+    allowed_origins: z.array(z.string().min(1)).min(1).max(5),
   }),
   z.strictObject({
     provider: z.literal('vercel'),
@@ -521,6 +583,7 @@ const provisioningActionStateSchema = z.strictObject({
     'neon.project',
     'vercel.database-binding',
     'cloudflare.r2-bucket',
+    'cloudflare.r2-cors',
     'vercel.r2-binding',
     'sentry.project',
     'vercel.sentry-binding',

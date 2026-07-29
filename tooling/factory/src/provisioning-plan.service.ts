@@ -183,6 +183,31 @@ export function createProvisioningPlan(
     );
   }
 
+  // Planned only when the context names the origins that may reach the bucket
+  // from a browser. A project whose objects are read server-side needs no rule,
+  // and there is no defensible default: the alternative to naming the origins
+  // is a wildcard, which opens the bucket to every site the browser visits.
+  if (hasR2 && context.cloudflare?.browser_origins) {
+    actions.push(
+      withIdempotencyKey({
+        id: 'cloudflare.r2-cors',
+        provider: 'cloudflare',
+        kind: 'ensure-r2-cors',
+        depends_on: ['cloudflare.r2-bucket'],
+        permissions: ['r2-bucket:read', 'r2-bucket:write'],
+        input: {
+          account_id: context.cloudflare.account_id,
+          bucket_action_id: 'cloudflare.r2-bucket',
+          jurisdiction: 'eu',
+          allowed_origins: context.cloudflare.browser_origins,
+          allowed_methods: ['GET', 'HEAD', 'PUT'],
+          allowed_headers: ['content-type'],
+          max_age_seconds: 3600,
+        },
+      }),
+    );
+  }
+
   if (hasWeb && hasR2) {
     actions.push(
       withIdempotencyKey({

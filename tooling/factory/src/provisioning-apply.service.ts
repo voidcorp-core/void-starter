@@ -416,6 +416,16 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
         canary_sha256: sha256(`simulated-r2-canary:${action.idempotency_key}`),
       };
     }
+    if (action.id === 'cloudflare.r2-cors') {
+      return {
+        provider: 'cloudflare',
+        resource_kind: 'r2-cors',
+        resource_id: resourceId,
+        display_name: 'Cloudflare R2 browser access rule',
+        account_id: action.input.account_id,
+        allowed_origins: action.input.allowed_origins,
+      };
+    }
     if (action.id === 'vercel.r2-binding') {
       return {
         provider: 'vercel',

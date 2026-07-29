@@ -214,6 +214,30 @@ const cloudflareBucketResponseSchema = z.object({
   result: cloudflareBucketSchema,
 });
 
+/**
+ * R2 answers a bucket with no CORS policy with `success: true` and a result that
+ * either omits `rules` or carries an empty array, so absence is a normal read
+ * rather than a 404.
+ */
+const cloudflareCorsResponseSchema = z.object({
+  success: z.literal(true),
+  result: z
+    .object({
+      rules: z
+        .array(
+          z.object({
+            allowed: z.object({
+              methods: z.array(z.string()),
+              origins: z.array(z.string()),
+              headers: z.array(z.string()).optional(),
+            }),
+          }),
+        )
+        .optional(),
+    })
+    .nullable(),
+});
+
 const cloudflareBucketListResponseSchema = z.object({
   success: z.literal(true),
   result: z.object({
@@ -789,6 +813,8 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensureDatabaseBinding(action, context);
       case 'cloudflare.r2-bucket':
         return this.#ensureR2Bucket(action, context);
+      case 'cloudflare.r2-cors':
+        return this.#ensureR2Cors(action, context);
       case 'vercel.r2-binding':
         return this.#ensureR2Binding(action, context);
       case 'sentry.project':
@@ -1308,6 +1334,85 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
       'Cloudflare accepted R2 bucket creation but the bucket is not yet observable',
       true,
     );
+  }
+
+  /**
+   * Put the browser-access rule on the bucket.
+   *
+   * Unlike a bucket or a project, a CORS policy is a single mutable document
+   * rather than a resource with an identity, so there is nothing to create
+   * twice: the PUT is the reconciliation. It is still read back afterwards, and
+   * compared, because a rule that silently did not take is indistinguishable at
+   * the application level from a signature problem -- the browser refuses before
+   * the request is sent, and nothing server-side ever sees it.
+   *
+   * Cloudflare documents this endpoint at
+   * https://developers.cloudflare.com/r2/buckets/cors/ and the jurisdiction
+   * header is required for an EU bucket, exactly as for every other R2 call
+   * here.
+   */
+  async #ensureR2Cors(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-cors' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const bucketName = this.#corsBucketName(context);
+    const url = `${CLOUDFLARE_API}/accounts/${encoded(action.input.account_id)}/r2/buckets/${encoded(bucketName)}/cors`;
+
+    await this.#request({
+      provider: 'cloudflare',
+      url,
+      method: 'PUT',
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      body: {
+        rules: [
+          {
+            allowed: {
+              methods: [...action.input.allowed_methods],
+              origins: [...action.input.allowed_origins],
+              headers: [...action.input.allowed_headers],
+            },
+            maxAgeSeconds: action.input.max_age_seconds,
+          },
+        ],
+      },
+      acceptedStatuses: [200],
+    });
+
+    const readBack = await this.#request({
+      provider: 'cloudflare',
+      url,
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      acceptedStatuses: [200],
+    });
+    const observed = await this.#json('cloudflare', readBack, cloudflareCorsResponseSchema);
+    const origins = observed.result?.rules?.flatMap((rule) => rule.allowed.origins) ?? [];
+    const missing = action.input.allowed_origins.filter((origin) => !origins.includes(origin));
+    if (missing.length > 0) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_CORS_NOT_APPLIED',
+        'Cloudflare accepted the CORS rule but the bucket does not report the requested origins',
+        true,
+      );
+    }
+
+    return {
+      provider: 'cloudflare',
+      resource_kind: 'r2-cors',
+      resource_id: `${action.input.account_id}:cors`,
+      display_name: 'Cloudflare R2 browser access rule',
+      account_id: action.input.account_id,
+      allowed_origins: [...action.input.allowed_origins],
+    };
+  }
+
+  /** The bucket this rule belongs to, taken from the dependency it declares. */
+  #corsBucketName(context: ProvisioningExecutionContext): string {
+    const bucket = requireDependency(context, 'cloudflare.r2-bucket');
+    if (bucket.provider !== 'cloudflare' || bucket.resource_kind !== 'r2-bucket') {
+      throw new Error('R2 CORS dependency is not a Cloudflare R2 bucket');
+    }
+    return bucket.display_name;
   }
 
   async #lookupSentryProject(
