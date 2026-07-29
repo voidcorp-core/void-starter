@@ -100,6 +100,8 @@ async function createBaseline() {
     ['_modules/analytics-posthog', '@repo/posthog'],
     ['_modules/email-resend', '@repo/email-resend'],
     ['_modules/observability-sentry', '@repo/sentry'],
+    ['_modules/jobs-vercel-workflow', '@repo/jobs-vercel-workflow'],
+    ['_modules/storage-r2', '@repo/storage-r2'],
   ]) {
     await mkdir(join(sourceRoot, path), { recursive: true });
     await writeJson(join(sourceRoot, path, 'package.json'), {
@@ -110,6 +112,14 @@ async function createBaseline() {
   await writeFile(
     join(sourceRoot, 'packages/core/index.ts'),
     'export const core = true;\n',
+    'utf8',
+  );
+  // The documents surface, so a render can be checked for its presence when R2
+  // is selected and its absence when it is not.
+  await mkdir(join(sourceRoot, 'apps/web/src/app/documents'), { recursive: true });
+  await writeFile(
+    join(sourceRoot, 'apps/web/src/app/documents/page.tsx'),
+    'export default function DocumentsPage() {\n  return null;\n}\n',
     'utf8',
   );
   await mkdir(join(sourceRoot, 'packages/db/migrations/meta'), { recursive: true });

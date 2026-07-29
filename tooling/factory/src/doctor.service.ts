@@ -166,6 +166,8 @@ async function capabilitiesMatchManifest(
   const usesPosthog = hasWeb && manifest.operations.analytics === 'posthog';
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
   const usesResend = hasWeb && manifest.operations.email === 'resend';
+  const usesDurableJobs = hasWeb && manifest.workloads.durable_jobs === 'vercel-workflows';
+  const usesR2 = hasWeb && manifest.data.files === 'cloudflare-r2-eu';
 
   const pathExpectations = new Map<string, boolean>([
     ['apps/web/vercel.json', hasWeb],
@@ -175,6 +177,9 @@ async function capabilitiesMatchManifest(
     ['_modules/analytics-posthog/package.json', usesPosthog],
     ['_modules/observability-sentry/package.json', usesSentry],
     ['_modules/email-resend/package.json', usesResend],
+    ['_modules/jobs-vercel-workflow/package.json', usesDurableJobs],
+    ['_modules/storage-r2/package.json', usesR2],
+    ['apps/web/src/app/documents/page.tsx', usesR2],
     ['apps/web/src/instrumentation.ts', usesSentry],
     ['apps/web/src/instrumentation-client.ts', usesSentry],
     ['apps/web/src/app/sign-in/[[...sign-in]]/page.tsx', usesClerk],

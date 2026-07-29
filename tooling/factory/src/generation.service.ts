@@ -147,16 +147,22 @@ async function sanitizeGeneratedBaseline(targetRoot: string, manifest: BuildMani
     throw new Error('Baseline package.json scripts must be an object when present');
   }
   (packageJson.scripts as Record<string, unknown>)['hooks:install'] = 'lefthook install';
+  // `_modules/*` stays a workspace as long as ANY module survives composition.
+  // The predicate has to list every selector that keeps one: it previously
+  // covered only the three `operations.*` modules, so a project selecting just
+  // durable jobs or just R2 dropped the workspace that declares the package it
+  // depends on, and failed at install time rather than at generation time.
+  const keepsAnyModule =
+    manifest.operations.analytics !== 'none' ||
+    manifest.operations.errors !== 'none' ||
+    manifest.operations.email !== 'none' ||
+    manifest.workloads.durable_jobs !== 'none' ||
+    manifest.data.files !== 'none';
   packageJson.workspaces = packageJson.workspaces.filter(
     (workspace): workspace is string =>
       typeof workspace === 'string' &&
       workspace !== 'tooling/*' &&
-      !(
-        workspace === '_modules/*' &&
-        manifest.operations.analytics === 'none' &&
-        manifest.operations.errors === 'none' &&
-        manifest.operations.email === 'none'
-      ),
+      !(workspace === '_modules/*' && !keepsAnyModule),
   );
   await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 

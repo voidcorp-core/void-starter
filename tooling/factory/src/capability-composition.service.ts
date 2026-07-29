@@ -21,6 +21,7 @@ const OPTIONAL_MODULES = [
   '_modules/observability-sentry',
   '_modules/payment-stripe',
   '_modules/rate-limit-upstash',
+  '_modules/storage-r2',
 ] as const;
 
 const BETTER_AUTH_WEB_PATHS = [
@@ -59,6 +60,18 @@ const INVITE_ONLY_WEB_PATHS = [
   `${WEB_ROOT}/src/app/admin/invitations`,
 ] as const;
 
+/**
+ * Surfaces that only exist to hold private documents. Removed unless the
+ * manifest selects R2, so a project without object storage does not ship a page
+ * whose every action would fail on a missing bucket. The `documents` table stays
+ * in every project, for the reason `invitations` and `job_executions` do:
+ * pruning a schema file would desynchronize the published Drizzle migrations.
+ */
+const DOCUMENTS_WEB_PATHS = [
+  `${WEB_ROOT}/src/actions/documents.actions.ts`,
+  `${WEB_ROOT}/src/app/documents`,
+] as const;
+
 const SENTRY_WEB_PATHS = [
   `${WEB_ROOT}/src/app/global-error.tsx`,
   `${WEB_ROOT}/src/instrumentation-client.ts`,
@@ -86,6 +99,7 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
   const usesPosthog = manifest.operations.analytics === 'posthog';
   const usesSentry = manifest.operations.errors === 'sentry';
   const usesDurableJobs = manifest.workloads.durable_jobs === 'vercel-workflows';
+  const usesR2 = manifest.data.files === 'cloudflare-r2-eu';
 
   const dependencies: Record<string, string> = {
     '@repo/core': 'workspace:*',
@@ -99,6 +113,9 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
   }
   if (usesDurableJobs) {
     dependencies['@repo/jobs-vercel-workflow'] = 'workspace:*';
+  }
+  if (usesR2) {
+    dependencies['@repo/storage-r2'] = 'workspace:*';
   }
   if (usesPosthog) {
     dependencies['@repo/posthog'] = 'workspace:*';
@@ -186,6 +203,7 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
   const usesSentry = manifest.operations.errors === 'sentry';
   const usesResend = manifest.operations.email === 'resend';
   const usesDurableJobs = manifest.workloads.durable_jobs === 'vercel-workflows';
+  const usesR2 = manifest.data.files === 'cloudflare-r2-eu';
   const transpilePackages = ['@repo/core', '@repo/ui'];
 
   if (usesBetterAuth) {
@@ -193,6 +211,9 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
   }
   if (usesDurableJobs) {
     transpilePackages.push('@repo/jobs-vercel-workflow');
+  }
+  if (usesR2) {
+    transpilePackages.push('@repo/storage-r2');
   }
   if (usesPosthog) {
     transpilePackages.push('@repo/posthog');
@@ -657,12 +678,14 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
   const usesSentry = hasWeb && manifest.operations.errors === 'sentry';
   const usesResend = hasWeb && manifest.operations.email === 'resend';
   const usesDurableJobs = hasWeb && manifest.workloads.durable_jobs === 'vercel-workflows';
+  const usesR2 = hasWeb && manifest.data.files === 'cloudflare-r2-eu';
 
   for (const modulePath of OPTIONAL_MODULES) {
     const selected =
       (modulePath === '_modules/analytics-posthog' && usesPosthog) ||
       (modulePath === '_modules/observability-sentry' && usesSentry) ||
       (modulePath === '_modules/jobs-vercel-workflow' && usesDurableJobs) ||
+      (modulePath === '_modules/storage-r2' && usesR2) ||
       (modulePath === '_modules/email-resend' && usesResend);
     if (!selected) {
       removals.add(modulePath);
@@ -719,6 +742,12 @@ export function createCapabilityFilePlan(manifest: BuildManifest): CapabilityFil
 
   if (!usesDurableJobs) {
     for (const path of DURABLE_JOBS_WEB_PATHS) {
+      removals.add(path);
+    }
+  }
+
+  if (!usesR2) {
+    for (const path of DOCUMENTS_WEB_PATHS) {
       removals.add(path);
     }
   }
