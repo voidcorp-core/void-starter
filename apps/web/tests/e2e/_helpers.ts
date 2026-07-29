@@ -1,10 +1,11 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { APIRequestContext } from '@playwright/test';
+import { type APIRequestContext, type APIResponse, expect } from '@playwright/test';
 // The dedicated subpath, never the `@repo/auth` barrel: Playwright loads specs
 // in plain Node and the barrel reaches `next/headers`. `access-mode.ts` has no
 // imports at all, so it is safe from any context.
 import { ACCESS_MODE } from '@repo/auth/access-mode';
 import postgres from 'postgres';
+import { BASE_URL } from './_config';
 
 /**
  * Test helpers for E2E suites that need DB access or HTTP signup.
@@ -102,6 +103,53 @@ export async function enterThroughInvitationLink(
 }
 
 /**
+ * POST to a Better Auth endpoint the way a browser reaches it.
+ *
+ * The `Origin` header is not decoration. Better Auth validates the origin of
+ * any request that carries a cookie, and refuses one that carries none with
+ * `MISSING_OR_NULL_ORIGIN` -- see `validateOrigin` in
+ * `better-auth/api/middlewares/origin-check`. A browser always sends it; an
+ * `APIRequestContext` never does. So the moment a fixture starts carrying the
+ * invitation cookie, every one of its POSTs is refused before reaching the
+ * application at all.
+ *
+ * That refusal is indistinguishable from an admission refusal at the
+ * `response.ok()` level, which is how it stayed hidden: the suites asserting a
+ * refusal kept passing, and only the one asserting admission went red. Every
+ * auth POST therefore goes through here, and refusals are asserted with
+ * `expectRefusedByAdmission` rather than on the status alone.
+ */
+export async function postToAuth(
+  request: APIRequestContext,
+  path: string,
+  data: Record<string, unknown>,
+): Promise<APIResponse> {
+  return await request.post(path, {
+    data,
+    headers: { origin: BASE_URL },
+    failOnStatusCode: false,
+  });
+}
+
+/** Refusals the transport produces, which no admission rule ever emits. */
+const TRANSPORT_REFUSAL_CODES = [
+  'MISSING_OR_NULL_ORIGIN',
+  'INVALID_ORIGIN',
+  'CROSS_SITE_NAVIGATION_LOGIN_BLOCKED',
+];
+
+/**
+ * Assert that the application refused the request, and that it was the
+ * application: a CSRF or origin refusal never reaches the admission rule, so
+ * accepting one as proof of refusal would assert nothing about the contract.
+ */
+export async function expectRefusedByAdmission(response: APIResponse): Promise<void> {
+  expect(response.ok()).toBe(false);
+  const code = ((await response.json().catch(() => ({}))) as { code?: string }).code;
+  expect(TRANSPORT_REFUSAL_CODES).not.toContain(code);
+}
+
+/**
  * Remove every trace of a test address: the account and, on an invite-only
  * project, the ledger row consumed to create it. Leaving the invitation behind
  * would collide with the partial unique index the next time the same address is
@@ -143,8 +191,10 @@ export async function signUpViaHttp(
 ) {
   const token = await admitForSignUp(body.email);
   await enterThroughInvitationLink(request, token);
-  return await request.post('/api/auth/sign-up/email', {
-    data: body,
-    failOnStatusCode: true,
-  });
+  const response = await postToAuth(request, '/api/auth/sign-up/email', body);
+  // `postToAuth` never throws on status, so the fixture asserts its own
+  // precondition here: a suite whose subject is something else must not start
+  // from a user that was silently never created.
+  expect(response.ok()).toBe(true);
+  return response;
 }

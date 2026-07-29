@@ -9,6 +9,8 @@ import {
   closeTestSql,
   deleteTestUser,
   enterThroughInvitationLink,
+  expectRefusedByAdmission,
+  postToAuth,
 } from './_helpers';
 
 /**
@@ -43,40 +45,41 @@ if (hasDb && isInviteOnlyProject) {
     });
 
     test('refuses email sign-up for an address that holds no invitation', async ({ request }) => {
-      const response = await request.post('/api/auth/sign-up/email', {
-        data: { email: uninvited, password, name: 'Uninvited' },
-        failOnStatusCode: false,
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: uninvited,
+        password,
+        name: 'Uninvited',
       });
 
-      expect(response.ok()).toBe(false);
+      await expectRefusedByAdmission(response);
     });
 
     test('creates no account through the magic-link path either', async ({ request }) => {
-      await request.post('/api/auth/sign-in/magic-link', {
-        data: { email: uninvited },
-        failOnStatusCode: false,
-      });
+      await postToAuth(request, '/api/auth/sign-in/magic-link', { email: uninvited });
 
       // Whatever the magic-link endpoint answers, no account may exist
       // afterwards: a successful password sign-in would prove one was created.
-      const signIn = await request.post('/api/auth/sign-in/email', {
-        data: { email: uninvited, password },
-        failOnStatusCode: false,
+      const signIn = await postToAuth(request, '/api/auth/sign-in/email', {
+        email: uninvited,
+        password,
       });
       expect(signIn.ok()).toBe(false);
     });
 
     test('does not reveal whether an address was ever invited', async ({ request }) => {
-      const neverInvited = await request.post('/api/auth/sign-up/email', {
-        data: { email: `e2e-never-${Date.now()}@example.test`, password, name: 'Never' },
-        failOnStatusCode: false,
+      const neverInvited = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: `e2e-never-${Date.now()}@example.test`,
+        password,
+        name: 'Never',
       });
-      const alsoUninvited = await request.post('/api/auth/sign-up/email', {
-        data: { email: uninvited, password, name: 'Uninvited' },
-        failOnStatusCode: false,
+      const alsoUninvited = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: uninvited,
+        password,
+        name: 'Uninvited',
       });
 
       expect(neverInvited.status()).toBe(alsoUninvited.status());
+      await expectRefusedByAdmission(neverInvited);
     });
 
     test('keeps the invitation admin screen behind authentication', async ({ page }) => {
@@ -95,12 +98,13 @@ if (hasDb && isInviteOnlyProject) {
       const invited = `e2e-notoken-${Date.now()}@example.test`;
       await admitForSignUp(invited);
 
-      const response = await request.post('/api/auth/sign-up/email', {
-        data: { email: invited, password, name: 'No Token' },
-        failOnStatusCode: false,
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'No Token',
       });
 
-      expect(response.ok()).toBe(false);
+      await expectRefusedByAdmission(response);
       await deleteTestUser(invited);
     });
 
@@ -113,12 +117,13 @@ if (hasDb && isInviteOnlyProject) {
       const foreignToken = await admitForSignUp(other);
       await enterThroughInvitationLink(request, foreignToken);
 
-      const response = await request.post('/api/auth/sign-up/email', {
-        data: { email: invited, password, name: 'Wrong Token' },
-        failOnStatusCode: false,
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'Wrong Token',
       });
 
-      expect(response.ok()).toBe(false);
+      await expectRefusedByAdmission(response);
       await deleteTestUser(invited);
       await deleteTestUser(other);
     });
@@ -128,9 +133,10 @@ if (hasDb && isInviteOnlyProject) {
       const token = await admitForSignUp(invited);
       await enterThroughInvitationLink(request, token);
 
-      const response = await request.post('/api/auth/sign-up/email', {
-        data: { email: invited, password, name: 'Good Token' },
-        failOnStatusCode: false,
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'Good Token',
       });
 
       expect(response.ok()).toBe(true);
