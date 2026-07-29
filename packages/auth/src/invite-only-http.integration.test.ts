@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getDb } from '@repo/db';
 import { invitations, users } from '@repo/db/schema';
-import { like } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -55,6 +55,21 @@ async function seedInvitation(email: string): Promise<string> {
   return token;
 }
 
+/** Whether an account exists for the address, which is what admission means. */
+async function accountExists(email: string): Promise<boolean> {
+  const rows = await getDb().select({ id: users.id }).from(users).where(eq(users.email, email));
+  return rows.length > 0;
+}
+
+/** Whether the address's invitation has been burnt by the post-creation hook. */
+async function invitationConsumed(email: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ usedAt: invitations.usedAt })
+    .from(invitations)
+    .where(eq(invitations.email, email));
+  return rows.length > 0 && rows.every((row) => row.usedAt !== null);
+}
+
 function signUpRequest(email: string, cookie?: string): Request {
   return new Request('http://localhost:3000/api/auth/sign-up/email', {
     method: 'POST',
@@ -83,6 +98,9 @@ describe.skipIf(!databaseUrl || !authSecret)('invite-only admission over HTTP', 
     const response = await getAuth().handler(signUpRequest(email, `void_invitation=${token}`));
 
     expect(response.status).toBeLessThan(400);
+    // The status is what the endpoint says; the row is what actually happened.
+    expect(await accountExists(email)).toBe(true);
+    expect(await invitationConsumed(email)).toBe(true);
   });
 
   it('refuses an invited address that presents no token', async () => {
@@ -93,6 +111,9 @@ describe.skipIf(!databaseUrl || !authSecret)('invite-only admission over HTTP', 
     const response = await getAuth().handler(signUpRequest(email));
 
     expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await accountExists(email)).toBe(false);
+    // A refused attempt must not burn the invitation the invitee still needs.
+    expect(await invitationConsumed(email)).toBe(false);
   });
 
   it('refuses a token issued for a different address', async () => {
@@ -107,5 +128,9 @@ describe.skipIf(!databaseUrl || !authSecret)('invite-only admission over HTTP', 
     );
 
     expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await accountExists(email)).toBe(false);
+    // Neither the targeted invitation nor the one the token belongs to is spent.
+    expect(await invitationConsumed(email)).toBe(false);
+    expect(await invitationConsumed(other)).toBe(false);
   });
 });
