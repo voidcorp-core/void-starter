@@ -1353,6 +1353,40 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   invitation per address, and revisit the Better Auth prerequisite if a Clerk allowlist adapter is
   ever adopted.
 
+### 64. Keep generated sources lint-stable at the longest accepted project name
+
+- **Date:** 2026-07-28
+- **Decision:** Generated TypeScript must already satisfy `biome check` for every project name the
+  manifest schema accepts, not only for the short names the fixtures use. Where the project name
+  reaches JSX, it is bound to a `PROJECT_NAME` module constant and rendered as `{PROJECT_NAME}`,
+  so the emitted line length no longer varies with the name. A composition test runs the repository
+  Biome binary over every generated `.ts`/`.tsx` file, for four profiles, with a 63-character name.
+- **Why:** The DEV-474 canary was the first generated project whose name exceeded 34 characters,
+  and its very first `bun run lint` failed. The home-page template inlined the name inside a JSX
+  element already indented eight columns, so any name past that threshold pushed the line beyond
+  the 100-column width and Biome demanded a break the generator never emitted. Every earlier canary
+  passed only because `void-starter-canary-20260725` is 28 characters. A generated project whose
+  lint gate fails on its first commit is broken on delivery: the CI the factory itself installs
+  goes red before the consumer writes a line of code.
+- **Rejected alternatives:**
+  - Running `biome check --write` over the rendered tree at generation time: it would fix any
+    future template drift too, but it makes the output depend on an external binary resolved at
+    render time, and the receipt's SHA-256 digests would then attest a file the generator did not
+    itself produce. Generation stays a pure function of the manifest.
+  - Capping the project name well below the schema maximum: it hides the defect behind a limit no
+    consumer can predict, and the same class of bug returns at the next template that interpolates
+    a manifest value into JSX.
+  - Asserting a maximum line width in the test instead of running Biome: the formatter, not a
+    proxy rule, is what the generated project's lint gate actually runs. This canary exists
+    precisely because a plausible-looking approximation had been trusted.
+- **Acceptance evidence:** The test fails on all four profiles before the fix and passes after it.
+  The regenerated canary passes `lint`, `type-check`, `test`, `knip` and `build` with exit code 0,
+  where its first generation exited 1 on lint.
+- **When to revisit:** Extend the same check to any future generated language surface (SQL, YAML,
+  Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
+  The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
+  non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+
 ### 65. Make the invitation token a credential the invitee must present
 
 - **Date:** 2026-07-28
@@ -1393,36 +1427,39 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
 - **When to revisit:** If invitations ever need to be delivered by the application itself rather
   than by the administrator, the link becomes an email template and the once-only display can go.
 
-### 64. Keep generated sources lint-stable at the longest accepted project name
+### 66. Exercise a manifest access mode the starter does not ship
 
-- **Date:** 2026-07-28
-- **Decision:** Generated TypeScript must already satisfy `biome check` for every project name the
-  manifest schema accepts, not only for the short names the fixtures use. Where the project name
-  reaches JSX, it is bound to a `PROJECT_NAME` module constant and rendered as `{PROJECT_NAME}`,
-  so the emitted line length no longer varies with the name. A composition test runs the repository
-  Biome binary over every generated `.ts`/`.tsx` file, for four profiles, with a 63-character name.
-- **Why:** The DEV-474 canary was the first generated project whose name exceeded 34 characters,
-  and its very first `bun run lint` failed. The home-page template inlined the name inside a JSX
-  element already indented eight columns, so any name past that threshold pushed the line beyond
-  the 100-column width and Biome demanded a break the generator never emitted. Every earlier canary
-  passed only because `void-starter-canary-20260725` is 28 characters. A generated project whose
-  lint gate fails on its first commit is broken on delivery: the CI the factory itself installs
-  goes red before the consumer writes a line of code.
+- **Date:** 2026-07-29
+- **Decision:** Any manifest option that changes the contract of an endpoint the test harness
+  already uses must be exercised inside the starter's own CI, under a forced mode, not only in a
+  generated project. `invite-only-http.integration.test.ts` mocks `./access-mode` to
+  `invite_only` and drives Better Auth's own handler with a `Request`, against the CI Postgres.
+  It asserts the effect on the rows -- account created and invitation consumed on admission, no
+  account and an unspent invitation on either refusal -- rather than the status alone.
+- **Why:** The starter ships `public_verified`, so before this suite nothing in its pipeline ever
+  entered the invite-only hook. The unit suite hands `presentedToken` to the rule as a parameter,
+  so it cannot observe a token lost between the cookie and the hook, and the Playwright specs
+  register no invite-only scenario at all, by design (ADR 63 makes the mode generated code, not an
+  environment variable). The contract therefore only ran inside a generated project. That single
+  blind spot produced two consecutive defects: ADR 63 shipped a token that was never verified, and
+  ADR 65 then shipped what looked like a broken admission. Each cost a canary round trip to see,
+  and the second one was not even a production defect -- Playwright's `APIRequestContext` owns its
+  cookie jar, so the hand-written `Cookie` header the fixtures passed never reached the server.
+  A suite that runs the real handler in three minutes names that difference; a canary cannot.
 - **Rejected alternatives:**
-  - Running `biome check --write` over the rendered tree at generation time: it would fix any
-    future template drift too, but it makes the output depend on an external binary resolved at
-    render time, and the receipt's SHA-256 digests would then attest a file the generator did not
-    itself produce. Generation stays a pure function of the manifest.
-  - Capping the project name well below the schema maximum: it hides the defect behind a limit no
-    consumer can predict, and the same class of bug returns at the next template that interpolates
-    a manifest value into JSX.
-  - Asserting a maximum line width in the test instead of running Biome: the formatter, not a
-    proxy rule, is what the generated project's lint gate actually runs. This canary exists
-    precisely because a plausible-looking approximation had been trusted.
-- **Acceptance evidence:** The test fails on all four profiles before the fix and passes after it.
-  The regenerated canary passes `lint`, `type-check`, `test`, `knip` and `build` with exit code 0,
-  where its first generation exited 1 on lint.
-- **When to revisit:** Extend the same check to any future generated language surface (SQL, YAML,
-  Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
-  The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
-  non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+  - Generating an `invite_only` project inside the starter's CI: the honest end-to-end answer, but
+    it makes the starter's pipeline depend on the factory and on a full generation per run, for a
+    contract that lives in `packages/auth`. The generated project already has its own pipeline.
+  - Parameterizing the Playwright matrix over the access mode: the specs read a generated constant,
+    which is the point of ADR 63. Forcing it for the browser run would mean regenerating the app.
+  - Trusting the live canary as the gate: it is the gate for provisioning and deployment, where
+    nothing else can stand in for a real provider. For a rule that runs in-process, it converts a
+    three-minute signal into an hour-long one, and it stayed silent here for as long as the fixture
+    was the thing at fault.
+- **Acceptance evidence:** The suite runs only where `DATABASE_URL` and `BETTER_AUTH_SECRET` exist,
+  which is CI, and covers admission with the address's own token, refusal with no token, and refusal
+  with a token issued for another address. The live canary republished on this same commit remains
+  the final gate for the deployed profile.
+- **When to revisit:** `public_signup_gated_activation` is declared and still inert; it gets the
+  same treatment when it is materialized. If a third mode arrives, the forced-mode mock stops
+  scaling and the suite should take the mode as a parameter instead.

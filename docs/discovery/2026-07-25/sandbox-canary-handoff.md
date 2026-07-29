@@ -466,7 +466,8 @@ et envoyé l'e-mail de configuration `badba0ca-317e-4d54-bcc3-6b5c25b91572` depu
 `5afef9d747b24bbdfcb9bca863673bc6564ef07dcfc652bab4bdbbedecfd2289`. `doctor` final vert sur ses
 quinze contrôles, reçus en mode `0600`.
 
-Le contrat d'accès lui-même est prouvé sur le déploiement Production réel :
+Le contrat d'accès lui-même est prouvé sur le déploiement Production réel, sur le commit
+`493c7f4949c3b139ebee2d080ab92605a6620f17`, donc avant que le token ne devienne obligatoire :
 
 - `fp+stranger@voidcorp.io` est refusé en HTTP 422 `FAILED_TO_CREATE_USER`;
 - une adresse jamais invitée reçoit un statut et un corps strictement identiques, donc l'endpoint
@@ -482,8 +483,19 @@ Limite assumée : le refus anonyme sur `/admin/invitations` n'a pas été distin
 la Deployment Protection Vercel, les deux répondant par une redirection. Ce garde est couvert sans
 ambiguïté par `invite-only.spec.ts` en CI, où la protection plateforme n'existe pas.
 
-Trois défauts réels ont été trouvés par ce canari et corrigés :
+Quatre défauts réels ont été trouvés par ce canari et corrigés, plus une fausse piste qui a
+produit la couverture manquante :
 
+- le token d'invitation n'était jamais vérifié. ADR 63 stockait un digest SHA-256 d'un
+  `randomBytes(32)`, le décrivait comme le porteur du lien envoyé à l'invité, et n'appelait
+  `hashInvitationToken` que sur le chemin d'écriture : l'admission ne tenait qu'à l'adresse. Le
+  canari l'a prouvé sur la Production réelle en créant le compte invité sans jamais détenir le
+  token. Sur un outil interne, où les adresses suivent un motif d'entreprise donc devinable,
+  n'importe qui pouvait créer le compte d'un collègue invité avant lui : il ne pouvait pas se
+  connecter, la vérification s'appliquant toujours, mais le hook post-création consomme
+  l'invitation, donc l'invité légitime trouvait son adresse prise et son invitation dépensée. Le
+  token est désormais une créance à présenter, portée par un cookie `httpOnly` que pose
+  `/invite/<token>` et comparée en temps constant (ADR 65);
 - le générateur inlinait `project.name` dans le JSX de la page d'accueil, à huit colonnes
   d'indentation. Au-delà de 34 caractères, la ligne dépassait la largeur Biome et le projet généré
   échouait son propre `bun run lint` au premier commit, CI rouge avant la première ligne de code du
@@ -497,12 +509,25 @@ Trois défauts réels ont été trouvés par ce canari et corrigés :
   invitation quand le projet l'exige, et un second cas vérifie qu'une adresse non invitée est
   refusée sans laisser de ligne `users`;
 - trois suites Playwright créaient leur utilisateur de fixture par la même inscription publique.
-  `signUpViaHttp` admet désormais l'adresse au préalable selon `ACCESS_MODE`, le nettoyage supprime
-  la ligne du ledger avec le compte, et les marqueurs `test.skip` ont été remplacés par la garde
-  `if (hasDb)` déjà utilisée par `invite-only.spec.ts`.
+  Elles sèment désormais l'invitation puis ouvrent réellement `/invite/<token>`, le nettoyage
+  supprime la ligne du ledger avec le compte, et les marqueurs `test.skip` ont été remplacés par la
+  garde `if (hasDb)` déjà utilisée par `invite-only.spec.ts`.
 
-Le point commun des deux derniers est structurant : ADR 63 a matérialisé `invite_only` avec sa
-propre spec de refus, mais aucune suite préexistante n'a été revisitée alors que le mode change le
-contrat d'un endpoint que la moitié du harnais de test utilise comme fixture. Toute future option de
-manifeste qui restreint un chemin déjà exercé par les tests doit faire l'objet du même passage en
-revue.
+La fausse piste vaut d'être enregistrée, parce qu'elle a coûté un aller-retour de canari. Après le
+correctif ADR 65, la CI du projet généré refusait toute admission tout en gardant ses quatre
+assertions de refus vertes, ce qui ressemblait exactement à un contrôle de token cassé en
+production. Les fixtures passaient alors le cookie par un header `Cookie` écrit à la main : or
+l'`APIRequestContext` de Playwright possède son propre cookie jar et peuple les cookies de requête
+depuis le contexte, donc ce header n'atteignait jamais le serveur. Chaque admission était refusée
+faute d'un token jamais envoyé, et chaque refus continuait de passer puisqu'il attend un refus dans
+tous les cas. Le code produit n'a jamais été cassé; la fixture l'était.
+
+La reproduction écrite pour trancher pilote le handler Better Auth avec une vraie `Request` sous
+mode forcé, contre le Postgres de CI. Elle est revenue verte du premier coup, ce qui est le résultat
+utile : elle a désigné la fixture. Elle est conservée, car c'est la seule chose dans la CI du starter
+qui exerce le contrat invite-only. Le starter livre `public_verified`, donc ses specs Playwright
+n'enregistrent aucun scénario invite-only, et la suite unitaire passe `presentedToken` en paramètre :
+le chemin du cookie jusqu'au hook n'existait nulle part. C'est ce point aveugle unique qui a laissé
+passer un token non vérifié en ADR 63, puis une admission apparemment cassée en ADR 65. Toute future
+option de manifeste qui restreint un chemin déjà exercé par les tests doit être exercée de la même
+façon, dans la CI du starter et sous mode forcé (ADR 66).
