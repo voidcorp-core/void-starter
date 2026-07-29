@@ -52,6 +52,7 @@ const config: NextConfig = {
     '@repo/notes',
     '@repo/posthog',
     '@repo/sentry',
+    '@repo/storage-r2',
     '@repo/ui',
   ],
 };

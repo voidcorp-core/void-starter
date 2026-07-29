@@ -135,6 +135,7 @@
         "@repo/notes": "workspace:*",
         "@repo/posthog": "workspace:*",
         "@repo/sentry": "workspace:*",
+        "@repo/storage-r2": "workspace:*",
         "@repo/ui": "workspace:*",
         "@sentry/nextjs": "^10.68.0",
         "better-auth": "^1.6.25",
