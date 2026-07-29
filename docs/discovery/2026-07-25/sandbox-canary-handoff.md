@@ -531,3 +531,53 @@ le chemin du cookie jusqu'au hook n'existait nulle part. C'est ce point aveugle 
 passer un token non vérifié en ADR 63, puis une admission apparemment cassée en ADR 65. Toute future
 option de manifeste qui restreint un chemin déjà exercé par les tests doit être exercée de la même
 façon, dans la CI du starter et sous mode forcé (ADR 66).
+
+### Republication sur le contrat courant, 2026-07-29
+
+Les preuves live ci-dessus datent d'avant ADR 65. Le canari a donc été republié sur le contrat en
+vigueur, et la moitié qui n'avait jamais été exercée en live, l'admission d'un invité présentant son
+token, l'est désormais.
+
+Deux publications successives, une tentative chacune, sur les six ressources adoptées aux mêmes
+identifiants :
+
+- `85d04ba203f62b390e68f430661aa9eeb64e3afd`, 251 fichiers, 921 753 octets, SHA-256 source
+  `dadcf79a9ffc163d548365d4a642e37d9d13adbf6a81e2fdc28931d4dc0895cb`. Job qualité vert, job E2E
+  rouge sur les trois seules specs qui créent un compte;
+- `7a731fb1572da96516e919e60e16bd0789d8bc67`, 252 fichiers, après correction. Workflow
+  `30434805342` entièrement vert, qualité et E2E, ce qui n'était jamais arrivé sur ce profil depuis
+  ADR 65.
+
+Ce second aller-retour a livré le défaut restant, et il n'était toujours pas dans le code produit.
+Better Auth valide l'origine de toute requête porteuse d'un cookie et refuse celle qui n'en déclare
+pas, avant que la règle d'admission ne s'exécute. Un navigateur envoie cet en-tête; l'
+`APIRequestContext` de Playwright jamais. Les fixtures étaient donc correctes tant qu'elles ne
+portaient aucun cookie, et ADR 65 leur en a donné un : à partir de là, chaque inscription était
+refusée en 403 sans jamais atteindre le hook. Quatre specs de refus restaient vertes, puisqu'un refus
+CSRF satisfait `ok() === false` aussi bien qu'un refus d'admission. Les requêtes passent désormais
+par un helper unique qui envoie l'origine, et un refus n'est accepté comme preuve qu'après exclusion
+des codes de transport (ADR 67).
+
+La trace Playwright a été décisive : elle montrait le cookie `void_invitation` correctement transmis
+au serveur, et la réponse `403 MISSING_OR_NULL_ORIGIN`. Sans elle, la lecture naturelle restait un
+contrôle de token cassé, pour le troisième tour consécutif.
+
+Le contrat d'admission est enfin prouvé sur le déploiement Production `dpl_4dB519JyugwGGfjjHpTKuGFvZdMC` :
+
+- une adresse invitée qui ouvre réellement `/invite/<token>`, garde le cookie et s'inscrit est admise
+  en HTTP 200. La ligne `users` existe et l'invitation est consommée;
+- la même invitation sans passage par le lien est refusée en HTTP 422 `FAILED_TO_CREATE_USER`, sans
+  ligne `users` et sans consommer l'invitation. Un refus qui la consommerait serait exactement le
+  déni d'onboarding que ADR 65 empêche;
+- les deux identités de test ont été supprimées, résidu vérifié à zéro.
+
+Le smoke protégé du même commit répond HTTP 200, 14 151 octets, SHA-256
+`5894f444611fb030ea61d2a385c8b85416e3350763f58576413936c92e7bf4fa`. Les six migrations Neon sont
+attestées sur ce commit sans modification de schéma, `doctor` est vert sur ses quinze contrôles, les
+reçus sont en mode `0600`, et aucun secret n'a été persisté. Le premier `delivery:live` a échoué en
+`VERCEL_PROTECTION_BYPASS_INVALID`, parce que la sonde d'admission avait régénéré le bypass du
+projet quelques minutes plus tôt; la reprise avec un bypass frais a réussi.
+
+Une note pour la lecture des runs précédents : `auth-signup.spec.ts` pilote le vrai formulaire dans
+le navigateur, en entrant par le lien d'invitation, et il passait déjà sur la publication rouge. Le
+parcours navigateur n'a jamais été cassé. Seules les fixtures parlant HTTP en direct l'étaient.
