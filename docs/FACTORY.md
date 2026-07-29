@@ -132,13 +132,18 @@ whether Better Auth's user-create hooks consult the `invitations` ledger. Becaus
 and not an environment variable, reopening an invite-only project requires changing the manifest and
 redeploying rather than editing a provider dashboard.
 
-In that mode an account is created only for the bootstrap administrator or for an address holding a
-pending, unexpired, unrevoked invitation. The check runs in the user-create hook, so it covers email
-sign-up, magic link and social callbacks alike. Invitations are issued and revoked from
-`/admin/invitations`, a surface the factory prunes on any other mode; only the SHA-256 digest of the
-token is stored, so the link shown at issuance is not recoverable afterwards. `invite_only` requires
-the Better Auth provider -- a manifest selecting it on Clerk is rejected rather than silently
-unenforced.
+In that mode an account is created only for the bootstrap administrator, or for an address that both
+holds a pending, unexpired, unrevoked invitation and presents the token it was issued with (ADR 65).
+The token reaches the request through a short-lived `httpOnly` cookie parked by `/invite/<token>`,
+which is why the check can live in the single user-create hook and still cover email sign-up, magic
+link and social callbacks alike. Requiring the token is what makes the invitation a credential
+rather than a list membership: admitting on the address alone would let anyone who guesses an
+invited address create that account first and burn the invitation.
+
+Invitations are issued and revoked from `/admin/invitations`, a surface the factory prunes on any
+other mode. The screen shows a complete link exactly once; only the SHA-256 digest of the token is
+stored, so it is not recoverable afterwards. `invite_only` requires the Better Auth provider -- a
+manifest selecting it on Clerk is rejected rather than silently unenforced.
 
 `public_signup_gated_activation` is declared in the schema but not yet materialized: it currently
 generates the same project as `public_verified`.
@@ -333,7 +338,9 @@ Forge.
 The generator fails if the target exists or is inside the source repository. It rejects source
 symlinks and excludes `.git`, `.env*` secrets, caches, build outputs, the source lockfile, factory
 code, Harness state, agent-governance artifacts including the project MCP configuration
-(`.mcp.json`, which points agents at this repository's own Linear workspace), internal discovery
+(`.mcp.json`, which points agents at this repository's own Linear workspace through a local
+`mcp-remote` bridge holding its own auth directory, so a session here cannot pick up the credentials
+of another workspace), internal discovery
 handoffs and historical implementation plans. The output stores the normalized manifest and a deterministic receipt under
 `.void-starter/`. `doctor` recalculates the plan and SHA-256 digests, checks surface and local
 capability presence, scans package manifests and a newly generated lockfile for Harness
@@ -971,8 +978,9 @@ doctors these profiles:
 The remaining remote validation target includes:
 
 - EU private documents;
-- voice/realtime control plane;
-- provisioned provider smoke tests.
+- voice/realtime control plane.
+
+The invite-only internal tool has been validated remotely as well, on its own provider stack.
 
 Each fixture must install, type-check, migrate, seed, build and pass smoke tests. Provisioning
 adapters use contract tests and dry-run fixtures; live canaries cover the provider APIs that cannot
@@ -1011,10 +1019,14 @@ be proven locally.
     canary proved a real remote run suspending and completing, a unique idempotency ledger row per
     step, a 401 on the anonymous trigger, and a green CI, migration, deployment and doctor on one
     exact commit. Selecting the workload requires an explicit non-EU processor approval (ADR 62).**
-15. Materialize the invite-only internal-tool profile. **Done locally; `auth.access_mode` now
+15. Materialize the invite-only internal-tool profile. **Done and live-validated; `auth.access_mode`
     generates `packages/auth/src/access-mode.ts` and gates account creation through the
-    `invitations` ledger in Better Auth's user-create hooks (ADR 63). The live canary remains the
-    final gate.**
+    `invitations` ledger in Better Auth's user-create hooks (ADR 63). The canary provisioned a
+    complete new provider stack rather than extending the historical one, adopted it twice without
+    duplicates, and proved on the real Production deployment that an uninvited address is refused
+    with no oracle, that no account is created on any path, and that the bootstrap administrator is
+    admitted without an invitation and receives the admin role. It also found three real defects
+    (ADR 64 and the two test-harness fixes).**
 16. Connect Forge as manifest producer and Linear as project bootstrap.
 
 ## 16. Open decisions

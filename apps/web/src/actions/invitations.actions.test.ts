@@ -54,11 +54,40 @@ describe('issueInvitationAction', () => {
       email: 'invitee@example.com',
       invitedBy: 'admin-1',
     });
+    // A path, not a bare token: the token is only usable through /invite,
+    // which is what parks it in the cookie the admission check reads (ADR 65).
+    // The origin is added client-side, where it is known without configuration.
     expect(result).toMatchObject({
       email: 'invitee@example.com',
-      token: 'raw-token',
+      invitePath: '/invite/raw-token',
       expiresAt: '2026-07-31T10:00:00.000Z',
     });
+  });
+
+  it('returns no bare token alongside the link, so the credential appears once and in one shape', async () => {
+    issueInvitationForAdmin.mockResolvedValue({
+      id: 'invitation-1',
+      email: 'invitee@example.com',
+      token: 'raw-token',
+      expiresAt: new Date('2026-07-31T10:00:00.000Z'),
+    });
+
+    const result = await issueInvitationAction({ email: 'invitee@example.com' });
+
+    expect(result).not.toHaveProperty('token');
+  });
+
+  it('percent-encodes the token in the path so a link is never malformed', async () => {
+    issueInvitationForAdmin.mockResolvedValue({
+      id: 'invitation-1',
+      email: 'invitee@example.com',
+      token: 'raw token/with?specials',
+      expiresAt: new Date('2026-07-31T10:00:00.000Z'),
+    });
+
+    const result = await issueInvitationAction({ email: 'invitee@example.com' });
+
+    expect(result).toMatchObject({ invitePath: '/invite/raw%20token%2Fwith%3Fspecials' });
   });
 
   it('rejects an input that is not an email address before touching the ledger', async () => {

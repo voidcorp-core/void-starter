@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import type { InvitationTimestamps } from './invitation.helper';
+import { hashInvitationToken, type InvitationTimestamps } from './invitation.helper';
 import {
   assertSignUpAdmitted,
   consumeInvitationFor,
@@ -14,7 +14,7 @@ import {
 const now = new Date('2026-07-28T10:00:00.000Z');
 const bootstrapAdminEmail = 'admin@example.com';
 
-function gatewayReturning(invitation: InvitationTimestamps | undefined): InvitationGateway {
+function gatewayReturning(invitation: LedgerRow | undefined): InvitationGateway {
   return {
     findLatestInvitationByEmail: vi.fn(async () => invitation),
     markInvitationUsed: vi.fn(async () => true),
@@ -22,10 +22,16 @@ function gatewayReturning(invitation: InvitationTimestamps | undefined): Invitat
   };
 }
 
-const pending: InvitationTimestamps = {
+type LedgerRow = InvitationTimestamps & { tokenHash: string };
+
+/** The token the invitee presents, and the digest the ledger stores for it. */
+const INVITATION_TOKEN = 'a-high-entropy-invitation-token';
+
+const pending: LedgerRow = {
   expiresAt: new Date('2026-07-29T10:00:00.000Z'),
   usedAt: null,
   revokedAt: null,
+  tokenHash: hashInvitationToken(INVITATION_TOKEN),
 };
 
 describe('assertSignUpAdmitted', () => {
@@ -52,14 +58,80 @@ describe('assertSignUpAdmitted', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('admits an address holding a pending, unexpired invitation', async () => {
+  it('admits an address holding a pending, unexpired invitation whose token it presents', async () => {
+    const gateway = gatewayReturning(pending);
+
+    await expect(
+      assertSignUpAdmitted({
+        email: 'invitee@example.com',
+        bootstrapAdminEmail,
+        now,
+        gateway,
+        presentedToken: INVITATION_TOKEN,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(gateway.findLatestInvitationByEmail).toHaveBeenCalledWith('invitee@example.com');
+  });
+
+  it('refuses a pending invitation when no token is presented', async () => {
     const gateway = gatewayReturning(pending);
 
     await expect(
       assertSignUpAdmitted({ email: 'invitee@example.com', bootstrapAdminEmail, now, gateway }),
-    ).resolves.toBeUndefined();
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
 
-    expect(gateway.findLatestInvitationByEmail).toHaveBeenCalledWith('invitee@example.com');
+  it('refuses a token that does not match the stored digest, so knowing the address is not enough', async () => {
+    const gateway = gatewayReturning(pending);
+
+    await expect(
+      assertSignUpAdmitted({
+        email: 'invitee@example.com',
+        bootstrapAdminEmail,
+        now,
+        gateway,
+        presentedToken: 'a-guessed-token',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('refuses a valid token presented for a different address', async () => {
+    // The digest belongs to the invitation of another address; binding the check
+    // to the email alone would let one leaked link open any invited account.
+    const gateway = gatewayReturning({
+      ...pending,
+      tokenHash: hashInvitationToken('someone-elses-token'),
+    });
+
+    await expect(
+      assertSignUpAdmitted({
+        email: 'invitee@example.com',
+        bootstrapAdminEmail,
+        now,
+        gateway,
+        presentedToken: INVITATION_TOKEN,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('gives a token mismatch the same message as an absent invitation', async () => {
+    const mismatch = await assertSignUpAdmitted({
+      email: 'invitee@example.com',
+      bootstrapAdminEmail,
+      now,
+      gateway: gatewayReturning(pending),
+      presentedToken: 'a-guessed-token',
+    }).catch((error: unknown) => (error as Error).message);
+
+    const absent = await assertSignUpAdmitted({
+      email: 'stranger@example.com',
+      bootstrapAdminEmail,
+      now,
+      gateway: gatewayReturning(undefined),
+    }).catch((error: unknown) => (error as Error).message);
+
+    expect(mismatch).toBe(absent);
   });
 
   it('normalizes the address before the lookup, so a case variant cannot miss a revocation', async () => {
@@ -70,6 +142,7 @@ describe('assertSignUpAdmitted', () => {
       bootstrapAdminEmail,
       now,
       gateway,
+      presentedToken: INVITATION_TOKEN,
     });
 
     expect(gateway.findLatestInvitationByEmail).toHaveBeenCalledWith('invitee@example.com');

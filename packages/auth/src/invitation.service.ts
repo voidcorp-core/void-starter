@@ -7,6 +7,7 @@ import {
   hashInvitationToken,
   type InvitationTimestamps,
   invitationExpiryFrom,
+  matchesInvitationToken,
   normalizeInvitationEmail,
   resolveInvitationState,
 } from './invitation.helper';
@@ -35,7 +36,9 @@ import {
 
 /** The ledger operations the rule needs. Implemented by `invitation.repository.ts`. */
 export type InvitationGateway = {
-  findLatestInvitationByEmail(normalizedEmail: string): Promise<InvitationTimestamps | undefined>;
+  findLatestInvitationByEmail(
+    normalizedEmail: string,
+  ): Promise<(InvitationTimestamps & { tokenHash: string }) | undefined>;
   markInvitationUsed(normalizedEmail: string, usedAt: Date): Promise<boolean>;
   insertInvitation(row: {
     id: string;
@@ -51,6 +54,12 @@ type AdmissionInput = {
   bootstrapAdminEmail: string | undefined;
   now: Date;
   gateway: InvitationGateway;
+  /**
+   * The raw token the visitor presented, carried from the invitation link.
+   * Absent means no link was followed, which is a refusal for anyone but the
+   * bootstrap administrator.
+   */
+  presentedToken?: string | undefined;
 };
 
 /**
@@ -77,7 +86,16 @@ function isBootstrapAdministrator(
  *
  * The bootstrap administrator is admitted without a ledger lookup, which is
  * what makes the first account possible on a tool where nobody can invite yet.
- * Every other address must hold a pending, unexpired, unrevoked invitation.
+ * Every other address must hold a pending, unexpired, unrevoked invitation AND
+ * present the token that invitation was issued with.
+ *
+ * Requiring the token is what makes the invitation a credential rather than a
+ * list membership. Admitting on the address alone would let anyone who guesses
+ * an invited address -- trivial where addresses follow a company pattern --
+ * create that account first. They could not sign in, since verification still
+ * applies, but the post-creation hook would consume the invitation, so the
+ * legitimate invitee would find their address taken and their invitation spent,
+ * repeatably.
  */
 export async function assertSignUpAdmitted(input: AdmissionInput): Promise<void> {
   const normalizedEmail = normalizeInvitationEmail(input.email);
@@ -87,7 +105,21 @@ export async function assertSignUpAdmitted(input: AdmissionInput): Promise<void>
   const invitation = await input.gateway.findLatestInvitationByEmail(normalizedEmail);
   const state = resolveInvitationState(invitation, input.now);
 
-  if (state === 'usable') return;
+  if (state === 'usable' && invitation) {
+    if (
+      input.presentedToken &&
+      matchesInvitationToken(input.presentedToken, invitation.tokenHash)
+    ) {
+      return;
+    }
+    // Separated from `state` in the log so an operator can tell a stranger from
+    // an invitee who lost their link; the visitor sees one message either way.
+    logger.warn(
+      { state, reason: input.presentedToken ? 'token-mismatch' : 'token-absent' },
+      'invite-only sign-up refused',
+    );
+    throw new ForbiddenError(REFUSAL_MESSAGE);
+  }
 
   logger.warn({ state }, 'invite-only sign-up refused');
   throw new ForbiddenError(REFUSAL_MESSAGE);

@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   canonicalManifest,
@@ -8,6 +11,40 @@ import {
 } from './__fixtures__/manifest.fixture';
 import { createCapabilityFilePlan, createProjectFilePlan } from './capability-composition.service';
 import { parseBuildManifest } from './factory.service';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const BIOME_BIN = resolve(REPO_ROOT, 'node_modules/.bin/biome');
+
+/**
+ * The longest project name the manifest schema accepts (63 characters).
+ *
+ * Generated sources must satisfy the lint gate at this length, not only at the
+ * short names the fixtures happen to use.
+ */
+const LONGEST_PROJECT_NAME = 'void-starter-canary-internal-tool-with-a-deliberately-long-name';
+
+/**
+ * Runs the generated content through the same `biome check` the generated
+ * project runs, from the repository root so the real overrides apply.
+ */
+function checkWithBiome(path: string, content: string): string {
+  const result = spawnSync(BIOME_BIN, ['check', '--write', `--stdin-file-path=${path}`], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    input: content,
+  });
+  if (result.status !== 0) {
+    throw new Error(`biome check failed for ${path}: ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
+function withProjectName<T extends { project: { name: string; profile: string } }>(
+  fixture: T,
+  name: string,
+): Record<string, unknown> {
+  return { ...fixture, project: { ...fixture.project, name } };
+}
 
 function readGeneratedJson(
   plan: ReturnType<typeof createCapabilityFilePlan>,
@@ -189,6 +226,23 @@ describe('createCapabilityFilePlan', () => {
         'packages/ui',
       ]),
     );
+  });
+
+  it.each([
+    ['public web', minimalManifest],
+    ['better-auth web', canonicalManifest],
+    ['clerk web', clerkManifest],
+    ['durable-jobs web', durableJobsManifest],
+  ])('emits %s TypeScript sources that already pass the lint gate', (_profile, fixture) => {
+    const plan = createProjectFilePlan(
+      parseBuildManifest(withProjectName(fixture, LONGEST_PROJECT_NAME)),
+    );
+    const sources = plan.writes.filter((file) => /\.tsx?$/.test(file.path));
+
+    expect(sources.length).toBeGreaterThan(0);
+    for (const file of sources) {
+      expect(checkWithBiome(file.path, file.content), file.path).toBe(file.content);
+    }
   });
 
   it('combines surface and capability plans deterministically without duplicate writes', () => {

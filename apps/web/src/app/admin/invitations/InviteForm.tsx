@@ -39,12 +39,15 @@ type InviteValues = z.infer<typeof inviteSchema>;
 
 type Issued = {
   email: string;
-  token: string;
+  invitePath: string;
   expiresAt: string;
 };
 
 export function InviteForm() {
   const [issued, setIssued] = useState<Issued | undefined>(undefined);
+  // Read during render rather than in an effect: this component only ever runs
+  // in the browser, and an effect would flash a link missing its origin.
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const form = useForm<InviteValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { email: '' },
@@ -91,10 +94,17 @@ export function InviteForm() {
         {issued ? (
           <div className="space-y-1 rounded-md border border-border bg-muted/40 p-3 text-sm">
             <p className="font-medium">
-              Invitation token for {issued.email}, shown once and not recoverable:
+              Invitation link for {issued.email}, shown once and not recoverable:
             </p>
-            <code className="block break-all">{issued.token}</code>
+            {/* Origin resolved client-side: the server action has no reliable
+                way to know which of a project's URLs the administrator is on,
+                and this component always does. */}
+            <code className="block break-all" data-testid="invite-link">
+              {origin}
+              {issued.invitePath}
+            </code>
             <p className="text-muted-foreground">
+              Send it to {issued.email}. Opening it is what lets that address create an account.
               Expires {new Date(issued.expiresAt).toLocaleString()}.
             </p>
           </div>

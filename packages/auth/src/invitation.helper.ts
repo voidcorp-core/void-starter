@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 /**
  * Pure helpers for the invite-only access mode (`auth.access_mode: invite_only`,
@@ -39,6 +39,57 @@ export function normalizeInvitationEmail(email: string): string {
  */
 export function hashInvitationToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Whether a presented token is the one an invitation was issued with.
+ *
+ * Compared in constant time: the digests are fixed-length, so an early-exit
+ * comparison would leak how many leading characters a guess got right, which is
+ * exactly the feedback an attacker needs to walk a token one character at a
+ * time. `timingSafeEqual` throws on differing lengths, so the length is checked
+ * first -- a length mismatch is not a secret, it just means the input was never
+ * a SHA-256 digest.
+ */
+export function matchesInvitationToken(presentedToken: string, storedHash: string): boolean {
+  const presented = Buffer.from(hashInvitationToken(presentedToken), 'utf8');
+  const stored = Buffer.from(storedHash, 'utf8');
+  if (presented.length !== stored.length) return false;
+  return timingSafeEqual(presented, stored);
+}
+
+/**
+ * Name of the cookie that carries the invitation token from the link the
+ * invitee opened to whichever endpoint then creates their account.
+ *
+ * A cookie rather than a request field because account creation happens on
+ * three different endpoints -- email sign-up, magic link, and a social provider
+ * callback that returns from an external redirect with no body of ours. A
+ * cookie is the only carrier all three share, and the social callback in
+ * particular cannot carry anything else.
+ */
+export const INVITATION_COOKIE_NAME = 'void_invitation';
+
+/**
+ * Extracts the invitation token from a raw `Cookie` header.
+ *
+ * Kept pure and separate from the hook so the parsing is unit-testable without
+ * a Better Auth instance. Returns undefined for a missing or empty value rather
+ * than an empty string, so the caller cannot mistake "present but blank" for a
+ * presented token.
+ */
+export function readInvitationCookie(
+  cookieHeader: string | undefined, // allow-null: Headers.get returns null at the framework boundary
+): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator === -1) continue;
+    if (part.slice(0, separator).trim() !== INVITATION_COOKIE_NAME) continue;
+    const value = decodeURIComponent(part.slice(separator + 1).trim());
+    return value.length > 0 ? value : undefined;
+  }
+  return undefined;
 }
 
 /** Computes an expiry instant without mutating the reference instant. */

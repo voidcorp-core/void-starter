@@ -21,7 +21,7 @@ export {
   defineFormAction,
   initialActionState,
 } from './auth-action';
-export type { InvitationState } from './invitation.helper';
+export { INVITATION_COOKIE_NAME, type InvitationState } from './invitation.helper';
 export {
   issueInvitationForAdmin,
   listInvitationsForAdmin,

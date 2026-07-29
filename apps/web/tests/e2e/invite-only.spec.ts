@@ -4,7 +4,14 @@ import { expect, test } from '@playwright/test';
 // `next/headers` and is unresolvable outside the Next runtime. `access-mode.ts`
 // has no imports at all, so it is safe to read from any context.
 import { ACCESS_MODE } from '@repo/auth/access-mode';
-import { closeTestSql, deleteTestUser } from './_helpers';
+import {
+  admitForSignUp,
+  closeTestSql,
+  deleteTestUser,
+  enterThroughInvitationLink,
+  expectRefusedByAdmission,
+  postToAuth,
+} from './_helpers';
 
 /**
  * The invite-only account creation contract (ADR 63).
@@ -38,46 +45,102 @@ if (hasDb && isInviteOnlyProject) {
     });
 
     test('refuses email sign-up for an address that holds no invitation', async ({ request }) => {
-      const response = await request.post('/api/auth/sign-up/email', {
-        data: { email: uninvited, password, name: 'Uninvited' },
-        failOnStatusCode: false,
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: uninvited,
+        password,
+        name: 'Uninvited',
       });
 
-      expect(response.ok()).toBe(false);
+      await expectRefusedByAdmission(response);
     });
 
     test('creates no account through the magic-link path either', async ({ request }) => {
-      await request.post('/api/auth/sign-in/magic-link', {
-        data: { email: uninvited },
-        failOnStatusCode: false,
-      });
+      await postToAuth(request, '/api/auth/sign-in/magic-link', { email: uninvited });
 
       // Whatever the magic-link endpoint answers, no account may exist
       // afterwards: a successful password sign-in would prove one was created.
-      const signIn = await request.post('/api/auth/sign-in/email', {
-        data: { email: uninvited, password },
-        failOnStatusCode: false,
+      const signIn = await postToAuth(request, '/api/auth/sign-in/email', {
+        email: uninvited,
+        password,
       });
       expect(signIn.ok()).toBe(false);
     });
 
     test('does not reveal whether an address was ever invited', async ({ request }) => {
-      const neverInvited = await request.post('/api/auth/sign-up/email', {
-        data: { email: `e2e-never-${Date.now()}@example.test`, password, name: 'Never' },
-        failOnStatusCode: false,
+      const neverInvited = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: `e2e-never-${Date.now()}@example.test`,
+        password,
+        name: 'Never',
       });
-      const alsoUninvited = await request.post('/api/auth/sign-up/email', {
-        data: { email: uninvited, password, name: 'Uninvited' },
-        failOnStatusCode: false,
+      const alsoUninvited = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: uninvited,
+        password,
+        name: 'Uninvited',
       });
 
       expect(neverInvited.status()).toBe(alsoUninvited.status());
+      await expectRefusedByAdmission(neverInvited);
     });
 
     test('keeps the invitation admin screen behind authentication', async ({ page }) => {
       await page.goto('/admin/invitations');
 
       await expect(page).not.toHaveURL(/\/admin\/invitations$/);
+    });
+
+    /**
+     * The invitation is a credential, not a list membership (ADR 65). Holding a
+     * pending invitation is not enough: the address must also present the token
+     * it was issued with. Without this, anyone who guesses an invited address
+     * could create that account first and burn the invitation.
+     */
+    test('refuses an invited address that presents no token', async ({ request }) => {
+      const invited = `e2e-notoken-${Date.now()}@example.test`;
+      await admitForSignUp(invited);
+
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'No Token',
+      });
+
+      await expectRefusedByAdmission(response);
+      await deleteTestUser(invited);
+    });
+
+    test('refuses an invited address that presents the wrong token', async ({ request }) => {
+      const invited = `e2e-wrongtoken-${Date.now()}@example.test`;
+      const other = `e2e-othertoken-${Date.now()}@example.test`;
+      await admitForSignUp(invited);
+      // A real token, issued for a different address: a leaked link must not
+      // open an account it was not issued for.
+      const foreignToken = await admitForSignUp(other);
+      await enterThroughInvitationLink(request, foreignToken);
+
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'Wrong Token',
+      });
+
+      await expectRefusedByAdmission(response);
+      await deleteTestUser(invited);
+      await deleteTestUser(other);
+    });
+
+    test('admits an invited address that presents its own token', async ({ request }) => {
+      const invited = `e2e-goodtoken-${Date.now()}@example.test`;
+      const token = await admitForSignUp(invited);
+      await enterThroughInvitationLink(request, token);
+
+      const response = await postToAuth(request, '/api/auth/sign-up/email', {
+        email: invited,
+        password,
+        name: 'Good Token',
+      });
+
+      expect(response.ok()).toBe(true);
+      await deleteTestUser(invited);
     });
   });
 }

@@ -1352,3 +1352,151 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   declared and still inert. Revisit the ledger shape when a project needs more than one pending
   invitation per address, and revisit the Better Auth prerequisite if a Clerk allowlist adapter is
   ever adopted.
+
+### 64. Keep generated sources lint-stable at the longest accepted project name
+
+- **Date:** 2026-07-28
+- **Decision:** Generated TypeScript must already satisfy `biome check` for every project name the
+  manifest schema accepts, not only for the short names the fixtures use. Where the project name
+  reaches JSX, it is bound to a `PROJECT_NAME` module constant and rendered as `{PROJECT_NAME}`,
+  so the emitted line length no longer varies with the name. A composition test runs the repository
+  Biome binary over every generated `.ts`/`.tsx` file, for four profiles, with a 63-character name.
+- **Why:** The DEV-474 canary was the first generated project whose name exceeded 34 characters,
+  and its very first `bun run lint` failed. The home-page template inlined the name inside a JSX
+  element already indented eight columns, so any name past that threshold pushed the line beyond
+  the 100-column width and Biome demanded a break the generator never emitted. Every earlier canary
+  passed only because `void-starter-canary-20260725` is 28 characters. A generated project whose
+  lint gate fails on its first commit is broken on delivery: the CI the factory itself installs
+  goes red before the consumer writes a line of code.
+- **Rejected alternatives:**
+  - Running `biome check --write` over the rendered tree at generation time: it would fix any
+    future template drift too, but it makes the output depend on an external binary resolved at
+    render time, and the receipt's SHA-256 digests would then attest a file the generator did not
+    itself produce. Generation stays a pure function of the manifest.
+  - Capping the project name well below the schema maximum: it hides the defect behind a limit no
+    consumer can predict, and the same class of bug returns at the next template that interpolates
+    a manifest value into JSX.
+  - Asserting a maximum line width in the test instead of running Biome: the formatter, not a
+    proxy rule, is what the generated project's lint gate actually runs. This canary exists
+    precisely because a plausible-looking approximation had been trusted.
+- **Acceptance evidence:** The test fails on all four profiles before the fix and passes after it.
+  The regenerated canary passes `lint`, `type-check`, `test`, `knip` and `build` with exit code 0,
+  where its first generation exited 1 on lint.
+- **When to revisit:** Extend the same check to any future generated language surface (SQL, YAML,
+  Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
+  The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
+  non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+
+### 65. Make the invitation token a credential the invitee must present
+
+- **Date:** 2026-07-28
+- **Decision:** Admission under `invite_only` now requires two things: a pending, unexpired,
+  unrevoked invitation for the address, AND the token that invitation was issued with. The token
+  travels in a short-lived, `httpOnly` cookie parked by a new `/invite/<token>` route, and the
+  user-create hook reads it from the request headers. Comparison is constant-time over the digests.
+  The admin screen hands out a complete link rather than a bare token, and the server action returns
+  `invitePath` instead of `token`.
+- **Why:** ADR 63 stored a SHA-256 digest of a `randomBytes(32)` token, described it as "the bearer
+  credential in the mailed link", and never verified it: `hashInvitationToken` was called only on
+  the write path. Admission was keyed on the email alone. The DEV-474 canary proved it on the real
+  Production deployment by creating the invited account without ever holding the token. On an
+  internal tool, where addresses follow a company pattern and are therefore guessable, anyone could
+  create an invited colleague's account before they did. They could not sign in, since verification
+  still applies, but the post-creation hook consumes the invitation, so the legitimate invitee found
+  their address taken and their invitation spent -- a targeted, repeatable denial of onboarding.
+  Every piece of the cryptographic apparatus was already in place; only the check was missing.
+- **Rejected alternatives:**
+  - A query parameter on `/sign-up`: the credential would then persist in browser history, in the
+    `Referer` header sent to any third party the page loads, and in every intermediate proxy log.
+  - Passing the token as a sign-up request field: it would cover email sign-up only. Account
+    creation also happens through magic link and a social provider callback, and that callback
+    returns from an external redirect carrying nothing of ours. A cookie is the one carrier all
+    three share, which is why the check can stay in the single user-create hook.
+  - Validating the token in the `/invite` route: answering "is this token real" before an account is
+    attempted turns the link into an oracle for which invitations exist. The route stays deliberately
+    unable to tell, and the single decision point remains the hook.
+  - Dropping the token entirely and keeping email-only admission: defensible for a mono-tenant tool,
+    but then the digest column, the random token and the once-only display are dead weight that
+    reads like a security control. Either verify it or remove it; keeping both is theatre.
+- **Acceptance evidence:** Service tests cover admission with the right token, refusal with no token,
+  refusal with a wrong token, refusal with a valid token issued for another address, and that a
+  mismatch is indistinguishable from an absent invitation. Route tests cover the cookie attributes,
+  the shape rejection, and that a malformed and a well-formed token get identical answers. E2E adds
+  the three-way no-token / wrong-token / own-token case against a real database, and the sign-up
+  suite now enters through the invitation link.
+- **When to revisit:** If invitations ever need to be delivered by the application itself rather
+  than by the administrator, the link becomes an email template and the once-only display can go.
+
+### 66. Exercise a manifest access mode the starter does not ship
+
+- **Date:** 2026-07-29
+- **Decision:** Any manifest option that changes the contract of an endpoint the test harness
+  already uses must be exercised inside the starter's own CI, under a forced mode, not only in a
+  generated project. `invite-only-http.integration.test.ts` mocks `./access-mode` to
+  `invite_only` and drives Better Auth's own handler with a `Request`, against the CI Postgres.
+  It asserts the effect on the rows -- account created and invitation consumed on admission, no
+  account and an unspent invitation on either refusal -- rather than the status alone.
+- **Why:** The starter ships `public_verified`, so before this suite nothing in its pipeline ever
+  entered the invite-only hook. The unit suite hands `presentedToken` to the rule as a parameter,
+  so it cannot observe a token lost between the cookie and the hook, and the Playwright specs
+  register no invite-only scenario at all, by design (ADR 63 makes the mode generated code, not an
+  environment variable). The contract therefore only ran inside a generated project. That single
+  blind spot produced two consecutive defects: ADR 63 shipped a token that was never verified, and
+  ADR 65 then shipped what looked like a broken admission. Each cost a canary round trip to see,
+  and the second one was not even a production defect -- Playwright's `APIRequestContext` owns its
+  cookie jar, so the hand-written `Cookie` header the fixtures passed never reached the server.
+  A suite that runs the real handler in three minutes names that difference; a canary cannot.
+- **Rejected alternatives:**
+  - Generating an `invite_only` project inside the starter's CI: the honest end-to-end answer, but
+    it makes the starter's pipeline depend on the factory and on a full generation per run, for a
+    contract that lives in `packages/auth`. The generated project already has its own pipeline.
+  - Parameterizing the Playwright matrix over the access mode: the specs read a generated constant,
+    which is the point of ADR 63. Forcing it for the browser run would mean regenerating the app.
+  - Trusting the live canary as the gate: it is the gate for provisioning and deployment, where
+    nothing else can stand in for a real provider. For a rule that runs in-process, it converts a
+    three-minute signal into an hour-long one, and it stayed silent here for as long as the fixture
+    was the thing at fault.
+- **Acceptance evidence:** The suite runs only where `DATABASE_URL` and `BETTER_AUTH_SECRET` exist,
+  which is CI, and covers admission with the address's own token, refusal with no token, and refusal
+  with a token issued for another address. The live canary republished on this same commit remains
+  the final gate for the deployed profile.
+- **When to revisit:** `public_signup_gated_activation` is declared and still inert; it gets the
+  same treatment when it is materialized. If a third mode arrives, the forced-mode mock stops
+  scaling and the suite should take the mode as a parameter instead.
+
+### 67. Make test clients speak the transport, and prove a refusal came from the rule
+
+- **Date:** 2026-07-29
+- **Decision:** Every request a test harness sends to an authentication endpoint goes through one
+  helper that sends what a real client sends -- today an `Origin` header matching the base URL the
+  run targets -- and every refusal is asserted with a helper that rejects the transport refusal
+  codes (`MISSING_OR_NULL_ORIGIN`, `INVALID_ORIGIN`,
+  `CROSS_SITE_NAVIGATION_LOGIN_BLOCKED`). A refusal counts as evidence only once it is shown to be
+  the application's.
+- **Why:** Better Auth validates the origin of any request that carries a cookie
+  (`validateOrigin` reads `headers.has('cookie')` and then demands `Origin` or `Referer`). Playwright's
+  `APIRequestContext` sends neither. The fixtures were therefore correct for exactly as long as they
+  carried no cookie, and ADR 65 gave them one: from that commit on, every sign-up POST was refused
+  with 403 before reaching the admission rule. Four refusal specs kept passing, because
+  `response.ok() === false` is true for a CSRF refusal too, so they asserted nothing about the
+  contract they were named for. Only the admission spec went red, which is what made a correct rule
+  look broken for a second canary round trip. The same shape as the cookie-jar false lead that
+  preceded it: a harness that is not built like a client produces green that means nothing.
+- **Rejected alternatives:**
+  - Disabling the origin or CSRF check for tests: it removes in the harness the protection that
+    exists in production, so a misconfigured `trustedOrigins` -- a real and easy production defect --
+    would become invisible exactly where it should be caught.
+  - Setting `extraHTTPHeaders` globally in the Playwright config: it also applies to browser
+    navigations, where Chrome already computes the header. Pinning a value there overrides the real
+    client's behaviour in the one place the harness has a real client.
+  - Keeping `expect(response.ok()).toBe(false)`: that is the assertion that hid the defect. A
+    refusal test that cannot tell which layer refused is a test of nothing.
+- **Acceptance evidence:** The canary republished on this commit is fully green, quality and E2E,
+  where the previous publication failed the three specs that create an account. On the Production
+  deployment, an invited address that walked `/invite/<token>` was admitted (HTTP 200, account
+  created, invitation consumed), and the same invitation without the link was refused with HTTP 422
+  `FAILED_TO_CREATE_USER`, leaving no account and an unspent invitation. Both test identities were
+  removed afterwards.
+- **When to revisit:** If Better Auth extends its transport requirements -- the `Sec-Fetch-*`
+  handling in the same middleware is the obvious candidate -- the helper is where that is taught,
+  and the refusal-code list is where the new failure mode is excluded.

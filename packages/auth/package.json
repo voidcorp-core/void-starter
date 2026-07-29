@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./access-mode": "./src/access-mode.ts",
+    "./invitation-helper": "./src/invitation.helper.ts",
     "./helper": "./src/auth.helper.ts",
     "./service": "./src/auth.service.ts",
     "./repository": "./src/auth.repository.ts",
