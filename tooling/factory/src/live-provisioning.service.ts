@@ -10,6 +10,7 @@ import {
   ProvisioningAdapterError,
   type ProvisioningExecutionContext,
 } from './provisioning-apply.service';
+import { signR2HeadBucket } from './r2-signature.service';
 
 const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
@@ -488,10 +489,17 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
   async #request(input: {
     provider: Provider;
     url: string;
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
     rawBody?: Exclude<RequestInit['body'], null>;
     headers?: Record<string, string>;
+    /**
+     * Send no provider Bearer token. Only the S3 endpoint needs this: it
+     * authenticates with an AWS4 signature, and adding the Cloudflare control
+     * token to that request would hand a far broader credential to a host that
+     * has no business seeing it.
+     */
+    withoutProviderAuthorization?: boolean;
     acceptedStatuses: number[];
   }): Promise<Response> {
     const method = input.method ?? 'GET';
@@ -516,7 +524,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     }
     const headers: Record<string, string> = {
       Accept: input.provider === 'github' ? 'application/vnd.github+json' : 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(input.withoutProviderAuthorization ? {} : { Authorization: `Bearer ${token}` }),
       'User-Agent': 'void-starter-factory',
       ...input.headers,
     };
@@ -1909,6 +1917,48 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     };
   }
 
+  /**
+   * Prove the runtime pair opens this exact bucket, before binding it.
+   *
+   * The bucket canary runs through the Cloudflare API with the control token,
+   * so without this nothing in the provisioning path ever exercises the runtime
+   * credentials. A pair scoped to another bucket would bind cleanly and leave a
+   * green receipt on an application unable to write a single object -- the kind
+   * of false positive the rest of this pipeline exists to refuse.
+   *
+   * A signed HEAD is the cheapest proof: it mutates nothing, it needs no
+   * listing permission, and 403 is exactly what a wrongly scoped token returns.
+   */
+  async #assertR2CredentialsOpenBucket(input: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    host: string;
+    bucket: string;
+  }): Promise<void> {
+    const signed = signR2HeadBucket({ ...input, now: new Date() });
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: `https://${input.host}/${encoded(input.bucket)}`,
+      method: 'HEAD',
+      withoutProviderAuthorization: true,
+      headers: {
+        Authorization: signed.authorization,
+        'x-amz-content-sha256': signed.payloadSha256,
+        'x-amz-date': signed.amzDate,
+      },
+      acceptedStatuses: [200, 301, 400, 403, 404],
+    });
+
+    if (response.status !== 200) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_RUNTIME_CREDENTIAL_SCOPE',
+        `R2 runtime credentials do not open bucket ${input.bucket}; issue an Object Read & Write token scoped to it and resume`,
+        true,
+      );
+    }
+  }
+
   async #ensureR2Binding(
     action: Extract<ProvisioningAction, { id: 'vercel.r2-binding' }>,
     context: ProvisioningExecutionContext,
@@ -1945,11 +1995,19 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         true,
       );
     }
+    const endpointHost = `${bucket.account_id}.eu.r2.cloudflarestorage.com`;
+    await this.#assertR2CredentialsOpenBucket({
+      accessKeyId,
+      secretAccessKey,
+      host: endpointHost,
+      bucket: bucket.display_name,
+    });
+
     const values: Record<(typeof R2_BINDING_KEYS)[number], string> = {
       CLOUDFLARE_ACCOUNT_ID: bucket.account_id,
       R2_ACCESS_KEY_ID: accessKeyId,
       R2_BUCKET_NAME: bucket.display_name,
-      R2_ENDPOINT: `https://${bucket.account_id}.eu.r2.cloudflarestorage.com`,
+      R2_ENDPOINT: `https://${endpointHost}`,
       R2_SECRET_ACCESS_KEY: secretAccessKey,
     };
     const variables = R2_BINDING_KEYS.flatMap((key) =>

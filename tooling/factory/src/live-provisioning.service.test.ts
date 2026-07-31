@@ -51,6 +51,8 @@ class MockProviderApi {
   r2BucketExists = false;
   corsRules: unknown[] = [];
   corsAppliesNothing = false;
+  /** Reproduces a runtime pair issued for a different bucket. */
+  r2CredentialsWrongScope = false;
   r2BindingMarker: string | null = null;
   r2CanaryPayload: string | null = null;
   r2PublicDomainEnabled = false;
@@ -477,6 +479,16 @@ class MockProviderApi {
       });
     }
 
+    // The S3 endpoint, a different host from the Cloudflare API. Only the signed
+    // HEAD that proves credential scope ever reaches it.
+    if (url.hostname.endsWith('.r2.cloudflarestorage.com')) {
+      if (method === 'HEAD') {
+        const authorized = !this.r2CredentialsWrongScope && url.pathname === '/example-saas';
+        return new Response(null, { status: authorized ? 200 : 403 });
+      }
+      return new Response(null, { status: 405 });
+    }
+
     const r2Base = '/client/v4/accounts/0123456789abcdef0123456789abcdef/r2/buckets';
     const r2Bucket = `${r2Base}/example-saas`;
     if (url.hostname === 'api.cloudflare.com' && url.pathname === r2Base && method === 'GET') {
@@ -809,10 +821,30 @@ describe('LiveProvisioningAdapter', () => {
       'dns_1',
     ]);
     expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(12);
-    expect(provider.requests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
+    // The signed HEAD against the S3 endpoint is the one request that is not a
+    // Bearer call, by construction: it authenticates with an AWS4 signature over
+    // the runtime pair. It is held to a stricter rule below -- it must carry no
+    // provider token at all.
+    const bearerRequests = provider.requests.filter(
+      (request) => !request.url.hostname.endsWith('.r2.cloudflarestorage.com'),
+    );
+    const s3Requests = provider.requests.filter((request) =>
+      request.url.hostname.endsWith('.r2.cloudflarestorage.com'),
+    );
+    expect(s3Requests).toHaveLength(1);
+    expect(s3Requests[0]?.authorization?.startsWith('AWS4-HMAC-SHA256 ')).toBe(true);
+    // The access key id belongs in an AWS4 credential scope; it is an
+    // identifier, not a secret. Everything else must be absent -- above all the
+    // Cloudflare control token, which `#request` would otherwise attach and
+    // which grants far more than this one bucket.
+    for (const [name, token] of Object.entries(credentials)) {
+      if (name === 'r2AccessKeyId') continue;
+      expect(s3Requests[0]?.authorization).not.toContain(token);
+    }
+    expect(bearerRequests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
       true,
     );
-    for (const request of provider.requests) {
+    for (const request of bearerRequests) {
       const expectedAuthorization =
         request.url.hostname === 'api.github.com'
           ? `Bearer ${credentials.githubToken}`
@@ -1424,6 +1456,43 @@ describe('LiveProvisioningAdapter', () => {
       error: { code: 'CLOUDFLARE_R2_CORS_NOT_APPLIED', retryable: true },
       status: 'failed',
     });
+  });
+
+  it('refuses to bind runtime credentials that do not open the bucket', async () => {
+    // The bucket canary runs through the Cloudflare API with the control token,
+    // so nothing else in the pipeline ever exercises the runtime pair. Without
+    // this check a pair scoped to another bucket binds cleanly and leaves a
+    // green receipt on an application that cannot write a single object.
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.r2CredentialsWrongScope = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+
+    const state = await readProvisioningState(project.root);
+    expect(state?.actions.find((action) => action.action_id === 'vercel.r2-binding')).toMatchObject(
+      {
+        error: { code: 'CLOUDFLARE_R2_RUNTIME_CREDENTIAL_SCOPE', retryable: true },
+        status: 'failed',
+      },
+    );
+    // No R2 variable reached Vercel: the check runs before the binding, so the
+    // credentials are never written anywhere. (The database binding runs
+    // earlier and legitimately posts to the same endpoint.)
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.pathname.includes('/env') &&
+          JSON.stringify(request.body).includes('R2_'),
+      ),
+    ).toHaveLength(0);
   });
 
   it('resumes the Sentry binding with a separate build token without recreating the project', async () => {

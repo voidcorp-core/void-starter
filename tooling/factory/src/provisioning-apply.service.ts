@@ -530,6 +530,35 @@ export class SimulatedProvisioningAdapter implements ProvisioningAdapter {
   }
 }
 
+/**
+ * What each action must produce, as an exhaustive table rather than a chain of
+ * ternaries with a default.
+ *
+ * The chain this replaces fell back to `'project'` for anything it did not
+ * name, so a newly added action whose line was forgotten produced an apply that
+ * wrote state the next resume then rejected as inconsistent -- which is exactly
+ * how the R2 CORS action was found. A `Record` keyed by the action id makes the
+ * same omission a compile error.
+ */
+const EXPECTED_RESOURCE_KIND: Record<
+  ProvisioningAction['id'],
+  ProvisionedResource['resource_kind']
+> = {
+  'github.repository': 'repository',
+  'vercel.project': 'project',
+  'neon.project': 'project',
+  'vercel.database-binding': 'database-binding',
+  'cloudflare.r2-bucket': 'r2-bucket',
+  'cloudflare.r2-cors': 'r2-cors',
+  'vercel.r2-binding': 'r2-binding',
+  'sentry.project': 'project',
+  'vercel.sentry-binding': 'sentry-binding',
+  'posthog.project': 'project',
+  'vercel.posthog-binding': 'posthog-binding',
+  'vercel.project-domain': 'project-domain',
+  'cloudflare.dns-record': 'dns-record',
+};
+
 export function validateProvisioningState(
   state: ProvisioningApplyState,
   expectedManifestSha256: string,
@@ -541,24 +570,7 @@ export function validateProvisioningState(
 
   for (const action of state.plan.actions) {
     const actionState = actionStateById(state, action.id);
-    const expectedResourceKind =
-      action.id === 'github.repository'
-        ? 'repository'
-        : action.id === 'vercel.database-binding'
-          ? 'database-binding'
-          : action.id === 'cloudflare.r2-bucket'
-            ? 'r2-bucket'
-            : action.id === 'vercel.r2-binding'
-              ? 'r2-binding'
-              : action.id === 'vercel.sentry-binding'
-                ? 'sentry-binding'
-                : action.id === 'vercel.posthog-binding'
-                  ? 'posthog-binding'
-                  : action.id === 'vercel.project-domain'
-                    ? 'project-domain'
-                    : action.id === 'cloudflare.dns-record'
-                      ? 'dns-record'
-                      : 'project';
+    const expectedResourceKind = EXPECTED_RESOURCE_KIND[action.id];
     if (
       actionState.status === 'succeeded' &&
       (!actionState.resource ||
