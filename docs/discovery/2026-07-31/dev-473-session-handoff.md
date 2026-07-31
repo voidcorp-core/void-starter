@@ -128,3 +128,38 @@ Lint, type-check, tests (158 pour la factory, 28 pour le module storage dont 5 d
 et build sur le dépôt. Les deux profils générés, avec et sans R2, passent leur propre `lint`,
 `type-check`, `test`, `knip`, `build` et `doctor`. La suite d'intégration a été validée contre un
 Postgres jetable local avant push, plutôt qu'en attendant la CI.
+
+## Alignement avec void-harness
+
+Branche harness en cours : `folpe/harness-gaps-consumer-lint`, deux commits orientés consommateur.
+
+- `3c2a8fb` : le harness exclut `.claude` du lint du consommateur à l'installation, parce que
+  `.claude/skills/autopilot/workflows/autopilot.workflow.js` porte `export const meta` et un
+  `return` de premier niveau, ce qu'aucun parseur ESM n'accepte;
+- `c162970` : le hook `no-console` lit désormais la configuration Biome du projet au lieu d'imposer
+  sa propre règle.
+
+Quatre constats, tous vérifiés en exécutant :
+
+1. **Le starter était vulnérable au problème que le harness vient de corriger.** Un fichier
+   `.claude/skills/**/*.workflow.js` fait échouer `bun run lint` avec deux erreurs. Corrigé au
+   commit `3003f0a` par `!.claude` dans `files.includes`, avec vérification dans les deux sens.
+2. **Le correctif du harness, appliqué tel quel, aurait cassé le lint du starter.**
+   `excludeHarnessFromLint` écrit avec `JSON.stringify(config, null, 2)`, ce qui produit des
+   tableaux multi-lignes que le formateur du dépôt refuse : `bun run lint` serait rouge sur
+   `biome.json` lui-même juste après `void-harness init`. L'orthographe posée en `3003f0a`
+   appartient à l'ensemble `EQUIVALENT` du harness, donc il rapportera `already-excluded` et
+   n'écrira rien. **Le correctif reste à faire côté harness** pour les autres consommateurs :
+   écrire au format du projet, ou ne pas réécrire un fichier dont le formatage est contraint.
+3. **`.claude/settings.local.json` était copié dans tout projet généré**, avec les permissions
+   accumulées pendant le développement du starter. Même famille que `.mcp.json`, que la génération
+   excluait déjà nommément. Corrigé en `3003f0a`, avec test.
+4. **Le harness ne lit que le `biome.json` racine.** Le starter place ses `includes` dans
+   `packages/config/biome.base.json` via `extends`. L'exclusion a donc été mise à la racine pour
+   rester visible du harness; un consommateur qui la placerait dans un fichier étendu se ferait
+   signaler `missing` à tort par `void-harness doctor`. À arbitrer côté harness : suivre `extends`,
+   ou documenter que seule la racine compte.
+
+Observation annexe : la suite de la factory est fragile à un `testTimeout` de 5 s sous charge.
+À 203 de load average elle a échoué sur 1 puis 3 tests, et passe 159/159 avec
+`--testTimeout=60000`. Relever le défaut mérite un changement à part.
