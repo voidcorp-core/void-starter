@@ -388,6 +388,37 @@ describe('renderProject', () => {
     expect(artifactCheck?.status).toBe('fail');
   });
 
+  // `.claude/settings.local.json` accumulates the permissions one contributor
+  // granted while developing the starter. Same family as `.mcp.json`, and just
+  // as meaningless in someone else's project.
+  it('excludes the local agent permissions from generated output', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    await mkdir(join(sourceRoot, '.claude'), { recursive: true });
+    await writeFile(
+      join(sourceRoot, '.claude/settings.local.json'),
+      '{"permissions":{"allow":["WebFetch(domain:orm.drizzle.team)"]}}',
+      'utf8',
+    );
+
+    const receipt = await renderProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+
+    expect(receipt.generated_files.map((file) => file.path)).not.toContain(
+      '.claude/settings.local.json',
+    );
+    await expect(readFile(join(targetRoot, '.claude/settings.local.json'))).rejects.toThrow();
+
+    // And doctor must flag it as a development artifact if it ever reappears.
+    await mkdir(join(targetRoot, '.claude'), { recursive: true });
+    await writeFile(join(targetRoot, '.claude/settings.local.json'), '{}', 'utf8');
+    const report = await doctorProject(targetRoot);
+    const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
+    expect(artifactCheck?.status).toBe('fail');
+  });
+
   // The Workflow SDK writes its route handlers into the SOURCE tree during a build
   // and drops a `.gitignore` containing `*` next to them. Copying those artifacts
   // produces a snapshot git then refuses to stage, which fails source publication.

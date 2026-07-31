@@ -24,6 +24,11 @@ const EXCLUDED_DIRECTORY_NAMES = new Set([
 
 const EXCLUDED_SOURCE_PATHS = [
   '.agents',
+  // The permissions one contributor accumulated while developing the starter:
+  // domains they fetched, command shapes they allowed. Same family as
+  // `.mcp.json` -- agent governance for this repository, meaningless and
+  // slightly intrusive in someone else's project.
+  '.claude/settings.local.json',
   '.codex',
   '.git',
   // Points agents at the void-starter team's own Linear workspace: development
