@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildObjectKey, extensionForContentType, matchesClaimedUpload } from './storage.helper';
+import {
+  buildObjectKey,
+  extensionForContentType,
+  matchesClaimedUpload,
+  resolveR2Endpoint,
+} from './storage.helper';
 
 describe('extensionForContentType', () => {
   it('derives the extension from the content type, never from the filename', () => {
@@ -65,5 +70,37 @@ describe('matchesClaimedUpload', () => {
 
   it('refuses an absent object', () => {
     expect(matchesClaimedUpload(claimed, undefined)).toBe(false);
+  });
+});
+
+describe('resolveR2Endpoint', () => {
+  const accountId = 'acc_123';
+
+  it('prefers the bound endpoint, which already carries the jurisdiction', () => {
+    const endpoint = resolveR2Endpoint({
+      bound: 'https://acc_123.eu.r2.cloudflarestorage.com',
+      accountId,
+    });
+
+    expect(endpoint).toBe('https://acc_123.eu.r2.cloudflarestorage.com');
+  });
+
+  it('keeps the jurisdiction in the host when composing without a bound value', () => {
+    // A bucket created in a jurisdiction answers only on the matching host. The
+    // default host refuses it with credentials that are perfectly valid, and
+    // the browser reports that refusal as a CORS failure, because a host that
+    // will not serve the bucket will not describe its CORS policy either. That
+    // is why this is asserted rather than assumed: the symptom names the wrong
+    // cause and no amount of CORS configuration answers it.
+    const endpoint = resolveR2Endpoint({ accountId, jurisdiction: 'eu' });
+
+    expect(endpoint).toBe('https://acc_123.eu.r2.cloudflarestorage.com');
+  });
+
+  it('omits the prefix when there is no jurisdiction to name', () => {
+    expect(resolveR2Endpoint({ accountId })).toBe('https://acc_123.r2.cloudflarestorage.com');
+    expect(resolveR2Endpoint({ accountId, jurisdiction: 'default' })).toBe(
+      'https://acc_123.r2.cloudflarestorage.com',
+    );
   });
 });
