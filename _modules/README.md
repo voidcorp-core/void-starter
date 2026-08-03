@@ -46,6 +46,23 @@ Delivers Better Auth verification, password-reset and magic-link messages throug
 API. Local development may log links only when the Resend pair is completely absent; production
 fails closed on missing or partial configuration.
 
+### @repo/storage-r2 -- Private EU documents on Cloudflare R2
+
+- **State:** real package, type-checked + tested, wired into `apps/web` when selected
+- **Env vars:** `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+- **Install:** see [`storage-r2/README.md`](./storage-r2/README.md)
+- **Pattern:** A. Selected by `data.files: cloudflare-r2-eu`; the `documents` surfaces live in
+  `apps/web/src/app/documents/` and are pruned with the module.
+
+An `ObjectStorage` port with an R2 adapter behind it, plus the `documents` ledger and the rules
+around it. The browser uploads straight to the bucket against a presigned URL, so the server never
+handles a file and the 4.5 MB request limit does not apply; the content type is part of the
+signature and the object is verified by a HEAD before the document becomes visible
+(see [ADR 68](../docs/DECISIONS.md)). Erasure removes the object before the row, and a user cascade
+is deliberately not an erasure path ([ADR 69](../docs/DECISIONS.md)). Browser access additionally
+requires a CORS rule on the bucket, provisioned as its own action from the origins the context
+names.
+
 ### @repo/jobs-vercel-workflow -- Durable jobs on the Vercel Workflow DevKit
 
 - **State:** real package, type-checked + tested, wired into `apps/web` when selected

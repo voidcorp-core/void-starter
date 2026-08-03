@@ -100,6 +100,8 @@ async function createBaseline() {
     ['_modules/analytics-posthog', '@repo/posthog'],
     ['_modules/email-resend', '@repo/email-resend'],
     ['_modules/observability-sentry', '@repo/sentry'],
+    ['_modules/jobs-vercel-workflow', '@repo/jobs-vercel-workflow'],
+    ['_modules/storage-r2', '@repo/storage-r2'],
   ]) {
     await mkdir(join(sourceRoot, path), { recursive: true });
     await writeJson(join(sourceRoot, path, 'package.json'), {
@@ -110,6 +112,14 @@ async function createBaseline() {
   await writeFile(
     join(sourceRoot, 'packages/core/index.ts'),
     'export const core = true;\n',
+    'utf8',
+  );
+  // The documents surface, so a render can be checked for its presence when R2
+  // is selected and its absence when it is not.
+  await mkdir(join(sourceRoot, 'apps/web/src/app/documents'), { recursive: true });
+  await writeFile(
+    join(sourceRoot, 'apps/web/src/app/documents/page.tsx'),
+    'export default function DocumentsPage() {\n  return null;\n}\n',
     'utf8',
   );
   await mkdir(join(sourceRoot, 'packages/db/migrations/meta'), { recursive: true });
@@ -373,6 +383,37 @@ describe('renderProject', () => {
 
     // And doctor must flag it as a development artifact if it ever reappears.
     await writeFile(join(targetRoot, '.mcp.json'), '{}', 'utf8');
+    const report = await doctorProject(targetRoot);
+    const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
+    expect(artifactCheck?.status).toBe('fail');
+  });
+
+  // `.claude/settings.local.json` accumulates the permissions one contributor
+  // granted while developing the starter. Same family as `.mcp.json`, and just
+  // as meaningless in someone else's project.
+  it('excludes the local agent permissions from generated output', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    await mkdir(join(sourceRoot, '.claude'), { recursive: true });
+    await writeFile(
+      join(sourceRoot, '.claude/settings.local.json'),
+      '{"permissions":{"allow":["WebFetch(domain:orm.drizzle.team)"]}}',
+      'utf8',
+    );
+
+    const receipt = await renderProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+
+    expect(receipt.generated_files.map((file) => file.path)).not.toContain(
+      '.claude/settings.local.json',
+    );
+    await expect(readFile(join(targetRoot, '.claude/settings.local.json'))).rejects.toThrow();
+
+    // And doctor must flag it as a development artifact if it ever reappears.
+    await mkdir(join(targetRoot, '.claude'), { recursive: true });
+    await writeFile(join(targetRoot, '.claude/settings.local.json'), '{}', 'utf8');
     const report = await doctorProject(targetRoot);
     const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
     expect(artifactCheck?.status).toBe('fail');

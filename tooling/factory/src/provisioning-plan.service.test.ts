@@ -47,6 +47,60 @@ const fullContext = {
   },
 } as const;
 
+describe('createProvisioningPlan browser access', () => {
+  it('plans no CORS rule when the context names no browser origin', () => {
+    // The default is deliberate: a bucket whose objects are only read
+    // server-side needs no rule, and the alternative to naming origins is a
+    // wildcard that opens it to every site the browser visits.
+    const plan = createProvisioningPlan(
+      parseBuildManifest(canonicalManifest),
+      parseProvisioningContext(fullContext),
+    );
+
+    expect(plan.actions.map((action) => action.id)).not.toContain('cloudflare.r2-cors');
+  });
+
+  it('plans the CORS rule right after the bucket when origins are named', () => {
+    const plan = createProvisioningPlan(
+      parseBuildManifest(canonicalManifest),
+      parseProvisioningContext({
+        ...fullContext,
+        cloudflare: {
+          ...fullContext.cloudflare,
+          browser_origins: ['https://app.example.com', 'http://localhost:3000'],
+        },
+      }),
+    );
+    const cors = plan.actions.find((action) => action.id === 'cloudflare.r2-cors');
+
+    expect(cors).toMatchObject({
+      provider: 'cloudflare',
+      depends_on: ['cloudflare.r2-bucket'],
+      input: {
+        jurisdiction: 'eu',
+        allowed_origins: ['https://app.example.com', 'http://localhost:3000'],
+        // Exactly what the documents surface performs. DELETE is absent on
+        // purpose: erasure goes through the server, which is what makes it
+        // auditable.
+        allowed_methods: ['GET', 'HEAD', 'PUT'],
+        allowed_headers: ['content-type'],
+      },
+    });
+  });
+
+  it('rejects an origin carrying a path, which never matches an Origin header', () => {
+    expect(() =>
+      parseProvisioningContext({
+        ...fullContext,
+        cloudflare: {
+          ...fullContext.cloudflare,
+          browser_origins: ['https://app.example.com/documents'],
+        },
+      }),
+    ).toThrow();
+  });
+});
+
 describe('createProvisioningPlan', () => {
   it('plans provider resources, bindings, and owned DNS deterministically', () => {
     const manifest = parseBuildManifest(canonicalManifest);

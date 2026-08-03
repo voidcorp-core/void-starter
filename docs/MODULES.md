@@ -35,6 +35,7 @@ The full catalogue (with env vars, install steps, removal, upstream docs) lives 
 | `@repo/payment-stripe` | A or B | placeholder | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
 | `@repo/email-resend` | A | wired into `@repo/auth` | `RESEND_API_KEY` plus `EMAIL_FROM` |
 | `@repo/jobs-vercel-workflow` | A | wired into `apps/web` when selected | `workloads.durable_jobs: vercel-workflows` (no env var) |
+| `@repo/storage-r2` | A | wired into `apps/web` when selected | `data.files: cloudflare-r2-eu` plus the four R2 env vars |
 | `@repo/cms-payload` | B | placeholder | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI` |
 | `@repo/audit-log` | B | placeholder | always-on once mounted |
 | `@repo/cookie-consent` | B | placeholder | always-on once mounted (cookie-driven state) |

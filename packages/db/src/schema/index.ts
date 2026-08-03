@@ -1,4 +1,5 @@
 export * from './accounts';
+export * from './documents';
 export * from './invitations';
 export * from './job-executions';
 export * from './notes';

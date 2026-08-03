@@ -49,6 +49,10 @@ class MockProviderApi {
   neonProjectExists = false;
   bindingMarker: string | null = null;
   r2BucketExists = false;
+  corsRules: unknown[] = [];
+  corsAppliesNothing = false;
+  /** Reproduces a runtime pair issued for a different bucket. */
+  r2CredentialsWrongScope = false;
   r2BindingMarker: string | null = null;
   r2CanaryPayload: string | null = null;
   r2PublicDomainEnabled = false;
@@ -475,6 +479,16 @@ class MockProviderApi {
       });
     }
 
+    // The S3 endpoint, a different host from the Cloudflare API. Only the signed
+    // HEAD that proves credential scope ever reaches it.
+    if (url.hostname.endsWith('.r2.cloudflarestorage.com')) {
+      if (method === 'HEAD') {
+        const authorized = !this.r2CredentialsWrongScope && url.pathname === '/example-saas';
+        return new Response(null, { status: authorized ? 200 : 403 });
+      }
+      return new Response(null, { status: 405 });
+    }
+
     const r2Base = '/client/v4/accounts/0123456789abcdef0123456789abcdef/r2/buckets';
     const r2Bucket = `${r2Base}/example-saas`;
     if (url.hostname === 'api.cloudflare.com' && url.pathname === r2Base && method === 'GET') {
@@ -504,6 +518,19 @@ class MockProviderApi {
             },
           })
         : jsonResponse({}, 404);
+    }
+    if (url.hostname === 'api.cloudflare.com' && url.pathname === `${r2Bucket}/cors`) {
+      if (method === 'PUT') {
+        // `corsAppliesNothing` reproduces an accepted PUT that does not take:
+        // the browser then refuses every upload, and nothing server-side sees it.
+        if (!this.corsAppliesNothing) {
+          this.corsRules = (body as { rules?: unknown[] } | undefined)?.rules ?? [];
+        }
+        return jsonResponse({ success: true, result: null });
+      }
+      if (method === 'GET') {
+        return jsonResponse({ success: true, result: { rules: this.corsRules } });
+      }
     }
     if (url.hostname === 'api.cloudflare.com' && url.pathname === r2Base && method === 'POST') {
       if (this.failR2CreateWithNetwork) {
@@ -748,6 +775,15 @@ async function createGeneratedProject() {
   };
 }
 
+/** The same context, plus the browser origins that make the bucket reachable. */
+const corsContext = parseProvisioningContext({
+  ...JSON.parse(JSON.stringify(context)),
+  cloudflare: {
+    account_id: '0123456789abcdef0123456789abcdef',
+    browser_origins: ['https://app.example.com', 'http://localhost:3000'],
+  },
+});
+
 afterEach(async () => {
   await Promise.all(
     temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
@@ -785,10 +821,30 @@ describe('LiveProvisioningAdapter', () => {
       'dns_1',
     ]);
     expect(provider.requests.filter((request) => request.method === 'POST')).toHaveLength(12);
-    expect(provider.requests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
+    // The signed HEAD against the S3 endpoint is the one request that is not a
+    // Bearer call, by construction: it authenticates with an AWS4 signature over
+    // the runtime pair. It is held to a stricter rule below -- it must carry no
+    // provider token at all.
+    const bearerRequests = provider.requests.filter(
+      (request) => !request.url.hostname.endsWith('.r2.cloudflarestorage.com'),
+    );
+    const s3Requests = provider.requests.filter((request) =>
+      request.url.hostname.endsWith('.r2.cloudflarestorage.com'),
+    );
+    expect(s3Requests).toHaveLength(1);
+    expect(s3Requests[0]?.authorization?.startsWith('AWS4-HMAC-SHA256 ')).toBe(true);
+    // The access key id belongs in an AWS4 credential scope; it is an
+    // identifier, not a secret. Everything else must be absent -- above all the
+    // Cloudflare control token, which `#request` would otherwise attach and
+    // which grants far more than this one bucket.
+    for (const [name, token] of Object.entries(credentials)) {
+      if (name === 'r2AccessKeyId') continue;
+      expect(s3Requests[0]?.authorization).not.toContain(token);
+    }
+    expect(bearerRequests.every((request) => request.authorization?.startsWith('Bearer '))).toBe(
       true,
     );
-    for (const request of provider.requests) {
+    for (const request of bearerRequests) {
       const expectedAuthorization =
         request.url.hostname === 'api.github.com'
           ? `Bearer ${credentials.githubToken}`
@@ -1326,6 +1382,117 @@ describe('LiveProvisioningAdapter', () => {
           request.url.pathname.endsWith('/r2/buckets'),
       ),
     ).toHaveLength(1);
+  });
+
+  it('applies the browser access rule and reads it back before accepting it', async () => {
+    const manifest = parseBuildManifest(canonicalManifest);
+    const root = await mkdtemp(join(tmpdir(), 'void-starter-live-cors-test-'));
+    temporaryRoots.push(root);
+    await mkdir(join(root, '.void-starter'));
+    await writeFile(
+      join(root, '.void-starter/manifest.json'),
+      serializeCanonicalJson(manifest),
+      'utf8',
+    );
+    const plan = createProvisioningPlan(manifest, corsContext);
+    const provider = new MockProviderApi();
+    provider.r2BucketExists = true;
+
+    const state = await applyProvisioning({
+      projectRoot: root,
+      plan,
+      adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+    });
+
+    expect(state.actions.find((action) => action.action_id === 'cloudflare.r2-cors')).toMatchObject(
+      { attempts: 1, status: 'succeeded' },
+    );
+    const put = provider.requests.find(
+      (request) => request.method === 'PUT' && request.url.pathname.endsWith('/cors'),
+    );
+    expect(put?.body).toEqual({
+      rules: [
+        {
+          allowed: {
+            methods: ['GET', 'HEAD', 'PUT'],
+            origins: ['https://app.example.com', 'http://localhost:3000'],
+            headers: ['content-type'],
+          },
+          maxAgeSeconds: 3600,
+        },
+      ],
+    });
+  });
+
+  it('fails when the bucket does not report the origins it just accepted', async () => {
+    // An accepted PUT is not proof. A rule that did not take makes every browser
+    // upload fail before the request leaves the page, which looks like a broken
+    // signature and is invisible to the server.
+    const manifest = parseBuildManifest(canonicalManifest);
+    const root = await mkdtemp(join(tmpdir(), 'void-starter-live-cors-fail-test-'));
+    temporaryRoots.push(root);
+    await mkdir(join(root, '.void-starter'));
+    await writeFile(
+      join(root, '.void-starter/manifest.json'),
+      serializeCanonicalJson(manifest),
+      'utf8',
+    );
+    const provider = new MockProviderApi();
+    provider.r2BucketExists = true;
+    provider.corsAppliesNothing = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: root,
+        plan: createProvisioningPlan(manifest, corsContext),
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+
+    const state = await readProvisioningState(root);
+    expect(
+      state?.actions.find((action) => action.action_id === 'cloudflare.r2-cors'),
+    ).toMatchObject({
+      error: { code: 'CLOUDFLARE_R2_CORS_NOT_APPLIED', retryable: true },
+      status: 'failed',
+    });
+  });
+
+  it('refuses to bind runtime credentials that do not open the bucket', async () => {
+    // The bucket canary runs through the Cloudflare API with the control token,
+    // so nothing else in the pipeline ever exercises the runtime pair. Without
+    // this check a pair scoped to another bucket binds cleanly and leaves a
+    // green receipt on an application that cannot write a single object.
+    const project = await createGeneratedProject();
+    const provider = new MockProviderApi();
+    provider.r2CredentialsWrongScope = true;
+
+    await expect(
+      applyProvisioning({
+        projectRoot: project.root,
+        plan: project.plan,
+        adapter: new LiveProvisioningAdapter({ credentials, fetch: provider.fetch }),
+      }),
+    ).rejects.toBeInstanceOf(ProvisioningApplyError);
+
+    const state = await readProvisioningState(project.root);
+    expect(state?.actions.find((action) => action.action_id === 'vercel.r2-binding')).toMatchObject(
+      {
+        error: { code: 'CLOUDFLARE_R2_RUNTIME_CREDENTIAL_SCOPE', retryable: true },
+        status: 'failed',
+      },
+    );
+    // No R2 variable reached Vercel: the check runs before the binding, so the
+    // credentials are never written anywhere. (The database binding runs
+    // earlier and legitimately posts to the same endpoint.)
+    expect(
+      provider.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.pathname.includes('/env') &&
+          JSON.stringify(request.body).includes('R2_'),
+      ),
+    ).toHaveLength(0);
   });
 
   it('resumes the Sentry binding with a separate build token without recreating the project', async () => {
