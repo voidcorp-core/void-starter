@@ -10,6 +10,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createAppEnv } from '@repo/core/env'; // allow-boundary: @repo/core is the always-allowed base of the graph
 import { z } from 'zod';
+import { resolveR2Endpoint } from './storage.helper';
 import type { ObjectStorage, StoredObject } from './storage.types';
 
 /**
@@ -26,6 +27,12 @@ import type { ObjectStorage, StoredObject } from './storage.types';
  * `auto` -- the SDK requires a region and R2 ignores it. And presigned URLs
  * only work against the S3 API hostname, never a custom domain, which is why
  * the endpoint is built from the account id rather than from any project URL.
+ *
+ * A third fact was learned the expensive way, and lives in `resolveR2Endpoint`:
+ * the hostname has to carry the bucket's jurisdiction. Composing it without one
+ * points every presigned URL at a host that refuses this bucket, and the
+ * browser reports that as a CORS failure -- which sends you configuring CORS
+ * rules that were never the problem.
  */
 
 let cached: S3Client | undefined;
@@ -39,6 +46,10 @@ function getClient(): S3Client {
       R2_ACCESS_KEY_ID: z.string().min(1),
       R2_SECRET_ACCESS_KEY: z.string().min(1),
       R2_BUCKET_NAME: z.string().min(1),
+      // Both optional: a bucket in the default jurisdiction has neither, and
+      // the factory binds the endpoint whenever it provisioned the bucket.
+      R2_ENDPOINT: z.string().url().optional(),
+      R2_JURISDICTION: z.string().optional(),
     },
     client: {},
     runtimeEnv: {
@@ -46,12 +57,18 @@ function getClient(): S3Client {
       R2_ACCESS_KEY_ID: process.env['R2_ACCESS_KEY_ID'],
       R2_SECRET_ACCESS_KEY: process.env['R2_SECRET_ACCESS_KEY'],
       R2_BUCKET_NAME: process.env['R2_BUCKET_NAME'],
+      R2_ENDPOINT: process.env['R2_ENDPOINT'],
+      R2_JURISDICTION: process.env['R2_JURISDICTION'],
     },
   });
 
   cached = new S3Client({
     region: 'auto',
-    endpoint: `https://${env['CLOUDFLARE_ACCOUNT_ID']}.r2.cloudflarestorage.com`,
+    endpoint: resolveR2Endpoint({
+      accountId: env['CLOUDFLARE_ACCOUNT_ID'],
+      bound: env['R2_ENDPOINT'],
+      jurisdiction: env['R2_JURISDICTION'],
+    }),
     credentials: {
       accessKeyId: env['R2_ACCESS_KEY_ID'],
       secretAccessKey: env['R2_SECRET_ACCESS_KEY'],

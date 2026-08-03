@@ -70,3 +70,30 @@ export function matchesClaimedUpload(
   if (actual.contentType !== claimed.contentType) return false;
   return actual.sizeBytes === claimed.sizeBytes;
 }
+
+/**
+ * The S3 API host this bucket actually answers on.
+ *
+ * A bucket created with a jurisdiction is reachable through the matching host
+ * only -- `<account>.eu.r2.cloudflarestorage.com` for an EU one. The default
+ * host refuses it with credentials that are perfectly valid, and a browser
+ * reports that refusal as a CORS failure, because a host that will not serve
+ * the bucket will not describe its CORS policy either. The symptom therefore
+ * names the wrong cause, and no amount of CORS configuration answers it.
+ *
+ * `R2_ENDPOINT` is what the provisioning binds and it already carries the
+ * jurisdiction, so it wins outright. Composing from the account id is the
+ * fallback for a bucket provisioned outside the factory, and it keeps the
+ * jurisdiction explicit rather than assuming there is none.
+ */
+export function resolveR2Endpoint(input: {
+  readonly accountId: string;
+  readonly bound?: string | undefined;
+  readonly jurisdiction?: string | undefined;
+}): string {
+  if (input.bound) return input.bound;
+
+  const named = input.jurisdiction && input.jurisdiction !== 'default';
+  const prefix = named ? `${input.jurisdiction}.` : '';
+  return `https://${input.accountId}.${prefix}r2.cloudflarestorage.com`;
+}
