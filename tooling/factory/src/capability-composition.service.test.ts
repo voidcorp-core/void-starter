@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalManifest,
   clerkManifest,
+  documentsManifest,
   durableJobsManifest,
   minimalManifest,
   mobileOnlyManifest,
@@ -178,6 +179,61 @@ describe('createCapabilityFilePlan', () => {
     expect(nextConfig).toContain("import { withWorkflow } from 'workflow/next';");
     expect(nextConfig).toContain('withWorkflow(config)');
     expect(nextConfig).toContain("'@repo/jobs-vercel-workflow'");
+  });
+
+  it('prunes the documents surface and its storage module when no object storage is selected', () => {
+    // `minimalManifest`, not the canonical one: the canonical fixture already
+    // selects R2, so asserting the pruned case against it would pass for the
+    // wrong reason -- or rather, would never pass at all.
+    const plan = createCapabilityFilePlan(parseBuildManifest(minimalManifest));
+    const webPackage = readGeneratedJson(plan, 'apps/web/package.json') as {
+      dependencies: Record<string, string>;
+    };
+
+    expect(plan.removals).toEqual(
+      expect.arrayContaining([
+        '_modules/storage-r2',
+        'apps/web/src/actions/documents.actions.ts',
+        'apps/web/src/app/documents',
+      ]),
+    );
+    expect(webPackage.dependencies).not.toHaveProperty('@repo/storage-r2');
+    expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).not.toContain('@repo/storage-r2');
+    expect(readGeneratedFile(plan, '.env.example')).not.toContain('R2_BUCKET_NAME');
+  });
+
+  it('keeps and wires the documents surface when R2 is selected', () => {
+    const plan = createCapabilityFilePlan(parseBuildManifest(documentsManifest));
+    const webPackage = readGeneratedJson(plan, 'apps/web/package.json') as {
+      dependencies: Record<string, string>;
+    };
+    const environment = readGeneratedFile(plan, '.env.example');
+
+    expect(plan.removals).not.toContain('_modules/storage-r2');
+    expect(plan.removals).not.toContain('apps/web/src/app/documents');
+    expect(plan.removals).not.toContain('apps/web/src/actions/documents.actions.ts');
+    expect(webPackage.dependencies).toMatchObject({ '@repo/storage-r2': 'workspace:*' });
+    expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).toContain("'@repo/storage-r2'");
+    // Every variable the R2 adapter reads, or the generated project starts and
+    // fails on its first upload rather than at boot.
+    for (const key of [
+      'CLOUDFLARE_ACCOUNT_ID',
+      'R2_ACCESS_KEY_ID',
+      'R2_SECRET_ACCESS_KEY',
+      'R2_BUCKET_NAME',
+    ]) {
+      expect(environment).toContain(key);
+    }
+  });
+
+  it('keeps the documents schema in both, so the published migrations stay in step', () => {
+    // The surfaces are pruned; the table is not. A generated project without R2
+    // still applies migration 0006, so removing the schema file would leave the
+    // Drizzle history describing a table the schema does not declare.
+    for (const manifest of [minimalManifest, documentsManifest]) {
+      const plan = createCapabilityFilePlan(parseBuildManifest(manifest));
+      expect(plan.removals).not.toContain('packages/db/src/schema/documents.ts');
+    }
   });
 
   it('materializes Clerk directly and removes the non-runtime scaffold and Better Auth graph', () => {

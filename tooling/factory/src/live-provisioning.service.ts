@@ -10,6 +10,7 @@ import {
   ProvisioningAdapterError,
   type ProvisioningExecutionContext,
 } from './provisioning-apply.service';
+import { signR2HeadBucket } from './r2-signature.service';
 
 const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
@@ -212,6 +213,30 @@ const cloudflareBucketSchema = z.object({
 const cloudflareBucketResponseSchema = z.object({
   success: z.literal(true),
   result: cloudflareBucketSchema,
+});
+
+/**
+ * R2 answers a bucket with no CORS policy with `success: true` and a result that
+ * either omits `rules` or carries an empty array, so absence is a normal read
+ * rather than a 404.
+ */
+const cloudflareCorsResponseSchema = z.object({
+  success: z.literal(true),
+  result: z
+    .object({
+      rules: z
+        .array(
+          z.object({
+            allowed: z.object({
+              methods: z.array(z.string()),
+              origins: z.array(z.string()),
+              headers: z.array(z.string()).optional(),
+            }),
+          }),
+        )
+        .optional(),
+    })
+    .nullable(),
 });
 
 const cloudflareBucketListResponseSchema = z.object({
@@ -464,10 +489,17 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
   async #request(input: {
     provider: Provider;
     url: string;
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
     rawBody?: Exclude<RequestInit['body'], null>;
     headers?: Record<string, string>;
+    /**
+     * Send no provider Bearer token. Only the S3 endpoint needs this: it
+     * authenticates with an AWS4 signature, and adding the Cloudflare control
+     * token to that request would hand a far broader credential to a host that
+     * has no business seeing it.
+     */
+    withoutProviderAuthorization?: boolean;
     acceptedStatuses: number[];
   }): Promise<Response> {
     const method = input.method ?? 'GET';
@@ -492,7 +524,7 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     }
     const headers: Record<string, string> = {
       Accept: input.provider === 'github' ? 'application/vnd.github+json' : 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(input.withoutProviderAuthorization ? {} : { Authorization: `Bearer ${token}` }),
       'User-Agent': 'void-starter-factory',
       ...input.headers,
     };
@@ -789,6 +821,8 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         return this.#ensureDatabaseBinding(action, context);
       case 'cloudflare.r2-bucket':
         return this.#ensureR2Bucket(action, context);
+      case 'cloudflare.r2-cors':
+        return this.#ensureR2Cors(action, context);
       case 'vercel.r2-binding':
         return this.#ensureR2Binding(action, context);
       case 'sentry.project':
@@ -1310,6 +1344,85 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     );
   }
 
+  /**
+   * Put the browser-access rule on the bucket.
+   *
+   * Unlike a bucket or a project, a CORS policy is a single mutable document
+   * rather than a resource with an identity, so there is nothing to create
+   * twice: the PUT is the reconciliation. It is still read back afterwards, and
+   * compared, because a rule that silently did not take is indistinguishable at
+   * the application level from a signature problem -- the browser refuses before
+   * the request is sent, and nothing server-side ever sees it.
+   *
+   * Cloudflare documents this endpoint at
+   * https://developers.cloudflare.com/r2/buckets/cors/ and the jurisdiction
+   * header is required for an EU bucket, exactly as for every other R2 call
+   * here.
+   */
+  async #ensureR2Cors(
+    action: Extract<ProvisioningAction, { id: 'cloudflare.r2-cors' }>,
+    context: ProvisioningExecutionContext,
+  ): Promise<ProvisionedResource> {
+    const bucketName = this.#corsBucketName(context);
+    const url = `${CLOUDFLARE_API}/accounts/${encoded(action.input.account_id)}/r2/buckets/${encoded(bucketName)}/cors`;
+
+    await this.#request({
+      provider: 'cloudflare',
+      url,
+      method: 'PUT',
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      body: {
+        rules: [
+          {
+            allowed: {
+              methods: [...action.input.allowed_methods],
+              origins: [...action.input.allowed_origins],
+              headers: [...action.input.allowed_headers],
+            },
+            maxAgeSeconds: action.input.max_age_seconds,
+          },
+        ],
+      },
+      acceptedStatuses: [200],
+    });
+
+    const readBack = await this.#request({
+      provider: 'cloudflare',
+      url,
+      headers: { 'cf-r2-jurisdiction': action.input.jurisdiction },
+      acceptedStatuses: [200],
+    });
+    const observed = await this.#json('cloudflare', readBack, cloudflareCorsResponseSchema);
+    const origins = observed.result?.rules?.flatMap((rule) => rule.allowed.origins) ?? [];
+    const missing = action.input.allowed_origins.filter((origin) => !origins.includes(origin));
+    if (missing.length > 0) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_CORS_NOT_APPLIED',
+        'Cloudflare accepted the CORS rule but the bucket does not report the requested origins',
+        true,
+      );
+    }
+
+    return {
+      provider: 'cloudflare',
+      resource_kind: 'r2-cors',
+      resource_id: `${action.input.account_id}:cors`,
+      display_name: 'Cloudflare R2 browser access rule',
+      account_id: action.input.account_id,
+      allowed_origins: [...action.input.allowed_origins],
+    };
+  }
+
+  /** The bucket this rule belongs to, taken from the dependency it declares. */
+  #corsBucketName(context: ProvisioningExecutionContext): string {
+    const bucket = requireDependency(context, 'cloudflare.r2-bucket');
+    if (bucket.provider !== 'cloudflare' || bucket.resource_kind !== 'r2-bucket') {
+      throw new Error('R2 CORS dependency is not a Cloudflare R2 bucket');
+    }
+    return bucket.display_name;
+  }
+
   async #lookupSentryProject(
     action: Extract<ProvisioningAction, { id: 'sentry.project' }>,
   ): Promise<z.infer<typeof sentryProjectSchema> | null> {
@@ -1804,6 +1917,48 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
     };
   }
 
+  /**
+   * Prove the runtime pair opens this exact bucket, before binding it.
+   *
+   * The bucket canary runs through the Cloudflare API with the control token,
+   * so without this nothing in the provisioning path ever exercises the runtime
+   * credentials. A pair scoped to another bucket would bind cleanly and leave a
+   * green receipt on an application unable to write a single object -- the kind
+   * of false positive the rest of this pipeline exists to refuse.
+   *
+   * A signed HEAD is the cheapest proof: it mutates nothing, it needs no
+   * listing permission, and 403 is exactly what a wrongly scoped token returns.
+   */
+  async #assertR2CredentialsOpenBucket(input: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    host: string;
+    bucket: string;
+  }): Promise<void> {
+    const signed = signR2HeadBucket({ ...input, now: new Date() });
+    const response = await this.#request({
+      provider: 'cloudflare',
+      url: `https://${input.host}/${encoded(input.bucket)}`,
+      method: 'HEAD',
+      withoutProviderAuthorization: true,
+      headers: {
+        Authorization: signed.authorization,
+        'x-amz-content-sha256': signed.payloadSha256,
+        'x-amz-date': signed.amzDate,
+      },
+      acceptedStatuses: [200, 301, 400, 403, 404],
+    });
+
+    if (response.status !== 200) {
+      throw adapterFailure(
+        'cloudflare',
+        'R2_RUNTIME_CREDENTIAL_SCOPE',
+        `R2 runtime credentials do not open bucket ${input.bucket}; issue an Object Read & Write token scoped to it and resume`,
+        true,
+      );
+    }
+  }
+
   async #ensureR2Binding(
     action: Extract<ProvisioningAction, { id: 'vercel.r2-binding' }>,
     context: ProvisioningExecutionContext,
@@ -1840,11 +1995,19 @@ export class LiveProvisioningAdapter implements ProvisioningAdapter {
         true,
       );
     }
+    const endpointHost = `${bucket.account_id}.eu.r2.cloudflarestorage.com`;
+    await this.#assertR2CredentialsOpenBucket({
+      accessKeyId,
+      secretAccessKey,
+      host: endpointHost,
+      bucket: bucket.display_name,
+    });
+
     const values: Record<(typeof R2_BINDING_KEYS)[number], string> = {
       CLOUDFLARE_ACCOUNT_ID: bucket.account_id,
       R2_ACCESS_KEY_ID: accessKeyId,
       R2_BUCKET_NAME: bucket.display_name,
-      R2_ENDPOINT: `https://${bucket.account_id}.eu.r2.cloudflarestorage.com`,
+      R2_ENDPOINT: `https://${endpointHost}`,
       R2_SECRET_ACCESS_KEY: secretAccessKey,
     };
     const variables = R2_BINDING_KEYS.flatMap((key) =>

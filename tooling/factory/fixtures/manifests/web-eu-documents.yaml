@@ -1,0 +1,56 @@
+schema_version: 1
+
+# Representative EU-private-documents profile (DEV-473, ADR 68).
+#
+# The distinguishing field is `data.files: cloudflare-r2-eu`, which materializes
+# the `ObjectStorage` port, the R2 adapter behind it, and the documents surface.
+# Unlike durable jobs, nothing here leaves the EU: the bucket carries the `eu`
+# jurisdiction and the bytes never transit through a non-EU processor, so this
+# manifest approves none.
+project:
+  name: web-eu-documents
+  profile: saas
+
+surfaces:
+  web: next-vercel
+  mobile:
+    adapter: none
+  worker: none
+
+workloads:
+  http: vercel-functions
+  durable_jobs: none
+  realtime_audio: none
+  persistent_service: none
+
+data:
+  database: neon-eu
+  orm: drizzle
+  files: cloudflare-r2-eu
+
+auth:
+  provider: better-auth
+  access_mode: public_verified
+  passkeys: optional
+  mfa: optional
+
+operations:
+  errors: sentry
+  analytics: none
+  email: resend
+
+data_residency:
+  policy: eu_primary
+  personal_data: eu_required
+  public_assets: global_allowed
+  non_eu_processor:
+    requires_approval: true
+    requires_dpa: true
+    requires_transfer_assessment: true
+
+dns:
+  provider: auto-detect
+
+cost_policy:
+  automatic_monthly_limit_eur: 10
+  paid_upgrade_requires_approval: true

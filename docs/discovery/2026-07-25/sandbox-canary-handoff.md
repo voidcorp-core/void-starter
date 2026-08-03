@@ -581,3 +581,26 @@ projet quelques minutes plus tôt; la reprise avec un bypass frais a réussi.
 Une note pour la lecture des runs précédents : `auth-signup.spec.ts` pilote le vrai formulaire dans
 le navigateur, en entrant par le lien d'invitation, et il passait déjà sur la publication rouge. Le
 parcours navigateur n'a jamais été cassé. Seules les fixtures parlant HTTP en direct l'étaient.
+
+---
+
+## Suite : provisioning réel de void-music (2026-07-30)
+
+Un second projet réel, `voidcorp-core/void-music`, a été provisionné de bout en bout avec la
+factory : neuf actions sur neuf réussies (GitHub, Vercel, Neon et son binding, bucket R2 avec CORS
+et credentials runtime, projet Sentry et son binding). L'adoption par lookup-before-create a été
+vérifiée une nouvelle fois : après archivage volontaire de `apply-state.json`, un `apply:live`
+complet a réadopté les six ressources existantes sans créer un seul doublon.
+
+Le chemin nominal fonctionne donc, mais huit points ont demandé un diagnostic manuel en `curl`,
+faute d'un message d'erreur exploitable. Ils sont consignés avec reproduction et correctif proposé
+dans [`../2026-07-30/void-music-provisioning-findings.md`](../2026-07-30/void-music-provisioning-findings.md).
+
+Le plus rentable est le point 0 : les échecs sont remontés en `<provider>_HTTP_<status>` sans le
+corps de la réponse, alors que Cloudflare, Sentry et Vercel y nomment tous la cause exacte. Le
+corriger rend trois des autres points beaucoup moins coûteux.
+
+À noter également : la publication du code a dû être faite en git standard après un
+`GITHUB_SOURCE_PUSH_UNCONFIRMED` qui a laissé le dépôt distant vide. `source:resume` n'a pas été
+testé sur cet échec précis, contrairement au canary du 25 où il avait réconcilié avec succès. Le
+point 6 du document reste donc à reproduire sur un dépôt neuf avant conclusion.

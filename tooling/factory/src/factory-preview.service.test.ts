@@ -96,6 +96,23 @@ describe('factory preview fixtures', () => {
     expect(nextConfig).toContain('withWorkflow(config)');
   });
 
+  it('previews the EU-documents fixture with its storage capability and surfaces', () => {
+    const preview = previewFixture('web-eu-documents');
+
+    expect(preview.composition.units).toContainEqual({
+      kind: 'capability',
+      id: 'files',
+      adapter: 'cloudflare-r2-eu',
+    });
+    expect(preview.files.removals).not.toContain('_modules/storage-r2');
+    expect(preview.files.removals).not.toContain('apps/web/src/app/documents');
+    // Nothing leaves the EU here, unlike durable jobs: the fixture approves no
+    // non-EU processor and must stay valid without one.
+    expect(preview.composition.policies.dataResidency).not.toHaveProperty(
+      'approved_non_eu_processors',
+    );
+  });
+
   it('writes the invite_only access mode into @repo/auth as code, not configuration', () => {
     const preview = previewFixture('web-internal-tool');
 

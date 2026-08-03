@@ -82,6 +82,18 @@ export const durableJobsManifest = {
   },
 } as const;
 
+export const documentsManifest = {
+  ...canonicalManifest,
+  project: {
+    name: 'eu-documents',
+    profile: 'saas',
+  },
+  data: {
+    ...canonicalManifest.data,
+    files: 'cloudflare-r2-eu',
+  },
+} as const;
+
 export const minimalManifest = {
   ...canonicalManifest,
   project: {
