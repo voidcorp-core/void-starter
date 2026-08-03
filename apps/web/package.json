@@ -14,7 +14,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.5.7",
+    "@hookform/resolvers": "^5.7.1",
     "@repo/auth": "workspace:*",
     "@repo/core": "workspace:*",
     "@repo/jobs-vercel-workflow": "workspace:*",
@@ -22,13 +22,13 @@
     "@repo/posthog": "workspace:*",
     "@repo/sentry": "workspace:*",
     "@repo/ui": "workspace:*",
-    "@sentry/nextjs": "^10.68.0",
+    "@sentry/nextjs": "^10.69.0",
     "better-auth": "^1.6.25",
     "next": "^16.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-hook-form": "^7.83.0",
-    "workflow": "^4.6.2",
+    "react-hook-form": "^7.84.0",
+    "workflow": "^4.8.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -39,8 +39,8 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@typescript/native-preview": "npm:typescript@^7.0.2",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitest/coverage-v8": "^4.1.10",
     "@repo/config": "workspace:*",
     "jsdom": "^29.1.1",
