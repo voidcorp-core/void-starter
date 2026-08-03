@@ -1,7 +1,11 @@
 # Handoff DEV-473 : profil documents privés EU
 
-> Rédigé le 2026-07-31 pour permettre la reprise en session fraîche. Aucun secret n'est enregistré
-> dans ce document.
+> **Remplacé par [`../2026-08-03/session-handoff.md`](../2026-08-03/session-handoff.md)**, qui est
+> le point de reprise à jour. Ce document reste exact sur le détail du canari et des défauts qu'il a
+> produits, mais ignore les tickets DEV-556 et DEV-557, l'audit de l'écosystème et l'avancement du
+> harness.
+>
+> Rédigé le 2026-07-31. Aucun secret n'est enregistré dans ce document.
 
 ## Ce qui est terminé
 
