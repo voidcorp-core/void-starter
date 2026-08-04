@@ -1,7 +1,11 @@
 # Handoff — 2026-08-03
 
-> Point de reprise à jour. Remplace `../2026-07-31/dev-473-session-handoff.md`, qui reste valable
-> pour le détail du canari mais ignore tout ce qui a suivi. Aucun secret ici.
+> **Remplacé par [`../2026-08-04/session-handoff.md`](../2026-08-04/session-handoff.md)**, qui est
+> le point de reprise à jour. Ce document reste exact sur le détail du canari, des tickets DEV-556 et
+> DEV-557 et de l'audit, mais décrit la PR #20 comme ouverte alors qu'elle est fusionnée.
+>
+> Remplace lui-même `../2026-07-31/dev-473-session-handoff.md`, qui reste valable pour le détail du
+> canari mais ignore tout ce qui a suivi. Aucun secret ici.
 
 ## En une ligne
 
