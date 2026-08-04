@@ -21,7 +21,7 @@ The factory wires this automatically. To activate it by hand in another app:
 
 1. Add `"@repo/storage-r2": "workspace:*"` to the app's `package.json`.
 2. Add `'@repo/storage-r2'` to `transpilePackages` in `next.config.ts`.
-3. Set the four environment variables below.
+3. Set the environment variables below.
 4. Put a CORS rule on the bucket naming the app's origins (see below). Without
    it a browser upload fails even though the presigned URL is valid.
 
@@ -30,10 +30,19 @@ CLOUDFLARE_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=
+# One of these two, unless the bucket is in the default jurisdiction:
+R2_ENDPOINT=
+R2_JURISDICTION=
 ```
 
 The credentials must be an Object Read & Write token scoped to the exact bucket.
 They are marked Sensitive in Vercel per `docs/SECURITY.md` section 4.
+
+`R2_ENDPOINT` is what the factory binds, and it wins outright. Set it by hand
+too if you have it. Otherwise set `R2_JURISDICTION` to the jurisdiction the
+bucket was created with (`eu` for this profile), because the host is composed
+from the account id and a bucket answers on its own jurisdiction's host only
+(ADR 70). Getting this wrong surfaces as a CORS error that no CORS rule fixes.
 
 ## The CORS rule
 
@@ -57,9 +66,13 @@ Name the origins. A wildcard opens a bucket of personal documents to every site
 the browser visits. `DELETE` is deliberately absent: erasure goes through the
 server, which is what makes it auditable.
 
-Presigned URLs only work against the S3 API hostname
-(`<ACCOUNT_ID>.r2.cloudflarestorage.com`), never a custom domain --
+Presigned URLs only work against the S3 API hostname, never a custom domain --
 [Cloudflare's docs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/).
+That hostname carries the bucket's jurisdiction:
+`<ACCOUNT_ID>.eu.r2.cloudflarestorage.com` here, and
+`<ACCOUNT_ID>.r2.cloudflarestorage.com` only for a bucket created without one.
+A host that does not match the bucket refuses it, and refuses to describe its
+CORS policy along with it, which is why the browser blames CORS (ADR 70).
 
 ## The upload flow
 

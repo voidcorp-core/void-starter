@@ -49,7 +49,9 @@ fails closed on missing or partial configuration.
 ### @repo/storage-r2 -- Private EU documents on Cloudflare R2
 
 - **State:** real package, type-checked + tested, wired into `apps/web` when selected
-- **Env vars:** `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+- **Env vars:** `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `R2_BUCKET_NAME`, plus `R2_ENDPOINT` or `R2_JURISDICTION` for a bucket with a jurisdiction
+  (ADR 70)
 - **Install:** see [`storage-r2/README.md`](./storage-r2/README.md)
 - **Pattern:** A. Selected by `data.files: cloudflare-r2-eu`; the `documents` surfaces live in
   `apps/web/src/app/documents/` and are pruned with the module.
