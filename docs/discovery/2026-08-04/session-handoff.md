@@ -5,9 +5,9 @@
 
 ## En une ligne
 
-Les trois PR ouvertes sont fusionnées, `main` est à `a2f4b83`, plus rien n'est en attente sur le
-dépôt. DEV-473 reste **In Progress** : le code est dans `main`, le canari du starter ne l'a toujours
-pas traversé.
+Les trois PR ouvertes sont fusionnées, plus deux ouvertes et fermées dans la foulée (documentation
+manquante, pins de sécurité périmés). Plus rien n'est en attente sur le dépôt. DEV-473 reste
+**In Progress** : le code est dans `main`, le canari du starter ne l'a toujours pas traversé.
 
 ## 1. Ce qui a été fusionné, et dans quel ordre
 
@@ -16,6 +16,8 @@ pas traversé.
 | #21 | `fix(storage-r2)`: endpoint composé avec la juridiction | `aa706d9`, dans la branche DEV-473 |
 | #20 | `feat(storage)`: profil documents privés EU | `95a45d0`, dans `main` |
 | #22 | `chore(deps)`: bump hebdomadaire | `a2f4b83`, dans `main` |
+| #24 | `fix(deps)`: pins de sécurité, voir section 3 | `60b13d6`, dans `main` |
+| #23 | `docs`: ADR 70 et le présent document | la PR qui porte ce fichier |
 
 L'ordre n'était pas libre. #21 devait précéder #20 : sans elle, `storage.object-store.ts` compose
 `https://<account>.r2.cloudflarestorage.com`, hôte qui refuse un bucket à juridiction, donc `main`
@@ -53,7 +55,19 @@ Ce que ce merge **ne** prouve pas : le canari du starter, lui, n'a jamais attein
 concernait que l'activation à la main, qui est le seul chemin où le bug mordait -- et le seul que la
 documentation décrivait.
 
-## 3. Reprise, dans l'ordre
+## 3. `bun audit` est passé au rouge tout seul
+
+Découvert en poussant la présente PR : `main` était rouge sur le job `quality` sans qu'une seule
+ligne du dépôt ait bougé depuis #22. Des avis publiés dans la nuit ont fait passer quatre des pins
+d'ADR 36 juste sous leur version corrigée -- `brace-expansion`, `fast-uri`, `postcss`, `undici`,
+huit avis dont trois high. Corrigé par #24, `bun audit` de retour à zéro.
+
+Le mécanisme d'ADR 36 a fonctionné exactement comme prévu, mais il pose une question de rythme : les
+pins ne sont revus qu'au bump hebdomadaire, alors qu'un avis peut les périmer n'importe quand, et
+c'est la CI de la PR suivante qui l'apprend. Un `bun audit` planifié plutôt que déclenché par un
+push dirait la même chose sans faire porter la découverte à un changement sans rapport.
+
+## 4. Reprise, dans l'ordre
 
 1. **Canari DEV-473.** Toujours arrêté sur `vercel.r2-binding`, code `R2_RUNTIME_CREDENTIAL_SCOPE`.
    Recréer un token R2 Object Read & Write scopé à `void-starter-canary-documents-20260730`,
@@ -68,7 +82,7 @@ documentation décrivait.
 Reste aussi, non planifié : le test de non-régression du lint décrit au 2026-08-03 section 4, et le
 `testTimeout` de la suite factory, instable sous forte charge machine.
 
-## 4. Vérifications au moment d'écrire
+## 5. Vérifications au moment d'écrire
 
 Sur le merge de #22 avant push : lint 337 fichiers, type-check 13 packages, test 13 tâches, build,
 knip, plus `_modules/storage-r2` hors graphe turbo racine (26 passed, 5 skipped). CI verte sur
