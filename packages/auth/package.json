@@ -19,11 +19,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.7.1",
+    "@better-auth/drizzle-adapter": "~1.6.30",
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/email-resend": "workspace:*",
-    "better-auth": "^1.7.1",
+    "better-auth": "~1.6.30",
     "drizzle-orm": "^0.45.2",
     "server-only": "^0.0.1",
     "zod": "^4.4.3"
