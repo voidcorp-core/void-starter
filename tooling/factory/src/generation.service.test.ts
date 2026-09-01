@@ -25,15 +25,41 @@ import {
 } from './eas-project.service';
 import { easProjectStateSchema } from './eas-project.types';
 import { parseBuildManifest } from './factory.service';
+import type { BuildManifest } from './factory.types';
 import { renderProject } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
 import { createMigrationPlan, migrationPlanDigest } from './migration.service';
 import { migrationStateSchema } from './migration.types';
 import { applyProvisioning, SimulatedProvisioningAdapter } from './provisioning-apply.service';
+import { parseProvisioningHandoffContext } from './provisioning-handoff.service';
 import { createProvisioningPlan, parseProvisioningContext } from './provisioning-plan.service';
 import { createSourcePublicationPlan } from './source-publication.service';
 
 const temporaryRoots: string[] = [];
+
+const minimalHandoffContext = parseProvisioningHandoffContext({
+  schema_version: 1,
+  github: {
+    owner: 'voidcorp-core',
+    owner_kind: 'organization',
+    visibility: 'private',
+  },
+  vercel: {
+    team_id: 'team_example',
+    region: 'fra1',
+  },
+});
+
+async function renderTestProject(input: {
+  manifest: BuildManifest;
+  sourceRoot: string;
+  targetRoot: string;
+}) {
+  return renderProject({
+    ...input,
+    provisioningContext: minimalHandoffContext,
+  });
+}
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -203,7 +229,7 @@ describe('renderProject', () => {
     const { sourceRoot, targetRoot } = await createBaseline();
     const manifest = parseBuildManifest(expoManifest);
 
-    const receipt = await renderProject({
+    const receipt = await renderTestProject({
       manifest,
       sourceRoot,
       targetRoot,
@@ -290,12 +316,12 @@ describe('renderProject', () => {
     const minimal = await createBaseline();
     const clerk = await createBaseline();
 
-    await renderProject({
+    await renderTestProject({
       manifest: parseBuildManifest(minimalManifest),
       sourceRoot: minimal.sourceRoot,
       targetRoot: minimal.targetRoot,
     });
-    await renderProject({
+    await renderTestProject({
       manifest: parseBuildManifest(clerkManifest),
       sourceRoot: clerk.sourceRoot,
       targetRoot: clerk.targetRoot,
@@ -334,17 +360,56 @@ describe('renderProject', () => {
     expect((await doctorProject(clerk.targetRoot)).ok).toBe(true);
   });
 
+  it('writes a deterministic minimal handoff and records its exact digest', async () => {
+    const first = await createBaseline();
+    const second = await createBaseline();
+    const manifest = parseBuildManifest(minimalManifest);
+
+    const firstReceipt = await renderTestProject({
+      manifest,
+      sourceRoot: first.sourceRoot,
+      targetRoot: first.targetRoot,
+    });
+    const secondReceipt = await renderTestProject({
+      manifest,
+      sourceRoot: second.sourceRoot,
+      targetRoot: second.targetRoot,
+    });
+    const firstPlanSource = await readFile(
+      join(first.targetRoot, '.void-starter/provisioning-plan.json'),
+      'utf8',
+    );
+    const secondPlanSource = await readFile(
+      join(second.targetRoot, '.void-starter/provisioning-plan.json'),
+      'utf8',
+    );
+    const firstRunbookSource = await readFile(
+      join(first.targetRoot, 'docs/PROVISIONING.md'),
+      'utf8',
+    );
+    const secondRunbookSource = await readFile(
+      join(second.targetRoot, 'docs/PROVISIONING.md'),
+      'utf8',
+    );
+
+    expect(secondPlanSource).toBe(firstPlanSource);
+    expect(secondRunbookSource).toBe(firstRunbookSource);
+    expect(firstReceipt.schema_version).toBe(2);
+    expect(firstReceipt.provisioning_plan_sha256).toBe(sha256(firstPlanSource));
+    expect(secondReceipt.provisioning_plan_sha256).toBe(firstReceipt.provisioning_plan_sha256);
+  });
+
   it('removes unselected surfaces and emits byte-for-byte deterministic metadata', async () => {
     const first = await createBaseline();
     const second = await createBaseline();
     const manifest = parseBuildManifest(mobileOnlyManifest);
 
-    const firstReceipt = await renderProject({
+    const firstReceipt = await renderTestProject({
       manifest,
       sourceRoot: first.sourceRoot,
       targetRoot: first.targetRoot,
     });
-    const secondReceipt = await renderProject({
+    const secondReceipt = await renderTestProject({
       manifest,
       sourceRoot: second.sourceRoot,
       targetRoot: second.targetRoot,
@@ -362,8 +427,8 @@ describe('renderProject', () => {
     );
   });
 
-  // `.mcp.json` points agents at the void-starter team's own Linear workspace. It is
-  // development governance, like CLAUDE.md, and must never reach a generated project.
+  // Generation must not copy this repository's MCP configuration, but a living
+  // generated project is allowed to add its own configuration later.
   it('excludes the project MCP configuration from generated output', async () => {
     const { sourceRoot, targetRoot } = await createBaseline();
     await writeFile(
@@ -372,7 +437,7 @@ describe('renderProject', () => {
       'utf8',
     );
 
-    const receipt = await renderProject({
+    const receipt = await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -381,11 +446,11 @@ describe('renderProject', () => {
     expect(receipt.generated_files.map((file) => file.path)).not.toContain('.mcp.json');
     await expect(readFile(join(targetRoot, '.mcp.json'))).rejects.toThrow();
 
-    // And doctor must flag it as a development artifact if it ever reappears.
+    // Doctor judges leaked Factory internals, not project-owned governance.
     await writeFile(join(targetRoot, '.mcp.json'), '{}', 'utf8');
     const report = await doctorProject(targetRoot);
     const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
-    expect(artifactCheck?.status).toBe('fail');
+    expect(artifactCheck?.status).toBe('pass');
   });
 
   // `.claude/settings.local.json` accumulates the permissions one contributor
@@ -400,7 +465,7 @@ describe('renderProject', () => {
       'utf8',
     );
 
-    const receipt = await renderProject({
+    const receipt = await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -411,12 +476,12 @@ describe('renderProject', () => {
     );
     await expect(readFile(join(targetRoot, '.claude/settings.local.json'))).rejects.toThrow();
 
-    // And doctor must flag it as a development artifact if it ever reappears.
+    // The copy exclusion remains strict, while doctor permits project-local state.
     await mkdir(join(targetRoot, '.claude'), { recursive: true });
     await writeFile(join(targetRoot, '.claude/settings.local.json'), '{}', 'utf8');
     const report = await doctorProject(targetRoot);
     const artifactCheck = report.checks.find((check) => check.id === 'development-artifacts');
-    expect(artifactCheck?.status).toBe('fail');
+    expect(artifactCheck?.status).toBe('pass');
   });
 
   // The Workflow SDK writes its route handlers into the SOURCE tree during a build
@@ -432,7 +497,7 @@ describe('renderProject', () => {
     await writeFile(join(workflowRoot, 'flow/route.js'), 'export {};');
     await writeFile(join(sourceRoot, 'apps/web/.swc/plugins/cache.wasmer'), 'binary');
 
-    const receipt = await renderProject({
+    const receipt = await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -465,7 +530,7 @@ describe('renderProject', () => {
     await mkdir(existing.targetRoot);
 
     await expect(
-      renderProject({
+      renderTestProject({
         manifest: parseBuildManifest(canonicalManifest),
         sourceRoot: existing.sourceRoot,
         targetRoot: existing.targetRoot,
@@ -474,7 +539,7 @@ describe('renderProject', () => {
 
     const nested = await createBaseline();
     await expect(
-      renderProject({
+      renderTestProject({
         manifest: parseBuildManifest(canonicalManifest),
         sourceRoot: nested.sourceRoot,
         targetRoot: join(nested.sourceRoot, 'generated'),
@@ -484,7 +549,7 @@ describe('renderProject', () => {
     const linked = await createBaseline();
     await symlink(linked.temporaryRoot, join(linked.sourceRoot, 'external-link'));
     await expect(
-      renderProject({
+      renderTestProject({
         manifest: parseBuildManifest(canonicalManifest),
         sourceRoot: linked.sourceRoot,
         targetRoot: linked.targetRoot,
@@ -493,13 +558,40 @@ describe('renderProject', () => {
     await expect(readFile(join(linked.targetRoot, 'package.json'), 'utf8')).rejects.toThrow();
   });
 
+  it('validates handoff coordinates before writing any target artifact', async () => {
+    const missingCoordinates = await createBaseline();
+    const contextWithoutVercel = parseProvisioningHandoffContext({
+      schema_version: 1,
+      github: {
+        owner: 'voidcorp-core',
+        owner_kind: 'organization',
+        visibility: 'private',
+      },
+    });
+
+    await expect(
+      renderProject({
+        manifest: parseBuildManifest(minimalManifest),
+        provisioningContext: contextWithoutVercel,
+        sourceRoot: missingCoordinates.sourceRoot,
+        targetRoot: missingCoordinates.targetRoot,
+      }),
+    ).rejects.toThrow(/Vercel settings.*selected web surface/i);
+    await expect(
+      readFile(join(missingCoordinates.targetRoot, '.void-starter/provisioning-plan.json'), 'utf8'),
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(missingCoordinates.targetRoot, 'docs/PROVISIONING.md'), 'utf8'),
+    ).rejects.toThrow();
+  });
+
   it('rejects an invalid baseline and supports optional repository metadata', async () => {
     const invalid = await createBaseline();
     await writeJson(join(invalid.sourceRoot, 'package.json'), {
       name: 'invalid-baseline',
     });
     await expect(
-      renderProject({
+      renderTestProject({
         manifest: parseBuildManifest(canonicalManifest),
         sourceRoot: invalid.sourceRoot,
         targetRoot: invalid.targetRoot,
@@ -511,7 +603,7 @@ describe('renderProject', () => {
     await rm(join(minimal.sourceRoot, 'knip.json'));
     await rm(join(minimal.sourceRoot, 'biome.json'));
     await rm(join(minimal.sourceRoot, 'README.md'));
-    const receipt = await renderProject({
+    const receipt = await renderTestProject({
       manifest: parseBuildManifest(canonicalManifest),
       sourceRoot: minimal.sourceRoot,
       targetRoot: minimal.targetRoot,
@@ -530,14 +622,14 @@ describe('renderProject', () => {
     ]);
     await expect(
       readFile(join(minimal.targetRoot, '.void-starter/receipt.json'), 'utf8'),
-    ).resolves.toContain('"schema_version": 1');
+    ).resolves.toContain('"schema_version": 2');
   });
 });
 
 describe('doctorProject', () => {
   it('passes a fresh render and detects generated-file tampering and forbidden artifacts', async () => {
     const { sourceRoot, targetRoot } = await createBaseline();
-    await renderProject({
+    await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -551,7 +643,7 @@ describe('doctorProject', () => {
       encoding: 'utf8',
       flag: 'a',
     });
-    await mkdir(join(targetRoot, '.codex'));
+    await mkdir(join(targetRoot, '.agents'));
     const rootPackagePath = join(targetRoot, 'package.json');
     const rootPackage = JSON.parse(await readFile(rootPackagePath, 'utf8'));
     rootPackage.devDependencies = {
@@ -596,7 +688,7 @@ describe('doctorProject', () => {
     });
 
     const { sourceRoot, targetRoot, temporaryRoot } = await createBaseline();
-    await renderProject({
+    await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -630,7 +722,7 @@ describe('doctorProject', () => {
 
   it('accepts a receipt-owned EAS link and rejects an unowned or corrupted link', async () => {
     const { sourceRoot, targetRoot } = await createBaseline();
-    await renderProject({
+    await renderTestProject({
       manifest: parseBuildManifest(expoManifest),
       sourceRoot,
       targetRoot,
@@ -689,7 +781,7 @@ describe('doctorProject', () => {
   it('accepts completed simulated provisioning state and fails closed on state corruption', async () => {
     const { sourceRoot, targetRoot } = await createBaseline();
     const manifest = parseBuildManifest(expoManifest);
-    await renderProject({
+    await renderTestProject({
       manifest,
       sourceRoot,
       targetRoot,
@@ -849,7 +941,7 @@ describe('doctorProject', () => {
     expect(healthyReport.checks).toContainEqual({
       id: 'development-artifacts',
       status: 'pass',
-      message: 'Factory and external development-governance artifacts are absent',
+      message: 'Factory internals are absent',
     });
     expect(healthyReport.checks).toContainEqual({
       id: 'source-publication-state',
