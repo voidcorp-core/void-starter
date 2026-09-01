@@ -1,9 +1,9 @@
 ---
 title: Intent-only Void Starter factory migration
 date: 2026-09-01
-status: in-progress
+status: executing
 spec: docs/specs/2026-09-01-intent-only-factory-boundary.md
-ticket:
+ticket: DEV-684
 author: Florent Pellegrin + Codex
 high_risk: true
 ---
@@ -426,7 +426,7 @@ mutable status and next-ready selection; this plan is not updated with a competi
 
 | Order key | Ticket title | Depends on | Estimate | Human gate |
 |---|---|---|---|---|
-| F01 | Ship minimal offline provisioning handoff | none | 1 day | no |
+| F01 | Ship minimal offline provisioning handoff | none | 1 day | plan review before start |
 | F02 | Cover complete infrastructure intent graph | F01 | 1.5 days | no |
 | F03 | Report legacy operational state locally | F01 | 1 day | no |
 | F04 | Retire generic live provisioning | F02, F03 | 1 day | Checkpoint A after completion |

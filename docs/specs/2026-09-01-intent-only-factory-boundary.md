@@ -3,7 +3,7 @@ title: Intent-only Void Starter factory boundary
 date: 2026-09-01
 status: approved
 author: Florent Pellegrin + Codex
-ticket:
+ticket: DEV-684
 related:
   - ../FACTORY.md
   - ../DECISIONS.md
