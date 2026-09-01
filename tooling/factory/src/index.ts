@@ -83,6 +83,8 @@ export {
   type DoctorReport,
   type GeneratedFile,
   type GenerationReceipt,
+  type HandoffGenerationReceipt,
+  type LegacyGenerationReceipt,
   type ProjectFilePlan,
   type SurfaceFilePlan,
 } from './factory.types';
@@ -164,6 +166,25 @@ export {
   SimulatedProvisioningAdapter,
   validateProvisioningState,
 } from './provisioning-apply.service';
+export {
+  createProvisioningHandoff,
+  type ProvisioningHandoff,
+  parseProvisioningHandoffContext,
+  parseProvisioningHandoffContextSource,
+  parseProvisioningHandoffPlan,
+} from './provisioning-handoff.service';
+export {
+  type ManifestSha256,
+  manifestSha256Schema,
+  type ProvisioningHandoffAction,
+  type ProvisioningHandoffContext,
+  type ProvisioningHandoffPlan,
+  type ProvisioningPlanSha256,
+  provisioningHandoffActionSchema,
+  provisioningHandoffContextSchema,
+  provisioningHandoffPlanSchema,
+  provisioningPlanSha256Schema,
+} from './provisioning-handoff.types';
 export {
   createProvisioningPlan,
   parseProvisioningContext,

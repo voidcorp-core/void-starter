@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ManifestSha256, ProvisioningPlanSha256 } from './provisioning-handoff.types';
 
 const projectNameSchema = z
   .string()
@@ -322,10 +323,9 @@ export type CapabilityFilePlan = SurfaceFilePlan;
 
 export type ProjectFilePlan = SurfaceFilePlan;
 
-export type GenerationReceipt = {
-  schema_version: 1;
+type GenerationReceiptBase = {
   project: BuildManifest['project'];
-  manifest_sha256: string;
+  manifest_sha256: ManifestSha256;
   composition: CompositionPlan;
   generated_files: Array<{
     path: string;
@@ -335,6 +335,17 @@ export type GenerationReceipt = {
   excluded_source_paths: string[];
   next_actions: string[];
 };
+
+export type LegacyGenerationReceipt = GenerationReceiptBase & {
+  schema_version: 1;
+};
+
+export type HandoffGenerationReceipt = GenerationReceiptBase & {
+  schema_version: 2;
+  provisioning_plan_sha256: ProvisioningPlanSha256;
+};
+
+export type GenerationReceipt = LegacyGenerationReceipt | HandoffGenerationReceipt;
 
 export type DoctorCheck = {
   id: string;
