@@ -41,6 +41,11 @@ When a package dependency removal requires a lockfile refresh, the step stops at
 gate. A human regenerates and reviews the lockfile; execution resumes only after frozen install and
 repository checks pass against that exact change.
 
+The DevEx budget is measured at the boundary the Factory still owns: at most 10 minutes from a fresh
+documented setup to `local_ready`, and at most 2 minutes for generation plus doctor with dependencies
+already installed. Both runs end at a version 2 plan, runbook, receipt, and passing local doctor;
+remote provider execution is excluded and must never be disguised as part of the measurement.
+
 ## Steps
 
 ### Step 1 - Ship the minimal offline handoff slice
@@ -71,11 +76,17 @@ repository checks pass against that exact change.
     surface selects Vercel;
   - the generation receipt records the handoff-plan digest;
   - doctor validates plan/runbook/receipt agreement without importing a live provider service;
+  - generation copy exclusions and doctor-forbidden artifacts become independent policies, absorbing
+    DEV-556 without invalidating historical receipts that recorded the older exclusion list;
   - a test replaces provider networking with a throwing guard and supplies sentinel credential
     values in the process environment; generation and doctor still pass and emit none of them.
 - **Verification gate**:
   - the new service tests fail before production code and pass afterward;
   - two runs over identical inputs produce byte-identical plan and runbook artifacts;
+  - filesystem assertions prove a failed pre-write validation leaves no partial plan or runbook;
+  - process-spawn and network guards prove generation and doctor invoke neither provider CLIs nor
+    provider APIs;
+  - a documented warm measurement completes generation plus doctor within 2 minutes;
   - `bun run --cwd tooling/factory test` passes, including the new handoff, generation, and doctor
     files;
   - `bun run --cwd tooling/factory type-check` and `bun run --cwd tooling/factory lint` pass;
@@ -426,7 +437,7 @@ mutable status and next-ready selection; this plan is not updated with a competi
 
 | Order key | Ticket title | Depends on | Estimate | Human gate |
 |---|---|---|---|---|
-| F01 | Ship minimal offline provisioning handoff | none | 1 day | plan review before start |
+| F01 | Ship minimal offline provisioning handoff | none | 1 day | plan review cleared |
 | F02 | Cover complete infrastructure intent graph | F01 | 1.5 days | no |
 | F03 | Report legacy operational state locally | F01 | 1 day | no |
 | F04 | Retire generic live provisioning | F02, F03 | 1 day | Checkpoint A after completion |
@@ -438,3 +449,44 @@ mutable status and next-ready selection; this plan is not updated with a competi
 F02 and F03 are independently ready after F01. F05, F06, and F07 are independently ready after
 F04 and Checkpoint A. Independence permits flexible ordering but does not authorize autonomous or
 parallel execution; execution mode remains a separate human decision.
+
+## Plan review — all lenses — 2026-09-01
+
+### Scope and verdict
+
+- **Mode**: REDUCTION. The plan touches more than 15 files because it retires multiple shipped
+  control planes; the eight vertical tickets and replacement-before-deletion gates contain that
+  size smell.
+- **CEO**: CLEARED. The approved spec compares keeping live verification, retaining a core provider
+  set, generating IaC, and the selected intent-only boundary; the plan follows the lowest durable
+  ownership cost without hiding the lost convenience.
+- **Design**: skipped. No end-user visual interface is added or changed.
+- **Engineering**: CLEARED after the DEV-556/DEV-557 ordering decision and the mechanical test tasks
+  below.
+- **DevEx**: CLEARED after the user approved explicit fresh and warm time-to-first-value budgets.
+- **Overall**: CLEARED. No P1 finding remains unresolved before F01.
+
+### Decision audit trail
+
+- **P1 — doctor baseline collision**: DEV-556 is absorbed into F01 because it changes the same
+  generation/doctor files and is required for trustworthy local verification. DEV-557 is deferred
+  behind F08 so the metadata namespace migration cannot race this deletion program. User approved.
+- **P1 — missing TTHW target**: the supported local boundary must reach `local_ready` within 10
+  minutes on a fresh documented setup and complete a warm generation-plus-doctor run within 2
+  minutes. Remote provisioning time is excluded explicitly. User approved.
+- **P2 — side-effect guard completeness**: add a child-process guard beside the network guard so a
+  provider CLI cannot replace an HTTP client unnoticed. Mechanical, auto-decided.
+- **P2 — atomic failure evidence**: assert that validation failure leaves no partial plan or runbook.
+  Mechanical, auto-decided.
+
+### Implementation tasks
+
+- [ ] **P1 / F01** — split generation exclusions from doctor-forbidden artifacts and keep historical
+  receipt comparisons tolerant, satisfying the absorbed DEV-556 contract.
+- [ ] **P1 / F01** — record a fresh `local_ready` measurement and a warm generation-plus-doctor
+  measurement against the approved 10-minute and 2-minute budgets.
+- [ ] **P2 / F01** — fail the test if the supported generation/doctor path spawns a provider CLI or
+  performs provider networking.
+- [ ] **P2 / F01** — prove pre-write validation failures leave no partial handoff artifacts.
+- [ ] **P2 / F08** — re-run both TTHW measurements on the final supported surface and record the
+  exact commands, environment, and elapsed times in the acceptance audit.

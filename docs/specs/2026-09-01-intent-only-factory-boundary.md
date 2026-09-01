@@ -200,6 +200,19 @@ Repeated validation, generation planning, or doctor execution has no remote side
 the supported flow with networking disabled and an empty credential environment produces the same
 local artifacts as an online run, assuming repository dependencies are already installed.
 
+## Developer experience budget
+
+The supported boundary has two time-to-first-value budgets, measured with the documented commands
+and no provider execution:
+
+- a first-time operator reaches `local_ready` in at most 10 minutes from a fresh documented setup;
+- with repository dependencies already installed, generation plus doctor completes in at most 2
+  minutes.
+
+Both measurements end when the version 2 plan, runbook, receipt, and passing local doctor report are
+available. Provider account creation, credential setup, resource provisioning, migration,
+deployment, and remote verification are external work and are not hidden inside either budget.
+
 ## Shipped surface changes
 
 The Factory retains local commands for manifest planning, generation, project-pack application,
@@ -350,6 +363,8 @@ The change is complete when all of the following are observed:
 9. Factory and root lint, type-check, tests, build, and Knip pass with fresh evidence.
 10. `docs/FACTORY.md` and related documentation describe the intent-only boundary without retaining
     the retired zero-copy or one-apply promise.
+11. A documented fresh run reaches `local_ready` within 10 minutes, and a warm generation-plus-doctor
+    run completes within 2 minutes, with the measurement commands and environment recorded.
 
 ## Alternatives considered
 

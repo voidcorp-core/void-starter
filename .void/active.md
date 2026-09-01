@@ -11,11 +11,24 @@ tracker:
   startedState: In Progress
   reviewState: In Review
   doneStates: [Done]
-humanGates: [DEV-685, DEV-688, DEV-691, DEV-692]
+humanGates: [DEV-688, DEV-691, DEV-692]
 autopilot:
   schemaVersion: 1
-  enabled: false
+  enabled: true
+  clusterSize: 3
+  base: main
   mergeGate: human
+  verifyCommands:
+    - [bun, install, --frozen-lockfile]
+    - [bun, run, audit]
+    - [bun, run, lint]
+    - [bun, run, type-check]
+    - [bun, run, test]
+    - [bun, run, build]
+    - [bun, run, knip]
+  ownership:
+    sequential: [tooling/factory/, docs/, .void/]
+    reconcileOnly: [.void/active.md]
 ---
 
 # Intent-only Factory boundary
@@ -25,10 +38,10 @@ checkpoints. Each complete Linear issue is the executable unit, and its native b
 decide readiness. The ordered `tracker.issues` list is only the deterministic tie-break order among
 simultaneously ready issues; it does not record mutable progress.
 
-`void-implement` owns each ticket's lifecycle, evidence, and tracker updates. Before DEV-685 starts,
-run `void-plan-review` in all-lenses mode and dispose every finding. DEV-688 closes Checkpoint A;
-DEV-691 closes Checkpoint B only after DEV-689 and DEV-690 are also done; DEV-692 carries the final
-doctrine, lockfile, verification, and acceptance gates. Every gate requires explicit human approval.
+`void-implement` owns each ticket's lifecycle, evidence, and tracker updates. The all-lenses plan
+review is cleared. DEV-688 closes Checkpoint A; DEV-691 closes Checkpoint B only after DEV-689 and
+DEV-690 are also done; DEV-692 carries the final doctrine, lockfile, verification, and acceptance
+gates. Every remaining gate requires explicit human approval.
 
-Autonomous execution is disabled. Ticket selection, lockfile changes, checkpoint continuation, and
-merge remain human-controlled.
+Autopilot execution is enabled and sequential for every planned Factory, documentation, and active
+program path. Lockfile changes, checkpoint continuation, and merge remain human-controlled.
