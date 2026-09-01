@@ -128,7 +128,7 @@ function createVercelAction(
   });
 }
 
-export function createProvisioningHandoffPlan(
+function createProvisioningHandoffPlan(
   manifest: BuildManifest,
   context: ProvisioningHandoffContext,
 ): ProvisioningHandoffPlan {
