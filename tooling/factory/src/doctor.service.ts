@@ -6,24 +6,29 @@ import { createProjectFilePlan } from './capability-composition.service';
 import { readDeliveryState, validateDeliveryState } from './delivery.service';
 import { readEasNativeBuildState, validateEasNativeBuildState } from './eas-native-build.service';
 import { readEasProjectState, validateEasProjectState } from './eas-project.service';
-import { createCompositionPlan, parseBuildManifest } from './factory.service';
-import type { BuildManifest, DoctorCheck, DoctorReport, GenerationReceipt } from './factory.types';
-import { createGenerationReceipt, FORBIDDEN_OUTPUT_PATHS } from './generation.service';
+import { parseBuildManifest } from './factory.service';
+import type { BuildManifest, DoctorCheck, DoctorReport } from './factory.types';
+import { createGenerationReceipt } from './generation.service';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
 import { readMigrationState, validateMigrationState } from './migration.service';
 import { readProvisioningState, validateProvisioningState } from './provisioning-apply.service';
+import {
+  parseProvisioningHandoffPlan,
+  renderProvisioningHandoffRunbook,
+  validateProvisioningHandoffPlan,
+} from './provisioning-handoff.service';
+import { manifestSha256Schema, provisioningPlanSha256Schema } from './provisioning-handoff.types';
 import {
   readSourcePublicationState,
   validateSourcePublicationState,
 } from './source-publication.service';
 
-const receiptSchema = z.strictObject({
-  schema_version: z.literal(1),
+const receiptFields = {
   project: z.strictObject({
     name: z.string(),
     profile: z.enum(['saas', 'internal-tool']),
   }),
-  manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  manifest_sha256: manifestSha256Schema,
   composition: z.unknown(),
   generated_files: z.array(
     z.strictObject({
@@ -34,7 +39,31 @@ const receiptSchema = z.strictObject({
   removed_paths: z.array(z.string()),
   excluded_source_paths: z.array(z.string()),
   next_actions: z.array(z.string()),
+};
+
+const legacyReceiptSchema = z.strictObject({
+  schema_version: z.literal(1),
+  ...receiptFields,
 });
+const handoffReceiptSchema = z.strictObject({
+  schema_version: z.literal(2),
+  ...receiptFields,
+  provisioning_plan_sha256: provisioningPlanSha256Schema,
+});
+const receiptSchema = z.discriminatedUnion('schema_version', [
+  legacyReceiptSchema,
+  handoffReceiptSchema,
+]);
+
+type DiagnosableGenerationReceipt = z.infer<typeof receiptSchema>;
+
+const DOCTOR_FORBIDDEN_PATHS = [
+  '.agents',
+  'docs/FACTORY.md',
+  'docs/discovery',
+  'docs/superpowers',
+  'tooling/factory',
+] as const;
 
 function isMissingFileError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
@@ -62,7 +91,7 @@ function createCheck(id: string, passed: boolean, message: string): DoctorCheck 
 
 async function generatedFilesAreValid(
   projectRoot: string,
-  generatedFiles: GenerationReceipt['generated_files'],
+  generatedFiles: DiagnosableGenerationReceipt['generated_files'],
 ): Promise<boolean> {
   for (const file of generatedFiles) {
     if (!file.path || isAbsolute(file.path)) {
@@ -82,6 +111,80 @@ async function generatedFilesAreValid(
     }
   }
   return true;
+}
+
+function comparableLegacyReceipt(receipt: DiagnosableGenerationReceipt) {
+  return {
+    project: receipt.project,
+    manifest_sha256: receipt.manifest_sha256,
+    composition: receipt.composition,
+    generated_files: receipt.generated_files,
+    removed_paths: receipt.removed_paths,
+    next_actions: receipt.next_actions,
+  };
+}
+
+async function checkProvisioningHandoff(
+  projectRoot: string,
+  manifest: BuildManifest,
+  receipt: DiagnosableGenerationReceipt,
+): Promise<DoctorCheck> {
+  const planPath = join(projectRoot, '.void-starter/provisioning-plan.json');
+  const runbookPath = join(projectRoot, 'docs/PROVISIONING.md');
+  if (receipt.schema_version === 1) {
+    const hasUnexpectedArtifacts = (await pathExists(planPath)) || (await pathExists(runbookPath));
+    return createCheck(
+      'provisioning-handoff',
+      false,
+      hasUnexpectedArtifacts
+        ? 'Provisioning handoff artifacts exist without a receipt digest'
+        : 'Historical receipt is readable but cannot establish version 2 handoff integrity',
+    );
+  }
+
+  let planSource: string;
+  let runbookSource: string;
+  try {
+    [planSource, runbookSource] = await Promise.all([
+      readFile(planPath, 'utf8'),
+      readFile(runbookPath, 'utf8'),
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return createCheck(
+      'provisioning-handoff',
+      false,
+      `Provisioning artifacts are missing: ${message}`,
+    );
+  }
+
+  let plan: ReturnType<typeof parseProvisioningHandoffPlan>;
+  try {
+    plan = parseProvisioningHandoffPlan(JSON.parse(planSource));
+    validateProvisioningHandoffPlan(manifest, plan);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return createCheck('provisioning-handoff', false, `Provisioning plan is invalid: ${message}`);
+  }
+  if (sha256(planSource) !== receipt.provisioning_plan_sha256) {
+    return createCheck(
+      'provisioning-handoff',
+      false,
+      'Provisioning receipt digest does not match the handoff plan',
+    );
+  }
+  if (runbookSource !== renderProvisioningHandoffRunbook(plan)) {
+    return createCheck(
+      'provisioning-handoff',
+      false,
+      'Provisioning runbook does not match the ordered handoff plan',
+    );
+  }
+  return createCheck(
+    'provisioning-handoff',
+    true,
+    'Provisioning plan, runbook, manifest, and receipt agree locally',
+  );
 }
 
 async function listPackageJsonFiles(directory: string): Promise<string[]> {
@@ -220,14 +323,13 @@ async function capabilitiesMatchManifest(
 export async function doctorProject(projectRoot: string): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
   let manifest: ReturnType<typeof parseBuildManifest>;
-  let receipt: GenerationReceipt;
+  let receipt: DiagnosableGenerationReceipt;
 
   try {
     const manifestSource = await readFile(join(projectRoot, '.void-starter/manifest.json'), 'utf8');
     manifest = parseBuildManifest(JSON.parse(manifestSource));
     const receiptSource = await readFile(join(projectRoot, '.void-starter/receipt.json'), 'utf8');
-    const parsedReceipt = receiptSchema.parse(JSON.parse(receiptSource));
-    receipt = parsedReceipt as GenerationReceipt;
+    receipt = receiptSchema.parse(JSON.parse(receiptSource));
     checks.push(createCheck('metadata', true, 'Manifest and receipt are readable and valid'));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -247,15 +349,24 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
     ),
   );
 
-  const expectedComposition = createCompositionPlan(manifest);
   const expectedFilePlan = createProjectFilePlan(manifest);
-  const expectedReceipt = createGenerationReceipt(manifest, expectedFilePlan);
+  const expectedReceipt = createGenerationReceipt(
+    manifest,
+    expectedFilePlan,
+    receipt.schema_version === 2
+      ? receipt.provisioning_plan_sha256
+      : provisioningPlanSha256Schema.parse('0'.repeat(64)),
+  );
   const receiptMatchesPlan =
-    serializeCanonicalJson(receipt) === serializeCanonicalJson(expectedReceipt) &&
-    serializeCanonicalJson(receipt.composition) === serializeCanonicalJson(expectedComposition);
+    receipt.schema_version === 1
+      ? serializeCanonicalJson(comparableLegacyReceipt(receipt)) ===
+        serializeCanonicalJson(comparableLegacyReceipt(expectedReceipt))
+      : serializeCanonicalJson(receipt) === serializeCanonicalJson(expectedReceipt);
   checks.push(
     createCheck('receipt-plan', receiptMatchesPlan, 'Receipt matches the normalized factory plan'),
   );
+
+  checks.push(await checkProvisioningHandoff(projectRoot, manifest, receipt));
 
   checks.push(
     createCheck(
@@ -300,10 +411,7 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
   }
 
   const presentForbiddenPaths: string[] = [];
-  for (const forbiddenPath of FORBIDDEN_OUTPUT_PATHS) {
-    if (forbiddenPath === '.git' && sourcePublicationState && !sourcePublicationStateError) {
-      continue;
-    }
+  for (const forbiddenPath of DOCTOR_FORBIDDEN_PATHS) {
     if (await pathExists(join(projectRoot, forbiddenPath))) {
       presentForbiddenPaths.push(forbiddenPath);
     }
@@ -313,7 +421,7 @@ export async function doctorProject(projectRoot: string): Promise<DoctorReport> 
       'development-artifacts',
       presentForbiddenPaths.length === 0,
       presentForbiddenPaths.length === 0
-        ? 'Factory and external development-governance artifacts are absent'
+        ? 'Factory internals are absent'
         : `Forbidden development artifacts found: ${presentForbiddenPaths.join(', ')}`,
     ),
   );
