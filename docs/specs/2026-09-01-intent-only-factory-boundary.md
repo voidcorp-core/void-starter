@@ -1,7 +1,7 @@
 ---
 title: Intent-only Void Starter factory boundary
 date: 2026-09-01
-status: in-design
+status: approved
 author: Florent Pellegrin + Codex
 ticket:
 related:
