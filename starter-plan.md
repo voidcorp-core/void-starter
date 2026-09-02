@@ -1,5 +1,11 @@
 # Void Factory Starter - Build Plan
 
+> **Historical document, frozen on 2026-05-07.** This is the execution plan the starter was built
+> from; its steps were carried out by the phase plans under `docs/superpowers/plans/`. It is kept as
+> history and is not maintained: the living conventions are `README.md` and `docs/*.md`. In
+> particular, step 2.6 "Renovate" is superseded by ADR 72 in `docs/DECISIONS.md` (Renovate retired
+> on 2026-09-02, no update bot, upgrades manual and unscheduled).
+
 This document is the execution plan for building the Void Factory Next.js 16 monorepo starter. Read `context.md` first before starting any step.
 
 ## Working method
