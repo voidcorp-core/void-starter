@@ -16,7 +16,7 @@ The starter follows a Wing Chun engineering philosophy: maximum efficiency, econ
 | Auth | Better-Auth (default), Clerk (opt-in) | Data sovereignty (ADR 02) |
 | DB | Drizzle + Neon Postgres | Branch-per-environment (ADR 11, 12) |
 | Logger | pino | Structured logs, dev-pretty (ADR 22) |
-| Tooling | Biome, Lefthook, knip, gitleaks, Renovate | Quality gates from commit one |
+| Tooling | Biome, Lefthook, knip, gitleaks | Quality gates from commit one |
 | Tests | Vitest, Playwright | Unit, integration, E2E |
 | Deploy | Vercel-ready, monorepo-aware | Auto preview branches |
 
