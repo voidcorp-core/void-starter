@@ -81,7 +81,7 @@ approve it explicitly under `data_residency.approved_non_eu_processors` (see [AD
 
 ## Placeholders
 
-The following seven modules are intentional scaffolds, not abandoned work. Each ships a `README.md` ONLY, with the full integration recipe inside. They deliberately stay out of the workspace graph (no `package.json`, no `src/`) so knip, Turborepo, and Renovate do not generate noise for capabilities no MVP has activated yet. See [ADR 29](../docs/DECISIONS.md) for the rationale. Implement when a real MVP needs the capability.
+The following seven modules are intentional scaffolds, not abandoned work. Each ships a `README.md` ONLY, with the full integration recipe inside. They deliberately stay out of the workspace graph (no `package.json`, no `src/`) so knip and Turborepo do not generate noise for capabilities no MVP has activated yet. See [ADR 29](../docs/DECISIONS.md) for the rationale. Implement when a real MVP needs the capability.
 
 ### @repo/payment-stripe -- Stripe checkout, customer portal, webhooks
 
