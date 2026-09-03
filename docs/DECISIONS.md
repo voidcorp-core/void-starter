@@ -1693,3 +1693,15 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   Revisit also if `bun audit` starts failing CI repeatedly on transitive advisories a scheduled
   bump would have absorbed: that is the signal that the manual path costs more than the automated
   one did.
+- **Last revised:** 2026-09-03 (DEV-702). The decision above says the repository "is removed from
+  the Renovate GitHub App installation". That is inaccurate: there was no installation to remove.
+  The organization's installed GitHub Apps were read on 2026-09-03 and carry Claude, Claude Design
+  Import, Claude for GitHub, Vercel and voidcorp-release, with no Renovate and no pending
+  installation request. Confirming it: no pull request in the repository's history has a bot for an
+  author, and the weekly dependency bumps that ADR 71 calls "the ordinary weekly path" were each
+  opened by hand. So `renovate.json` configured a bot that never had access to this repository, and
+  what this entry retired was a dead configuration and the promises the documentation still made
+  about it. Nothing else in the decision changes: there is no automated update mechanism, upgrades
+  are manual and unscheduled, and `docs/SECURITY.md` describes that gap rather than a replacement
+  control. The scope of an installation still cannot be read from the repository, since the API
+  needs a GitHub App JWT and a user token answers 403, so this remains a human observation.
