@@ -1,5 +1,14 @@
 # Void Factory Starter - Context
 
+> **Historical document, frozen on 2026-05-07.** This is the brainstorm seed the starter was built
+> from. It is kept as history and is not maintained: the living conventions are `README.md` and
+> `docs/*.md`, and `docs/DECISIONS.md` wins over anything written below. In particular, the
+> "Auto-updating" non-negotiable, the "Updates | Renovate" stack row, the `renovate.json` topology
+> entry, the "A06 Vulnerable Components - Renovate auto-merge patches" line and the "Renovate
+> config with auto-merge rules" wish are superseded by ADR 72 (Renovate retired on 2026-09-02, no
+> update bot, upgrades manual and unscheduled). The security section is superseded by
+> `docs/SECURITY.md`.
+
 ## Owner
 
 Folpe (Florent Pellegrin) - Senior React/Node.js dev, founder of VoidCorp / Void Factory.

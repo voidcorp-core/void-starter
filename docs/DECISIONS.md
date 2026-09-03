@@ -157,6 +157,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - `Proxy`-wrapped `db: Database` const: the Proxy hop fires on every property read, breaks `instanceof` / type narrowing / devtools display, and adds zero capability over a function call. No 2026 reference (Vercel, Drizzle docs, Neon docs, next-forge, t3-stack) prescribes it.
   - Replacing `createAppEnv` with `required()` inside the client: loses Zod URL validation that catches `localhost` typos and missing `postgres://` schemes.
 - **When to revisit:** If we ship a non-Vercel deploy target without a Neon-style server-side pooler, reconsider postgres-js options (explicit `{ max }`, `idle_timeout`). If a future Drizzle release ships a first-party request-scoped client, evaluate replacing the Node singleton with it.
+- **Last revised:** 2026-09-02 (DEV-770). This revises the client's test, not the singleton. `client.test.ts` imported the module dynamically in every case so the lazy `cached` slot starts empty, which made the first case also pay the cold `drizzle-orm/postgres-js` graph inside Vitest's 5 s per-case clock: 1291 to 1349 ms under the root Turborepo fan-out at load average 6 to 29, 5117 to 6376 ms at load average 25 to 42, so the root gate failed on a green tree. The export-shape case now asserts on a static top-level import, which pays that graph at file load, the phase Vitest leaves unbounded, and the fresh-module case proves its fresh instance by identity against the static namespace instead of assuming it from `vi.resetModules()`. Rejected: raising the case timeout (hides the cost, DEV-767 precedent) and a bounded `beforeAll` warm-up (three times the measured worst case already exceeds the 10 s hook default, so the bound would only relocate the flake).
 
 ### 13. `required()` env helper + drizzle-kit `dbCredentials.url` getter
 
@@ -1386,6 +1387,15 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
   The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
   non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+- **Last revised:** 2026-09-02 (DEV-767). The check now runs one `biome check --write` child
+  per profile over the generated sources materialized in a temporary directory, instead of one
+  `--stdin-file-path` child per file, and both the child and the Vitest case carry an explicit,
+  measured bound. The per-file spawns cost 700 to 2900 ms per profile under the root Turborepo
+  fan-out and tripped Vitest's implicit 5 s default on a green tree, so every autopilot seal that
+  ran the verify suite inherited the flake. Batching keeps the same binary, working directory and
+  configuration; the count of files Biome reports is asserted against the count handed over, so a
+  source the configuration would skip fails the gate instead of passing it vacuously. The
+  alternative of raising the timeout alone was rejected: it hides the cost instead of removing it.
 
 ### 65. Make the invitation token a credential the invitee must present
 
@@ -1633,3 +1643,53 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   migration is written and merged, and Better Auth's 1.7 changelog is reviewed for anything else
   the starter relies on. At that point the tilde returns to a caret and the bump moves through
   the ordinary weekly path.
+
+### 72. Retire Renovate; dependency upgrades are manual and nothing replaces the bot
+
+- **Date:** 2026-09-02
+- **Decision:** `renovate.json` is deleted and the repository is removed from the Renovate GitHub
+  App installation (the app-side removal is a human action, recorded on DEV-702). No bot opens
+  dependency PRs, no patch is automerged, and no lockfile maintenance runs on a schedule. A
+  dependency upgrade is now a pull request a maintainer opens on purpose, and it goes through the
+  same CI as any other change. No replacement bot (Dependabot or another) is introduced.
+  This entry supersedes the two places in this log that still described Renovate as active
+  policy: the ADR 18 convention bullet "Renovate handles minor/patch upgrades automatically", and
+  the "weekly dependency bump" / "ordinary weekly path" that ADR 71 relies on for revisiting the
+  Better Auth pin. Their text stays as written, per the append-only rule of this file; the ADR 71
+  revisit now happens when a maintainer chooses to open the bump. ADR 07 and ADR 29 name Renovate
+  only inside their cost reasoning about phantom packages; that reasoning holds for any dependency
+  bot and stays as historical rationale. `context.md` and `starter-plan.md`, the 2026-05-07
+  brainstorm seed and its build plan, are frozen historical documents superseded by `README.md`
+  and `docs/*.md`: each carries a banner saying so and is not rewritten.
+- **Why:** Owner decision, 2026-09-01: Renovate is no longer part of the surface this repository
+  maintains. The motive is recorded here as stated, not derived from the code, and this entry does
+  not guess at one. What the decision costs is explicit: the repository loses proactive update
+  PRs, grouped weekly bumps and the automerge of patch, pin and digest updates, and nothing
+  replaces them. `bun audit` still blocks CI on published advisories, but it detects and does not
+  upgrade; knip trims the surface and says nothing about freshness. Upgrades are manual and
+  unscheduled until a later decision says otherwise.
+- **Rejected alternatives:**
+  - Keep Renovate with `automerge` off: removes the unreviewed lockfile rewrites but keeps the PR
+    stream and the app's write access, which is the surface being retired.
+  - Replace it with Dependabot or another bot: the same surface under another name, and explicitly
+    out of scope of the retirement.
+  - Delete the config but leave the repository in the app installation: Renovate then opens an
+    onboarding PR against a repository that opted out. The app-side removal is part of the
+    decision and is a human gate.
+  - Write a manual review cadence here as the replacement control: nothing enforces it, so
+    `docs/SECURITY.md` would claim a control that does not exist. The honest statement is that
+    upgrades are manual and unscheduled.
+- **Acceptance evidence:** `rg -n -i renovate` reviewed occurrence by occurrence on DEV-702: the
+  normative surfaces (`README.md`, `docs/SECURITY.md`, `docs/MODULES.md`, `_modules/README.md`)
+  no longer name Renovate; what remains is this entry, the superseded and historical ADR text,
+  the frozen seed documents behind their banner, the Phase A plan under `docs/superpowers/plans/`
+  and a handoff note that uses "auto-merge" about a git merge. `gh pr list --state open` on
+  `voidcorp-core/void-starter` returned no pull request at the time of the change, and a search
+  over all pull requests found none authored by Renovate. The installation scope could not be read
+  from the repository (the API answered 401), so its removal is a human observation attached to
+  the ticket.
+- **When to revisit:** If the factory wants an update cadence again, that is a new ADR naming the
+  bot, the automerge policy and who reviews the stream; do not reinstate `renovate.json` silently.
+  Revisit also if `bun audit` starts failing CI repeatedly on transitive advisories a scheduled
+  bump would have absorbed: that is the signal that the manual path costs more than the automated
+  one did.
