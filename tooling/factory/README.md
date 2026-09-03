@@ -14,7 +14,10 @@ The current slice exposes:
 - `parseManifestSource(source, fileName)` and `createFactoryPreview(manifest)` for YAML or JSON
   dry runs;
 - `renderProject(input)` to copy the baseline into a new target, apply selected surfaces, exclude
-  secrets and development-only artifacts, and emit deterministic metadata;
+  secrets and development-only artifacts, and emit deterministic metadata plus the external
+  provisioning handoff;
+- `createProvisioningHandoff(manifest, context)` to derive one version 2 JSON plan and its human
+  runbook from strict, non-secret account coordinates;
 - `createProvisioningPlan(manifest, context)` to plan non-secret GitHub, Vercel, Neon,
   Cloudflare R2, Sentry and PostHog reconciliation actions with stable idempotency keys;
 - `applyProvisioning(input)` and the simulated adapter to exercise atomic state, locking,
@@ -24,9 +27,9 @@ The current slice exposes:
   in-memory secret transport;
 - `createDeliveryPlan`, `preflightDelivery`, and `observeDelivery` to bind a Vercel Production
   deployment and HTTP smoke receipt to the exact published source commit;
-- `doctorProject(target)` to verify the manifest, receipt, SHA-256 file digests, selected surfaces
-  and capabilities, optional provisioning/source/delivery state, dependencies, and the absence of
-  Harness/factory artifacts;
+- `doctorProject(target)` to verify the manifest, receipt, handoff plan, derived runbook, SHA-256
+  file digests, selected surfaces and capabilities, optional historical operational state,
+  dependencies, and the absence of leaked Factory internals;
 - `createProjectPackPlan`, `applyProjectPack`, and `checkProjectPack` to inject Forge foundation
   documents without overwriting unmanaged or locally modified files;
 - `buildManifestSchema` and the corresponding public TypeScript boundary types.
@@ -42,7 +45,10 @@ Render a new repository and verify it:
 
 ```sh
 cd tooling/factory
-bun run generate -- fixtures/manifests/web-expo.yaml /absolute/path/to/new-project
+bun run generate -- \
+  fixtures/manifests/web-minimal.yaml \
+  fixtures/provisioning/eu.yaml \
+  /absolute/path/to/new-project
 bun run doctor -- /absolute/path/to/new-project
 
 cd /absolute/path/to/new-project
@@ -54,8 +60,34 @@ bun run hooks:install
 `generate` refuses an existing target, a target inside the source repository, and source
 symlinks. It copies neither `.env*` secrets nor caches, lockfiles, Harness state, factory source,
 agent-governance files, internal discovery handoffs, or historical implementation plans. A
-generated project receives `.void-starter/manifest.json` and `.void-starter/receipt.json`; the
-receipt is deterministic and records SHA-256 digests for every generated file.
+generated project receives `.void-starter/manifest.json`,
+`.void-starter/provisioning-plan.json`, `docs/PROVISIONING.md`, and
+`.void-starter/receipt.json`. The receipt records the exact plan digest. The plan names external
+credentials but never accepts or persists their values; generation and doctor remain local-only.
+
+## Local-ready timing evidence
+
+DEV-685 was measured on 2026-09-01 in an isolated clean worktree on Darwin 25.3.0 arm64, Bun
+1.3.13, and Node.js 25.9.0. No provider credential or provider network access was used.
+
+The fresh dependency setup command was:
+
+```sh
+bun install --frozen-lockfile
+```
+
+It installed 892 packages into a worktree with no existing `node_modules` in 19.50 seconds. The
+following exact warm command then generated the minimal project and obtained an `ok: true` doctor
+report in 0.69 seconds:
+
+```sh
+/usr/bin/time -p /bin/sh -c \
+  'bun run --cwd tooling/factory generate -- fixtures/manifests/web-minimal.yaml fixtures/provisioning/eu.yaml /private/tmp/void-starter-dev685-final.2aTGu8/generated >/private/tmp/void-starter-dev685-final.2aTGu8/receipt.stdout && bun run --cwd tooling/factory doctor -- /private/tmp/void-starter-dev685-final.2aTGu8/generated >/private/tmp/void-starter-dev685-final.2aTGu8/doctor.stdout'
+```
+
+The observed first local-ready path was therefore 20.19 seconds, below the 10-minute fresh budget;
+the 0.69-second generation-plus-doctor path is below the 2-minute warm budget. The generated plan,
+runbook, receipt, and passing doctor report were all present at the endpoint.
 
 The fixture matrix covers public minimal web, Better Auth + Neon/Drizzle web, Clerk web,
 mobile-only, and web + Expo. Unselected auth, database, sample-domain, PostHog and Sentry packages

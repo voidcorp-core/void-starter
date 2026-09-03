@@ -2,8 +2,14 @@ import { cp, lstat, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createProjectFilePlan } from './capability-composition.service';
 import { createCompositionPlan } from './factory.service';
-import type { BuildManifest, GenerationReceipt, ProjectFilePlan } from './factory.types';
+import type { BuildManifest, HandoffGenerationReceipt, ProjectFilePlan } from './factory.types';
 import { serializeCanonicalJson, sha256 } from './integrity.service';
+import { createProvisioningHandoff } from './provisioning-handoff.service';
+import {
+  manifestSha256Schema,
+  type ProvisioningHandoffContext,
+  type ProvisioningPlanSha256,
+} from './provisioning-handoff.types';
 
 const METADATA_DIRECTORY = '.void-starter';
 
@@ -56,8 +62,6 @@ const EXCLUDED_SOURCE_PATHS = [
  * project regenerates them from its own `use workflow` directives.
  */
 const EXCLUDED_BUILD_ARTIFACT_PATHS = ['apps/web/src/app/.well-known/workflow'].toSorted();
-
-export const FORBIDDEN_OUTPUT_PATHS = EXCLUDED_SOURCE_PATHS.filter((path) => path !== 'bun.lock');
 
 function isMissingFileError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
@@ -263,6 +267,7 @@ async function sanitizeGeneratedBaseline(targetRoot: string, manifest: BuildMani
 
 export type RenderProjectInput = {
   manifest: BuildManifest;
+  provisioningContext: ProvisioningHandoffContext;
   sourceRoot: string;
   targetRoot: string;
 };
@@ -270,12 +275,14 @@ export type RenderProjectInput = {
 export function createGenerationReceipt(
   manifest: BuildManifest,
   filePlan: ProjectFilePlan,
-): GenerationReceipt {
+  provisioningPlanSha256: ProvisioningPlanSha256,
+): HandoffGenerationReceipt {
   const manifestSource = serializeCanonicalJson(manifest);
   return {
-    schema_version: 1,
+    schema_version: 2,
     project: manifest.project,
-    manifest_sha256: sha256(manifestSource),
+    manifest_sha256: manifestSha256Schema.parse(sha256(manifestSource)),
+    provisioning_plan_sha256: provisioningPlanSha256,
     composition: createCompositionPlan(manifest),
     generated_files: filePlan.writes.map((file) => ({
       path: file.path,
@@ -294,7 +301,7 @@ export function createGenerationReceipt(
   };
 }
 
-export async function renderProject(input: RenderProjectInput): Promise<GenerationReceipt> {
+export async function renderProject(input: RenderProjectInput): Promise<HandoffGenerationReceipt> {
   const sourceRoot = await realpath(resolve(input.sourceRoot));
   const sourceStats = await stat(sourceRoot);
   if (!sourceStats.isDirectory()) {
@@ -313,6 +320,7 @@ export async function renderProject(input: RenderProjectInput): Promise<Generati
   }
 
   const filePlan = createProjectFilePlan(input.manifest);
+  const handoff = createProvisioningHandoff(input.manifest, input.provisioningContext);
 
   try {
     await cp(sourceRoot, targetRoot, {
@@ -340,11 +348,17 @@ export async function renderProject(input: RenderProjectInput): Promise<Generati
 
     await sanitizeGeneratedBaseline(targetRoot, input.manifest);
 
+    const planPath = join(targetRoot, METADATA_DIRECTORY, 'provisioning-plan.json');
+    const runbookPath = join(targetRoot, 'docs/PROVISIONING.md');
+    await mkdir(dirname(planPath), { recursive: true });
+    await mkdir(dirname(runbookPath), { recursive: true });
+    await writeFile(planPath, handoff.planSource, { encoding: 'utf8', flag: 'wx' });
+    await writeFile(runbookPath, handoff.runbookSource, { encoding: 'utf8', flag: 'w' });
+
     const manifestSource = serializeCanonicalJson(input.manifest);
-    const receipt = createGenerationReceipt(input.manifest, filePlan);
+    const receipt = createGenerationReceipt(input.manifest, filePlan, handoff.planSha256);
 
     const metadataRoot = join(targetRoot, METADATA_DIRECTORY);
-    await mkdir(metadataRoot);
     await writeFile(join(metadataRoot, 'manifest.json'), manifestSource, {
       encoding: 'utf8',
       flag: 'wx',
