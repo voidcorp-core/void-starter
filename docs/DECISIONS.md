@@ -1386,6 +1386,15 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
   The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
   non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+- **Last revised:** 2026-09-02 (DEV-767). The check now runs one `biome check --write` child
+  per profile over the generated sources materialized in a temporary directory, instead of one
+  `--stdin-file-path` child per file, and both the child and the Vitest case carry an explicit,
+  measured bound. The per-file spawns cost 700 to 2900 ms per profile under the root Turborepo
+  fan-out and tripped Vitest's implicit 5 s default on a green tree, so every autopilot seal that
+  ran the verify suite inherited the flake. Batching keeps the same binary, working directory and
+  configuration; the count of files Biome reports is asserted against the count handed over, so a
+  source the configuration would skip fails the gate instead of passing it vacuously. The
+  alternative of raising the timeout alone was rejected: it hides the cost instead of removing it.
 
 ### 65. Make the invitation token a credential the invitee must present
 
