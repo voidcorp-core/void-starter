@@ -157,6 +157,7 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   - `Proxy`-wrapped `db: Database` const: the Proxy hop fires on every property read, breaks `instanceof` / type narrowing / devtools display, and adds zero capability over a function call. No 2026 reference (Vercel, Drizzle docs, Neon docs, next-forge, t3-stack) prescribes it.
   - Replacing `createAppEnv` with `required()` inside the client: loses Zod URL validation that catches `localhost` typos and missing `postgres://` schemes.
 - **When to revisit:** If we ship a non-Vercel deploy target without a Neon-style server-side pooler, reconsider postgres-js options (explicit `{ max }`, `idle_timeout`). If a future Drizzle release ships a first-party request-scoped client, evaluate replacing the Node singleton with it.
+- **Last revised:** 2026-09-02 (DEV-770). This revises the client's test, not the singleton. `client.test.ts` imported the module dynamically in every case so the lazy `cached` slot starts empty, which made the first case also pay the cold `drizzle-orm/postgres-js` graph inside Vitest's 5 s per-case clock: 1291 to 1349 ms under the root Turborepo fan-out at load average 6 to 29, 5117 to 6376 ms at load average 25 to 42, so the root gate failed on a green tree. The export-shape case now asserts on a static top-level import, which pays that graph at file load, the phase Vitest leaves unbounded, and the fresh-module case proves its fresh instance by identity against the static namespace instead of assuming it from `vi.resetModules()`. Rejected: raising the case timeout (hides the cost, DEV-767 precedent) and a bounded `beforeAll` warm-up (three times the measured worst case already exceeds the 10 s hook default, so the bound would only relocate the flake).
 
 ### 13. `required()` env helper + drizzle-kit `dbCredentials.url` getter
 
@@ -1386,6 +1387,15 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   Markdown) that interpolates manifest values and has a formatter in the generated project's gate.
   The `biome.json` `$schema` pin drifting from the freshly resolved CLI patch is a separate,
   non-blocking `info` and belongs to the version-alignment policy (DEV-479).
+- **Last revised:** 2026-09-02 (DEV-767). The check now runs one `biome check --write` child
+  per profile over the generated sources materialized in a temporary directory, instead of one
+  `--stdin-file-path` child per file, and both the child and the Vitest case carry an explicit,
+  measured bound. The per-file spawns cost 700 to 2900 ms per profile under the root Turborepo
+  fan-out and tripped Vitest's implicit 5 s default on a green tree, so every autopilot seal that
+  ran the verify suite inherited the flake. Batching keeps the same binary, working directory and
+  configuration; the count of files Biome reports is asserted against the count handed over, so a
+  source the configuration would skip fails the gate instead of passing it vacuously. The
+  alternative of raising the timeout alone was rejected: it hides the cost instead of removing it.
 
 ### 65. Make the invitation token a credential the invitee must present
 
