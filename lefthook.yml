@@ -8,7 +8,7 @@ pre-commit:
       glob: "*.{ts,tsx}"
       run: bunx turbo run type-check --output-logs=errors-only
     - name: gitleaks
-      run: gitleaks git --staged --redact --no-banner
+      run: gitleaks protect --staged --redact --no-banner
 
 pre-push:
   jobs:
