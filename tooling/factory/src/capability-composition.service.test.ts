@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -61,10 +60,10 @@ const LONGEST_PROJECT_NAME = 'void-starter-canary-internal-tool-with-a-deliberat
  * generated project runs, in a single child process from the repository root so
  * the real configuration applies. One process per profile, not per file: the
  * process start dominates the cost, and `--stdin-file-path` takes one file per
- * process, so the sources are materialized in a temporary directory instead.
- * Biome resolves its configuration from the working directory, so the root
- * `biome.json` governs files outside the repository too (verified: a
- * double-quoted probe under the OS temporary directory came back single-quoted).
+ * process, so the sources are materialized in a temporary directory inside the
+ * repository. Biome 2.5.15 requires paths under its VCS root when ignore-file
+ * integration is enabled; an OS temporary directory makes its matcher panic.
+ * Keeping fixtures under the root applies the real configuration and VCS rules.
  * Neither the root nor the base config carries path-scoped overrides, and every
  * enabled rule is per-file, so co-locating a profile's sources changes nothing.
  *
@@ -76,7 +75,7 @@ const LONGEST_PROJECT_NAME = 'void-starter-canary-internal-tool-with-a-deliberat
  * Warnings pass, exactly as they pass the generated project's `bun run lint`.
  */
 function checkWithBiome(profile: string, sources: readonly GeneratedSource[]): Map<string, string> {
-  const root = mkdtempSync(join(tmpdir(), 'factory-lint-gate-'));
+  const root = mkdtempSync(join(REPO_ROOT, '.factory-lint-gate-'));
   try {
     materializeSources(root, sources);
     const startedAt = performance.now();
