@@ -82,6 +82,21 @@ Generation only accepts a fresh target outside this source repository. Void Harn
 development of the factory externally, but it is never copied or installed in generated outputs.
 See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture matrix.
 
+## Contributor harness setup
+
+After cloning this source repository, restore the pinned Void Machine assets before starting
+an agent session:
+
+```bash
+npx voidmachine@4.0.0 hydrate --runtime both \
+  --pack monorepo --pack react --pack nextjs --pack server
+```
+
+This restores generated skills and doctrine, and rewrites the runtime wiring for the clone's
+absolute path. The committed manifest and hook bundles pin the bootstrap version. Local
+observations and checkpoints stay outside version control. Factory-generated applications
+exclude this contributor harness.
+
 ## Quick start (per-MVP onboarding)
 
 Use Bun `1.3.14` (the version in `packageManager`) and Node.js 24, matching CI.
