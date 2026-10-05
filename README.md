@@ -107,8 +107,8 @@ with its frozen dependencies. From this repository root, with Node.js 24.15+ and
 )
 ```
 
-This restores 174 assets and rewrites runtime wiring for the clone's absolute path. Both
-committed hook bundles retain identical SHA-256 hashes after hydration from this source
+This restores 174 assets and wires Codex through a launcher that locates the project's hooks.
+Both committed hook bundles retain identical SHA-256 hashes after hydration from this source
 revision. Local observations and checkpoints stay outside version control. Factory-generated
 applications exclude this contributor harness, including the entire `.claude` directory.
 
