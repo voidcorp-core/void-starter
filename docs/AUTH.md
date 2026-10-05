@@ -41,6 +41,8 @@ Every export below lives at `packages/auth/src/index.ts` (the barrel) unless the
 
 - **`defineAction({ schema, auth, handler })`** -- typed RPC factory. Returns a function `(input) => Promise<TResult>`. Use with react-hook-form's `handleSubmit`.
 - **`defineFormAction({ schema, auth, handler })`** -- FormData factory for `<form action={...}>` and React 19's `useActionState`. Returns a function `(prevState, formData) => Promise<ActionState<TResult>>`.
+- Validation failures preserve both per-field messages and schema-level messages. Schema-level
+  messages are returned as `formError` with code `VALIDATION`, including when field errors also exist.
 - **`ActionState<T>`** -- the structured return type of `defineFormAction`. Either `{ ok: true, data: T }` or `{ ok: false, fieldErrors, formError? }`.
 - **`initialActionState`** -- the initial `ActionState` you pass to `useActionState`.
 
