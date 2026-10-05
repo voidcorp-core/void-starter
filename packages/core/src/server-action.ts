@@ -143,9 +143,20 @@ export function defineFormAction<TSchema extends ZodType, TResult>({
       const raw = Object.fromEntries(formData);
       const parsed = schema.safeParse(raw);
       if (!parsed.success) {
-        const fieldErrors = parsed.error.flatten().fieldErrors as Record<string, string[]>;
+        const flattened = parsed.error.flatten();
+        const fieldErrors = Object.fromEntries(
+          Object.entries(flattened.fieldErrors).filter((entry): entry is [string, string[]] =>
+            Array.isArray(entry[1]),
+          ),
+        );
         logger.warn({ issues: parsed.error.issues }, 'formAction: validation failed');
-        return { ok: false, fieldErrors };
+        return {
+          ok: false,
+          fieldErrors,
+          ...(flattened.formErrors.length > 0
+            ? { formError: { code: 'VALIDATION', message: flattened.formErrors.join('. ') } }
+            : {}),
+        };
       }
 
       const ctx = await resolveAuth(auth);

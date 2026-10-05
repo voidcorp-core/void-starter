@@ -9,7 +9,7 @@ The starter follows a Wing Chun engineering philosophy: maximum efficiency, econ
 | Layer | Choice | Why |
 |---|---|---|
 | Topology | Turborepo + Bun workspaces | DAG-aware builds, fast install (ADR 01) |
-| Framework | Next.js 16.2 / React 19.2 | Cache Components stable, App Router |
+| Framework | Next.js 16.3 / React 19.3 | Cache Components stable, App Router |
 | Language | TypeScript 7.0 strict | Native compiler; Expo blueprint tracks its SDK-supported TypeScript |
 | Styling | Tailwind CSS v4 with `@theme` | Token-based design system, zero-runtime |
 | UI | Radix-backed primitives via `@repo/ui` | Accessibility for free (ADR 16, 18, 19) |
@@ -33,15 +33,18 @@ void-starter/
 |   |-- core/                      # @repo/core   -- logger, env, errors, server-action, ...
 |   |-- auth/                      # @repo/auth   -- Better-Auth wrapper, RBAC, action factories
 |   |-- db/                        # @repo/db     -- Drizzle schema + getDb()
+|   |-- notes/                     # @repo/notes  -- user-scoped cache example
 |   |-- ui/                        # @repo/ui     -- Radix-backed primitives, ThemeProvider
 |   `-- config/                    # @repo/config -- shared tsconfig, biome, vitest base
 |
 |-- _modules/                      # Tier 2: opt-in, build-time activation via env vars
 |   |-- observability-sentry/      # @repo/sentry        -- ready, wired into apps/web
 |   |-- analytics-posthog/         # @repo/posthog       -- ready, wired into apps/web
+|   |-- storage-r2/                # @repo/storage-r2 -- private document storage
+|   |-- jobs-vercel-workflow/       # @repo/jobs-vercel-workflow -- durable jobs
 |   |-- auth-clerk/                # @repo/auth-clerk    -- alternative repository (not env-driven)
 |   |-- payment-stripe/            # placeholder (README only)
-|   |-- email-resend/              # placeholder
+|   |-- email-resend/              # ready, authentication email adapter
 |   |-- cms-payload/               # placeholder
 |   |-- audit-log/                 # placeholder
 |   |-- cookie-consent/            # placeholder
@@ -66,20 +69,59 @@ strict YAML/JSON manifest:
 ```bash
 cd tooling/factory
 bun run plan -- fixtures/manifests/web-minimal.yaml
-bun run generate -- fixtures/manifests/web-minimal.yaml /absolute/path/to/new-project
+bun run generate -- \
+  fixtures/manifests/web-minimal.yaml \
+  fixtures/provisioning/eu.yaml \
+  /absolute/path/to/new-project
 bun run doctor -- /absolute/path/to/new-project
 ```
 
+The provisioning fixture contains example account coordinates, not credentials. Replace them
+with the intended GitHub owner and provider accounts before using the resulting handoff.
 Generation only accepts a fresh target outside this source repository. Void Harness may assist
 development of the factory externally, but it is never copied or installed in generated outputs.
 See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture matrix.
 
+## Contributor harness setup
+
+After cloning this source repository, restore Void Machine before starting an agent session.
+The committed hooks include the upstream Codex/PowerShell denial fix in
+[`03580e2`](https://github.com/voidcorp-core/void-machine/commit/03580e2d0609d1d98bc5ef06d80512327b811c60),
+which is absent from the published `voidmachine@4.0.0` package. Build that exact revision
+with its frozen dependencies. From this repository root, with Node.js 24.15+ and a POSIX shell:
+
+```bash
+(
+  set -eu
+  vm_source="$(mktemp -d)"
+  git clone https://github.com/voidcorp-core/void-machine.git "$vm_source"
+  git -C "$vm_source" checkout --detach 03580e2d0609d1d98bc5ef06d80512327b811c60
+  (
+    cd "$vm_source"
+    npx --yes pnpm@10.34.5 install --frozen-lockfile
+    npx --yes pnpm@10.34.5 build:cli
+    npx --yes pnpm@10.34.5 --filter ./packages/cli build:assets
+  )
+  node "$vm_source/packages/cli/bin/void-machine.mjs" hydrate --runtime both \
+    --pack monorepo --pack react --pack nextjs --pack server
+)
+```
+
+This restores 174 assets and wires Codex through a launcher that locates the project's hooks.
+Both committed hook bundles retain identical SHA-256 hashes after hydration from this source
+revision. Local observations and checkpoints stay outside version control. Factory-generated
+applications exclude this contributor harness, including the entire `.claude` directory.
+
 ## Quick start (per-MVP onboarding)
+
+Use Bun `1.3.14` (the version in `packageManager`) and Node.js 24, matching CI.
+For a minimal capability-selected project, use factory generation above. The template path
+below clones the complete source baseline.
 
 1. **Create a new MVP from this template:**
 
    ```bash
-   gh repo create my-mvp --template voidcorp-core/void-starter
+   gh repo create my-mvp --template voidcorp-core/void-starter --clone
    cd my-mvp && bun install
    ```
 
@@ -115,9 +157,14 @@ See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture mat
 5. **Run migrations and start dev:**
 
    ```bash
-   cd packages/db && bunx drizzle-kit migrate && cd ../..
-   bun run dev
+   cd packages/db
+   bun --env-file=../../.env.local run db:migrate
+   cd ../../apps/web
+   bun --env-file=../../.env.local run dev
    ```
+
+The commands above explicitly load the root environment file for each workspace.
+   Run the following command in a second terminal from the repository root.
 
 6. **(Optional) Run E2E tests:**
 
@@ -125,7 +172,11 @@ See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture mat
    cd apps/web && bunx playwright install --with-deps chromium && bun run test:e2e
    ```
 
-7. **Smoke test the auth flows** at `http://localhost:3000`: sign up, follow the magic link from the dev console (`pino-pretty` per ADR 22), sign in, visit `/dashboard`. Promote a user to admin via `bunx drizzle-kit studio` to unlock `/admin`.
+7. **Before a production deployment**, configure `AUTH_BOOTSTRAP_ADMIN_EMAIL`,
+   `RESEND_API_KEY`, and `EMAIL_FROM` in the provider environment. Production auth requires
+   an explicit administrator and real email delivery; development links are logged only locally.
+
+8. **Smoke test the auth flows** at `http://localhost:3000`: sign up, follow the magic link from the dev console (`pino-pretty` per ADR 22), sign in, visit `/dashboard`. Promote a user to admin via `bunx drizzle-kit studio` to unlock `/admin`.
 
 > **Note for starter contributors:** the starter repo itself never ships with a `.env.local`. The full pipeline (`bun run lint`, `bun run type-check`, `bun run test`, `bun run build`, `bunx knip`, `bunx gitleaks detect --no-git --redact`) is expected to pass with **no `DATABASE_URL` set**. Database access is fully lazy: `getDb()` and `getAuth()` only open connections when a runtime request actually needs them.
 

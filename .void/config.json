@@ -1,0 +1,11 @@
+{
+  "paths": {
+    "business": "apps/*/src/*.ts"
+  },
+  "packs": {
+    "@voidcorp/harness-monorepo": "^3.4.1",
+    "@voidcorp/harness-react": "^3.4.1",
+    "@voidcorp/harness-nextjs": "^3.4.1",
+    "@voidcorp/harness-server": "^3.4.1"
+  }
+}

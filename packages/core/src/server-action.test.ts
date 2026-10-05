@@ -46,6 +46,29 @@ describe('defineAction', () => {
 });
 
 describe('defineFormAction', () => {
+  it('returns form-level validation errors alongside field errors without calling the handler', async () => {
+    const handler = vi.fn();
+    const action = defineFormAction({
+      schema: z
+        .object({ name: z.string().min(1, 'Name is required') })
+        .superRefine((_input, context) => {
+          context.addIssue({ code: 'custom', message: 'The form is unavailable' });
+          context.addIssue({ code: 'custom', message: 'Try again later' });
+        }),
+      auth: 'public',
+      handler,
+    });
+    const formData = new FormData();
+    formData.set('name', '');
+
+    await expect(action(initialActionState, formData)).resolves.toEqual({
+      ok: false,
+      fieldErrors: { name: ['Name is required'] },
+      formError: { code: 'VALIDATION', message: 'The form is unavailable. Try again later' },
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('returns ok:true with parsed data on success', async () => {
     const action = defineFormAction({
       schema: z.object({ email: z.email() }),

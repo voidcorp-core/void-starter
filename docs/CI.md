@@ -4,11 +4,18 @@ This document describes the CI pipeline shipped in `.github/workflows/ci.yml` an
 
 ## Pipeline overview
 
-CI runs on every push to `main` and on every pull request. Two jobs run in sequence: `quality` gates the PR on dependency security, static analysis, type safety, unit tests, build, dead-code detection, and secrets scanning. `e2e` then runs Playwright end-to-end tests against a freshly migrated Postgres.
+CI runs on every push to `main` and on every pull request. Three jobs start independently:
+`code` (lint, types, migrations, tests, build, knip), `dependency-audit`, and `secrets`.
+`quality` aggregates all three and fails if any failed, was cancelled, or was skipped.
+`e2e` depends on `code`, so dependency advisories do not prevent collecting browser-test evidence.
+The required check names remain `quality` and `e2e`.
+
+All external actions are pinned to full commit SHAs. The workflow token has `contents: read`.
+Bun is selected from `package.json#packageManager` to avoid a second version declaration.
 
 Concurrency is scoped per ref so a force-push or new commit cancels the in-flight run, saving Actions minutes.
 
-### Job: `quality`
+### Job: `code`
 
 Steps, in order:
 
@@ -17,20 +24,32 @@ Steps, in order:
 3. Set up Node.js 24 LTS via `actions/setup-node@v6`. Bun is the workspace runtime, but several tools we depend on (Vitest, Drizzle Kit, Playwright) ship binaries with a `#!/usr/bin/env node` shebang; pinning Node 24 explicitly gives us reproducible CI, parity with the local dev runtime, and native `.ts` loading across `package.json#exports` boundaries (the case for `@repo/config/vitest.base.ts`) because Node 23.6+ ships `--experimental-strip-types` on by default. No `NODE_OPTIONS` flag needed. See `docs/DECISIONS.md` entry 30.
 4. Restore the Bun install cache and the Turborepo cache, keyed by the hash of `bun.lock`.
 5. `bun install --frozen-lockfile` to materialize workspace links and module graph.
-6. `bun run audit` to fail on any known vulnerability in production or development dependencies.
-7. `bun run lint` (Biome).
-8. `bun run type-check` (Turborepo fan-out, each package runs TypeScript 7 `tsc --noEmit`).
-9. `cd packages/db && bunx drizzle-kit migrate` to apply schema migrations to the CI Postgres.
-10. `bun run test` (Turborepo fan-out, each package runs `vitest run`).
-11. `bun run build` (Turborepo fan-out, `apps/web` runs `next build` after the separate type gate).
-12. `bunx knip --no-progress` to detect dead code, unused exports, and orphaned files.
-13. Install the pinned gitleaks binary and scan the repository history for accidentally committed secrets.
+6. `bun run lint` (Biome).
+7. `bun run type-check` (Turborepo fan-out, TypeScript 7).
+8. `cd packages/db && bunx drizzle-kit migrate` against the CI Postgres.
+9. `bun run test` (Turborepo fan-out, Vitest).
+10. `bun run build` (Next.js, after the separate type gate).
+11. `bun run knip` for dead code and unused exports.
 
 Any failure aborts the job. Subsequent steps do not run.
 
+### Independent security checks
+
+`dependency-audit` installs the frozen lockfile with lifecycle scripts disabled and runs
+`bun run audit`. Every published advisory remains blocking, including development dependencies.
+
+`secrets` checks out full history (`fetch-depth: 0`), downloads Gitleaks 8.30.1, verifies the
+archive against a committed SHA-256 digest, then runs `gitleaks git --redact --verbose`.
+It never installs or runs project packages. The download fails on HTTP errors and has bounded
+retries and a timeout. A Gitleaks update must update the version and verified digest together.
+
+`quality` uses `always()` so failed or skipped prerequisites produce a failed required check.
+It succeeds only when `code`, `dependency-audit`, and `secrets` all succeeded. The local CI
+contract tests execute this gate for success, failure, cancellation, and skipped results.
+
 ### Job: `e2e`
 
-Depends on `quality`. Steps:
+Depends on `code`. Steps:
 
 1. Checkout, set up Bun, set up Node 24, install with the frozen lockfile.
 2. Apply DB migrations against the job's own Postgres service container.
@@ -42,12 +61,12 @@ E2E tests under `apps/web/tests/e2e/` skip gracefully when `DATABASE_URL` is uns
 
 ## Cache strategy
 
-The `quality` job caches `~/.bun/install/cache` and `.turbo`, keyed by `hashFiles('bun.lock')`. A change to the lockfile invalidates the cache; otherwise both caches roll forward across runs.
+The `code` job caches `~/.bun/install/cache` and `.turbo`, keyed by `hashFiles('bun.lock')`. A change to the lockfile invalidates the cache; otherwise both caches roll forward across runs.
 
 - Bun install cache shaves ~30s off `bun install` once warm.
 - Turborepo cache makes incremental `lint`, `type-check`, `test`, and `build` cheap (Turbo skips tasks whose inputs are unchanged).
 
-The `e2e` job does not cache because its hot path is the Playwright browser download, which is layered into the `setup-bun` action's runner image and not worth caching across jobs.
+The `e2e` job installs Chromium explicitly. Playwright browser caching is not configured.
 
 ## Postgres rationale: docker in CI, Neon in dev/prod
 

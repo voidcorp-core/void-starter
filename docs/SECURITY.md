@@ -184,7 +184,7 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
 
 ## 10. Dependency security
 
-- **Audit is a required gate.** `bun run audit` checks production and development dependencies and exits non-zero when the registry reports any advisory. The `quality` CI job runs it immediately after the frozen install.
+- **Audit is a required gate.** `bun run audit` checks production and development dependencies and exits non-zero when the registry reports any advisory. The independent `dependency-audit` job runs it after a frozen install; `quality` requires its success alongside code checks and secret scanning.
 - **Fix owners before leaves.** Update the direct dependency that owns a vulnerable transitive package whenever its latest release contains the fix.
 - **Centralize temporary overrides.** If the latest owner still pins a vulnerable transitive release, add the patched version to the root `package.json#overrides`, validate the full pipeline, and record the rationale in ADR 36. Do not add fake direct dependencies just to influence the resolver.
 - **Remove overrides when upstream catches up.** Each dependency update should re-run `bun audit` and test whether an override can be deleted. An override is a temporary security control, not a permanent fork.

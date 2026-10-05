@@ -453,6 +453,42 @@ describe('renderProject', () => {
     expect(artifactCheck?.status).toBe('pass');
   });
 
+  it('excludes contributor Claude hooks and skills from generated output', async () => {
+    const { sourceRoot, targetRoot } = await createBaseline();
+    await mkdir(join(sourceRoot, '.claude/skills/contributor'), { recursive: true });
+    await writeFile(
+      join(sourceRoot, '.claude/settings.json'),
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            { hooks: [{ type: 'command', command: 'node .void/hooks/_void-hook.mjs' }] },
+          ],
+        },
+      }),
+    );
+    await writeFile(join(sourceRoot, '.claude/skills/contributor/SKILL.md'), '# Contributor skill');
+
+    const receipt = await renderTestProject({
+      manifest: parseBuildManifest(expoManifest),
+      sourceRoot,
+      targetRoot,
+    });
+
+    expect(receipt.generated_files.some((file) => file.path.startsWith('.claude/'))).toBe(false);
+    await expect(readFile(join(targetRoot, '.claude/settings.json'))).rejects.toThrow();
+    await expect(
+      readFile(join(targetRoot, '.claude/skills/contributor/SKILL.md')),
+    ).rejects.toThrow();
+
+    // Generated projects can install their own governance independently.
+    await mkdir(join(targetRoot, '.claude'), { recursive: true });
+    await writeFile(join(targetRoot, '.claude/settings.json'), '{}');
+    const report = await doctorProject(targetRoot);
+    expect(report.checks.find((check) => check.id === 'development-artifacts')?.status).toBe(
+      'pass',
+    );
+  });
+
   // `.claude/settings.local.json` accumulates the permissions one contributor
   // granted while developing the starter. Same family as `.mcp.json`, and just
   // as meaningless in someone else's project.
