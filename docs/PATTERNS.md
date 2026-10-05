@@ -259,6 +259,9 @@ Mechanical rules. Biome enforces what it can; reviews catch the rest.
 
 ### Tests
 
+- **Bound nested test concurrency.** Shared Vitest configuration uses at most two workers per
+  workspace because Turborepo already runs workspaces concurrently. Subprocess tests retain
+  their existing timeouts.
 - **Colocate tests with source.** `auth.service.test.ts` next to `auth.service.ts`. Vitest, default node env unless the test renders React (then jsdom + `@testing-library/react`).
 - **Integration tests get the `.integration.test.ts` suffix.** They skip gracefully when `DATABASE_URL` is unset (see `docs/ARCHITECTURE.md` section 8).
 - **No mocking the DB at the service level.** If the service goes through a repository, mock the repository. If the test needs the real DB, write an integration test.

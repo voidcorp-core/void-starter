@@ -15,7 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.75.3",
+    "@sentry/nextjs": "^10.76.0",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
