@@ -23,13 +23,13 @@
     "@repo/sentry": "workspace:*",
     "@repo/storage-r2": "workspace:*",
     "@repo/ui": "workspace:*",
-    "@sentry/nextjs": "^10.75.3",
+    "@sentry/nextjs": "^10.76.0",
     "better-auth": "~1.6.33",
     "next": "^16.3.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-hook-form": "^7.89.0",
-    "workflow": "^4.8.11",
+    "workflow": "^4.8.12",
     "zod": "^4.6.5"
   },
   "devDependencies": {

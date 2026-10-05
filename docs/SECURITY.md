@@ -193,6 +193,12 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
   Remove this override once Workflow resolves a patched release itself and audit, tests and
   build remain green. See [the upstream advisory](https://github.com/advisories/GHSA-j22f-vq7h-c4qm).
 
+- **Current HTTP cache override.** Workflow brings `cacheable-request@13.0.19`, whose
+  `http-cache-semantics` range still starts at the vulnerable 4.2.0. Pin 4.3.0 within
+  the same major to exclude the affected release while keeping the frozen install
+  reproducible. Remove the pin once the owner requires a patched minimum and audit
+  remains green. See [the advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).
+
 ---
 
 ## Cross-references
