@@ -84,18 +84,33 @@ See [`docs/FACTORY.md`](./docs/FACTORY.md) for the full contract and fixture mat
 
 ## Contributor harness setup
 
-After cloning this source repository, restore the pinned Void Machine assets before starting
-an agent session:
+After cloning this source repository, restore Void Machine before starting an agent session.
+The committed hooks include the upstream Codex/PowerShell denial fix in
+[`03580e2`](https://github.com/voidcorp-core/void-machine/commit/03580e2d0609d1d98bc5ef06d80512327b811c60),
+which is absent from the published `voidmachine@4.0.0` package. Build that exact revision
+with its frozen dependencies. From this repository root, with Node.js 24.15+ and a POSIX shell:
 
 ```bash
-npx voidmachine@4.0.0 hydrate --runtime both \
-  --pack monorepo --pack react --pack nextjs --pack server
+(
+  set -eu
+  vm_source="$(mktemp -d)"
+  git clone https://github.com/voidcorp-core/void-machine.git "$vm_source"
+  git -C "$vm_source" checkout --detach 03580e2d0609d1d98bc5ef06d80512327b811c60
+  (
+    cd "$vm_source"
+    npx --yes pnpm@10.34.5 install --frozen-lockfile
+    npx --yes pnpm@10.34.5 build:cli
+    npx --yes pnpm@10.34.5 --filter ./packages/cli build:assets
+  )
+  node "$vm_source/packages/cli/bin/void-machine.mjs" hydrate --runtime both \
+    --pack monorepo --pack react --pack nextjs --pack server
+)
 ```
 
-This restores generated skills and doctrine, and rewrites the runtime wiring for the clone's
-absolute path. The committed manifest and hook bundles pin the bootstrap version. Local
-observations and checkpoints stay outside version control. Factory-generated applications
-exclude this contributor harness.
+This restores 174 assets and rewrites runtime wiring for the clone's absolute path. Both
+committed hook bundles retain identical SHA-256 hashes after hydration from this source
+revision. Local observations and checkpoints stay outside version control. Factory-generated
+applications exclude this contributor harness, including the entire `.claude` directory.
 
 ## Quick start (per-MVP onboarding)
 
