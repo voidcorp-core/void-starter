@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    ".": {
+      "entry": [".github/scripts/ci-admission.test.mjs"]
+    },
     "packages/config": {
       "project": ["*.ts"],
       "ignoreDependencies": ["next"]
