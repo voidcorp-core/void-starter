@@ -53,7 +53,7 @@ describe('starter CI contract', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression syntax is literal YAML.
     expect(gate?.if).toBe('${{ always() }}');
     expect(gate?.needs).toEqual(['code', 'dependency-audit', 'secrets']);
-    const script = gate?.steps[0]?.run;
+    const script = gate?.steps.find((step) => step.run?.includes('CODE_RESULT'))?.run;
     expect(script).toBeDefined();
     if (!script) throw new Error('Missing quality gate script');
     for (const result of ['success', 'failure', 'skipped', 'cancelled']) {
