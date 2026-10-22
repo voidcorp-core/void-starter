@@ -87,11 +87,13 @@ export const r2ObjectStorage: ObjectStorage = {
   async signUpload({ key, contentType, expiresInSeconds }) {
     // `ContentType` enters the signature, so R2 answers 403 to a PUT that
     // declares anything else. This is what makes the allowlist enforceable on
-    // an upload the server never sees.
+    // an upload the server never sees. The presigner leaves `content-type`
+    // unsigned by default (s3-request-presigner adds it to its unsignable
+    // set), so it has to be named here or the allowlist is decorative.
     return await getSignedUrl(
       getClient(),
       new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType }),
-      { expiresIn: expiresInSeconds },
+      { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type']) },
     );
   },
 
