@@ -58,7 +58,7 @@ jobs:
       # DECISIONS entry 30.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Cache bun + turbo
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
@@ -108,7 +108,7 @@ jobs:
           bun-version-file: package.json
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version: "24"
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bunx drizzle-kit migrate
       - run: cd apps/web && bunx playwright install --with-deps chromium
@@ -142,8 +142,8 @@ jobs:
       # https://api.github.com/repos/gitleaks/gitleaks/releases/tags/v8.30.1
       - name: Install verified gitleaks
         env:
-          GITLEAKS_VERSION: '8.30.1'
-          GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
         run: |
           archive="$RUNNER_TEMP/gitleaks.tar.gz"
           curl --fail --silent --show-error --location --retry 3 --max-time 120 \

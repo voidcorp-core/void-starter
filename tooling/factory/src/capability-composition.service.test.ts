@@ -98,7 +98,7 @@ function checkWithBiome(profile: string, sources: readonly GeneratedSource[]): M
           `${result.stdout}${result.stderr}`,
       );
     }
-    const checkedCount = result.stdout.match(BIOME_CHECKED_COUNT_PATTERN)?.[1];
+    const checkedCount = (result.stdout + result.stderr).match(BIOME_CHECKED_COUNT_PATTERN)?.[1];
     if (checkedCount === undefined) {
       throw new Error(
         `biome printed no "Checked N files" line for ${profile} (${files}):\n` +

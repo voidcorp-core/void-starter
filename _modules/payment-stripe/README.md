@@ -10,17 +10,17 @@ Most B2C MVPs eventually need paid plans, one-shot purchases, or subscription ga
 
 ## Required env vars
 
-| Variable | Type | Description |
-| --- | --- | --- |
-| `STRIPE_SECRET_KEY` | secret | Server-side API key. Used by the Stripe Node SDK to create Checkout sessions, refund charges, and call the Customer Portal. |
-| `STRIPE_WEBHOOK_SECRET` | secret | Signing secret for the webhook endpoint. The route handler verifies every payload via `stripe.webhooks.constructEvent`. |
+| Variable                             | Type   | Description                                                                                                                    |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `STRIPE_SECRET_KEY`                  | secret | Server-side API key. Used by the Stripe Node SDK to create Checkout sessions, refund charges, and call the Customer Portal.    |
+| `STRIPE_WEBHOOK_SECRET`              | secret | Signing secret for the webhook endpoint. The route handler verifies every payload via `stripe.webhooks.constructEvent`.        |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | Browser-side publishable key. Build-time inlined for the redirect-to-Checkout flow when using Stripe Elements or `loadStripe`. |
 
 Optional:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `STRIPE_PRICE_ID` | none | Default price for Checkout when only one plan exists. Override per call site if the MVP has multiple SKUs. |
+| Variable          | Default | Purpose                                                                                                    |
+| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `STRIPE_PRICE_ID` | none    | Default price for Checkout when only one plan exists. Override per call site if the MVP has multiple SKUs. |
 
 ## Install (when implementing)
 

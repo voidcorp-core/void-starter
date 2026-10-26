@@ -6,12 +6,12 @@ API, so it adds no vendor SDK or client bundle code.
 
 ## Environment
 
-| Variable | Type | Purpose |
-| --- | --- | --- |
-| `RESEND_API_KEY` | secret | Resend sending key. |
-| `EMAIL_FROM` | non-secret | Verified sender, optionally `Name <address@example.com>`. |
-| `EMAIL_REPLY_TO` | non-secret, optional | Reply address. |
-| `EMAIL_APP_NAME` | non-secret, optional | Product name rendered in subjects and templates. |
+| Variable         | Type                 | Purpose                                                   |
+| ---------------- | -------------------- | --------------------------------------------------------- |
+| `RESEND_API_KEY` | secret               | Resend sending key.                                       |
+| `EMAIL_FROM`     | non-secret           | Verified sender, optionally `Name <address@example.com>`. |
+| `EMAIL_REPLY_TO` | non-secret, optional | Reply address.                                            |
+| `EMAIL_APP_NAME` | non-secret, optional | Product name rendered in subjects and templates.          |
 
 Local development retains the console-link flow only when both required variables are absent.
 Partial configuration fails explicitly. Production always requires both values and never logs an

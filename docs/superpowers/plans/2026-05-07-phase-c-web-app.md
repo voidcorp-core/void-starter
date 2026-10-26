@@ -684,9 +684,7 @@ export default async function AdminPage() {
                 <tr key={u.id} className="border-b border-border">
                   <td className="py-2">{u.email}</td>
                   <td className="py-2">{u.role}</td>
-                  <td className="py-2 text-muted-foreground">
-                    {u.createdAt.toLocaleDateString()}
-                  </td>
+                  <td className="py-2 text-muted-foreground">{u.createdAt.toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -882,9 +880,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'bun run dev',
     url: 'http://localhost:3000',
@@ -1012,9 +1008,11 @@ In a browser:
 5. /dashboard shows the user (with `role`, `name`, `email` from `sessionUserSchema`)
 6. /admin shows 403 or the admin guard
 7. Promote the user to admin in the DB (via drizzle-kit studio):
+
    ```
    cd packages/db && bunx drizzle-kit studio
    ```
+
    Open http://local.drizzle.studio - find the user in the `users` table (PLURAL) - change role to 'admin' - save. Note: the table name is `users`, NOT `user`; Better-Auth maps the singular model name via `modelName` in the adapter config (Phase B Task B13).
 8. Refresh /admin - the user listing renders
 9. Sign out - back to home

@@ -34,7 +34,7 @@
   "devDependencies": {
     "@repo/config": "workspace:*",
     "@vitest/coverage-v8": "^4.1.12",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   }

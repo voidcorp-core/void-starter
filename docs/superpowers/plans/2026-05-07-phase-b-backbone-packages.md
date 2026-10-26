@@ -614,9 +614,7 @@ describe.skipIf(!databaseUrl)('users schema integration', () => {
   it('enforces email uniqueness', async () => {
     const email = `dup-${Date.now()}@example.com`;
     const [first] = await db.insert(users).values({ id: randomUUID(), email }).returning();
-    await expect(
-      db.insert(users).values({ id: randomUUID(), email }),
-    ).rejects.toThrow();
+    await expect(db.insert(users).values({ id: randomUUID(), email })).rejects.toThrow();
     if (first) {
       await db.delete(users).where(eq(users.id, first.id));
     }
@@ -993,7 +991,11 @@ git push
 ```ts
 import { describe, expect, it } from 'vitest';
 import { isAppError } from '@repo/core/errors';
-import { EmailAlreadyTakenError, InvalidCredentialsError, MagicLinkExpiredError } from './auth.errors';
+import {
+  EmailAlreadyTakenError,
+  InvalidCredentialsError,
+  MagicLinkExpiredError,
+} from './auth.errors';
 
 describe('auth errors', () => {
   it('InvalidCredentialsError has 401 + INVALID_CREDENTIALS code', () => {
@@ -1024,14 +1026,24 @@ import { AppError } from '@repo/core/errors';
 
 export class InvalidCredentialsError extends AppError {
   constructor(cause?: unknown) {
-    super({ message: 'Invalid email or password', code: 'INVALID_CREDENTIALS', status: 401, cause });
+    super({
+      message: 'Invalid email or password',
+      code: 'INVALID_CREDENTIALS',
+      status: 401,
+      cause,
+    });
     this.name = 'InvalidCredentialsError';
   }
 }
 
 export class EmailAlreadyTakenError extends AppError {
   constructor(email: string, cause?: unknown) {
-    super({ message: `Email already registered: ${email}`, code: 'EMAIL_TAKEN', status: 409, cause });
+    super({
+      message: `Email already registered: ${email}`,
+      code: 'EMAIL_TAKEN',
+      status: 409,
+      cause,
+    });
     this.name = 'EmailAlreadyTakenError';
   }
 }
@@ -1910,11 +1922,7 @@ import type { ButtonProps } from './Button.types';
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'primary', size = 'md', className, children, ...props }, ref) => (
-    <button
-      ref={ref}
-      className={cn(getButtonClasses(variant, size), className)}
-      {...props}
-    >
+    <button ref={ref} className={cn(getButtonClasses(variant, size), className)} {...props}>
       {children}
     </button>
   ),
@@ -2010,7 +2018,10 @@ export const Label = forwardRef<HTMLLabelElement, LabelHTMLAttributes<HTMLLabelE
   ({ className, ...props }, ref) => (
     <label
       ref={ref}
-      className={cn('text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70', className)}
+      className={cn(
+        'text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
+        className,
+      )}
       {...props}
     />
   ),

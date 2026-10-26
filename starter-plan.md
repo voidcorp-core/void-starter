@@ -43,6 +43,7 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 ## Step 2: Tooling layer
 
 ### 2.1 Biome
+
 - Install at root: `bun add -D @biomejs/biome`
 - Create root `biome.json` extending `@repo/config/biome.base.json`
 - Configure: 2 spaces, single quotes, trailing comma, semicolons, organize imports, VCS git ignore enabled
@@ -50,6 +51,7 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 - Commit: `chore: configure Biome linting and formatting`
 
 ### 2.2 Lefthook
+
 - Install: `bun add -D lefthook`
 - Create `lefthook.yml`:
   - `pre-commit`: biome check (staged) + tsc --noEmit (parallel) + gitleaks
@@ -59,23 +61,27 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 - Commit: `chore: configure Lefthook git hooks`
 
 ### 2.3 Commitlint
+
 - Install: `bun add -D @commitlint/cli @commitlint/config-conventional`
 - Create `commitlint.config.cjs`
 - Commit: `chore: configure commitlint`
 
 ### 2.4 knip
+
 - Install: `bun add -D knip`
 - Create `knip.json` with workspace-aware config
 - Add script `knip` and CI integration
 - Commit: `chore: add knip dead-code detection`
 
 ### 2.5 gitleaks
+
 - Install gitleaks binary or use bun-runnable wrapper
 - Configure in `.gitleaks.toml` with default rules + custom allowlist if needed
 - Wire into Lefthook pre-commit
 - Commit: `chore: add gitleaks secret scanning`
 
 ### 2.6 Renovate
+
 - Create `renovate.json`:
   - extends: `config:recommended`
   - automerge patches
@@ -88,27 +94,33 @@ This document is the execution plan for building the Void Factory Next.js 16 mon
 Path: `packages/core/`
 
 ### 3.1 Logger
+
 - Install: `bun add pino pino-pretty`
 - Create `src/logger.ts` with Pino instance (pretty in dev, JSON in prod, `LOG_LEVEL` from env)
 
 ### 3.2 Env validation
+
 - Install: `bun add @t3-oss/env-nextjs zod`
 - Create `src/env.ts` with `createEnv` schema (server / client / runtimeEnv split)
 - Minimal vars at J0: `NODE_ENV`, `LOG_LEVEL`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (server) / `NEXT_PUBLIC_APP_URL` (client)
 
 ### 3.3 Errors
+
 - Create `src/errors.ts`: `AppError` base + `ValidationError`, `NotFoundError`, `UnauthorizedError`, `ForbiddenError`, `ConflictError` + `isAppError` guard
 
 ### 3.4 Server Action wrapper
+
 - Create `src/server-action.ts` with `defineAction({ schema, auth, handler })` per `context.md`
 - Includes Zod parse, auth check, error normalization, structured logging
 
 ### 3.5 Security primitives
+
 - Create `src/security-headers.ts` with CSP, HSTS, X-Frame-Options, Permissions-Policy defaults
 - Create `src/rate-limit.ts` with in-memory adapter (interface for Upstash via module)
 - Create `src/sanitize.ts` with PII helpers (`maskEmail`, `truncate`)
 
 ### 3.6 Tests
+
 - Per-file `.test.ts` for helpers and wrapper
 
 Commit: `feat(core): add logger, env, errors, security primitives, server-action wrapper`
@@ -158,6 +170,7 @@ Path: `packages/ui/`
 ## Step 7: apps/web
 
 ### 7.1 Next.js bootstrap
+
 - Manually scaffold Next.js 16 in `apps/web/` (avoid create-next-app, which does not understand the workspace layout)
 - `package.json` with `"next": "^16.2.x"`, `"react": "^19.2.x"`, deps on `@repo/core`, `@repo/auth`, `@repo/db`, `@repo/ui`
 - `next.config.ts`: import security headers from `@repo/core/security-headers`, set `experimental.cacheComponents: true`
@@ -166,15 +179,18 @@ Path: `packages/ui/`
 - Commit: `feat(web): bootstrap Next.js 16 app with security headers`
 
 ### 7.2 instrumentation.ts
+
 - Create `src/instrumentation.ts` with conditional dynamic imports
 - Wire stubs (commented) for Sentry and PostHog server-side init
 - Commit: `feat(web): add instrumentation entry for opt-in modules`
 
 ### 7.3 Middleware
+
 - Create `src/middleware.ts` for session refresh, locale detection placeholder, and rate-limit hooks
 - Commit: `feat(web): add middleware for session refresh and rate-limit`
 
 ### 7.4 Auth pages
+
 - Read Better-Auth Next.js integration docs
 - Create `src/app/(auth)/sign-in/page.tsx` with email/password form + Google button
 - Create `src/app/(auth)/sign-up/page.tsx`
@@ -186,11 +202,13 @@ Path: `packages/ui/`
 - Commit: `feat(web): add sign-in, sign-up, password reset, email verify pages`
 
 ### 7.5 Protected pages
+
 - Create `src/app/dashboard/page.tsx` with `requireAuth()` guard, displays current user
 - Create `src/app/admin/page.tsx` with `requireRole('admin')` guard, lists users
 - Commit: `feat(web): add protected dashboard and admin pages`
 
 ### 7.6 Home page
+
 - Create `src/app/page.tsx` with hero + CTA + feature highlights
 - Showcase design tokens from `@repo/ui`
 - Commit: `feat(web): add home page`
@@ -198,12 +216,14 @@ Path: `packages/ui/`
 ## Step 8: Test setup
 
 ### 8.1 Vitest
+
 - Install at packages level: `bun add -D vitest @vitest/ui @testing-library/react @testing-library/dom jsdom`
 - Each package has a `vitest.config.ts` extending `@repo/config/vitest.base.ts`
 - Add scripts via Turborepo: `test`, `test:ui`, `test:watch`, `test:coverage`
 - Commit: `chore: configure Vitest across workspaces`
 
 ### 8.2 Playwright
+
 - Install in `apps/web`: `bun add -D @playwright/test`
 - Run `bunx playwright install`
 - Create `playwright.config.ts`
@@ -214,6 +234,7 @@ Path: `packages/ui/`
 ## Step 9: Canonical examples
 
 ### 9.1 Simple component
+
 Path: `apps/web/src/components/_examples/SimpleButton/`
 
 ```
@@ -227,6 +248,7 @@ index.ts
 Demonstrates: pure helper extracted from JSX, helper tested without rendering, types isolated, barrel export only exposes public API.
 
 ### 9.2 Complex component (consumes a service)
+
 Path: `apps/web/src/components/_examples/UserProfileCard/`
 
 ```
@@ -248,6 +270,7 @@ Commit: `feat(examples): add canonical component examples`
 ## Step 10: Optional modules
 
 ### 10.1 _modules/observability-sentry
+
 - Workspace package `@repo/sentry`
 - Read Sentry official docs for Next.js 16 integration
 - Implement: server init via `instrumentation.ts` register, client SDK init via lazy provider
@@ -257,6 +280,7 @@ Commit: `feat(examples): add canonical component examples`
 - Commit: `feat(modules): add observability-sentry module`
 
 ### 10.2 _modules/analytics-posthog
+
 - Workspace package `@repo/posthog`
 - Read PostHog official docs for Next.js + reverse proxy patterns
 - Implement: client SDK with `api_host: '/ingest'`, AnalyticsProvider with build-time DCE on `NEXT_PUBLIC_POSTHOG_KEY`
@@ -265,11 +289,13 @@ Commit: `feat(examples): add canonical component examples`
 - Commit: `feat(modules): add analytics-posthog module with proxy`
 
 ### 10.3 _modules/auth-clerk
+
 - Workspace package providing alternative `auth.repository.ts` for Clerk
 - README documents the swap procedure and required env vars
 - Commit: `feat(modules): add auth-clerk alternative`
 
 ### 10.4 Stub remaining modules
+
 - `_modules/payment-stripe/README.md`
 - `_modules/email-resend/README.md`
 - `_modules/cms-payload/README.md`

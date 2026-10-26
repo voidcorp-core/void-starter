@@ -1,14 +1,16 @@
 ---
+
 title: Intent-only Void Starter factory boundary
 date: 2026-09-01
 status: approved
 author: Florent Pellegrin + Codex
 ticket: DEV-684
 related:
-  - ../FACTORY.md
-  - ../DECISIONS.md
-  - ../discovery/2026-07-30/void-music-provisioning-findings.md
-  - ../discovery/2026-08-04/session-handoff.md
+- ../FACTORY.md
+- ../DECISIONS.md
+- ../discovery/2026-07-30/void-music-provisioning-findings.md
+- ../discovery/2026-08-04/session-handoff.md
+
 ---
 
 # Intent-only Void Starter factory boundary
@@ -96,19 +98,19 @@ accident.
 
 ## Ownership boundary
 
-| Concern | Void Starter owns | External owner |
-|---|---|---|
-| Product selection | Manifest schema and validation | Product author chooses values |
-| Source tree | Deterministic composition and generation | Consumer owns later edits |
-| Provider intent | Desired resources, constraints, dependencies, and required outputs | Operator chooses execution mechanism |
-| Credentials | Names and purpose only; never values or validation | Operator, secret manager, provider CLI, or IaC |
-| Resource creation | No execution | Official CLI, dashboard, generated-project CI, or IaC |
-| Environment binding | Required variable names, targets, and sensitivity classification | Deployment platform or IaC |
-| Database migration | Ordered migration handoff and application command | Generated-project CI or operator |
-| Source publication | Ordered handoff and expected repository state | Git and official hosting CLI |
-| Deployment and native build | Required inputs, command handoff, and success criteria | Vercel/EAS tooling or project CI |
-| Verification | Local hashes, schemas, composition, and plan completeness | Provider truth and remote drift |
-| Receipts | Generation and plan digests | Remote executor owns its state and receipts |
+| Concern                     | Void Starter owns                                                  | External owner                                        |
+| --------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| Product selection           | Manifest schema and validation                                     | Product author chooses values                         |
+| Source tree                 | Deterministic composition and generation                           | Consumer owns later edits                             |
+| Provider intent             | Desired resources, constraints, dependencies, and required outputs | Operator chooses execution mechanism                  |
+| Credentials                 | Names and purpose only; never values or validation                 | Operator, secret manager, provider CLI, or IaC        |
+| Resource creation           | No execution                                                       | Official CLI, dashboard, generated-project CI, or IaC |
+| Environment binding         | Required variable names, targets, and sensitivity classification   | Deployment platform or IaC                            |
+| Database migration          | Ordered migration handoff and application command                  | Generated-project CI or operator                      |
+| Source publication          | Ordered handoff and expected repository state                      | Git and official hosting CLI                          |
+| Deployment and native build | Required inputs, command handoff, and success criteria             | Vercel/EAS tooling or project CI                      |
+| Verification                | Local hashes, schemas, composition, and plan completeness          | Provider truth and remote drift                       |
+| Receipts                    | Generation and plan digests                                        | Remote executor owns its state and receipts           |
 
 No Factory success status may imply that a remote resource exists. Vocabulary must distinguish
 `local_ready` from externally provisioned, deployed, migrated, or verified states.

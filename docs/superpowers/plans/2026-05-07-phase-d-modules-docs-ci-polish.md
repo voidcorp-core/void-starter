@@ -603,7 +603,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.13'
+          bun-version: "1.3.13"
       - name: Cache bun + turbo
         uses: actions/cache@v4
         with:
@@ -652,7 +652,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.13'
+          bun-version: "1.3.13"
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bunx drizzle-kit migrate
       - run: cd apps/web && bunx playwright install --with-deps chromium
