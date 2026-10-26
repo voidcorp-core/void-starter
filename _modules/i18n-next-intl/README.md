@@ -10,9 +10,9 @@ Most early-stage MVPs ship in one language (typically English or French) and pay
 
 ## Required env vars
 
-| Variable | Type | Description |
-| --- | --- | --- |
-| `NEXT_PUBLIC_DEFAULT_LOCALE` | public | Fallback locale when none can be inferred from the URL or Accept-Language header (e.g. `en`). |
+| Variable                        | Type   | Description                                                                                                                  |
+| ------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_DEFAULT_LOCALE`    | public | Fallback locale when none can be inferred from the URL or Accept-Language header (e.g. `en`).                                |
 | `NEXT_PUBLIC_SUPPORTED_LOCALES` | public | Comma-separated list of supported locale codes (e.g. `en,fr,es`). The middleware uses this list to validate the URL segment. |
 
 Both are read at build time and inlined; changing them requires a redeploy. This is intentional -- locales are a static contract of the build, not a runtime toggle.

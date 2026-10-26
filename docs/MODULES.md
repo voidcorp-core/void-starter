@@ -27,21 +27,21 @@ For the catalogue, see `_modules/README.md`.
 
 The full catalogue (with env vars, install steps, removal, upstream docs) lives in `_modules/README.md`. This summary table is for quick orientation only; do not duplicate the full README here.
 
-| Module | Pattern | State | Activation trigger |
-|---|---|---|---|
-| `@repo/sentry` | A | wired into `apps/web` | `SENTRY_DSN` plus `NEXT_PUBLIC_SENTRY_DSN` |
-| `@repo/posthog` | A | wired into `apps/web` | `NEXT_PUBLIC_POSTHOG_KEY` |
-| `@repo/auth-clerk` | A | scaffold (alternative repository) | manual swap, see `docs/AUTH.md` section 6 |
-| `@repo/payment-stripe` | A or B | placeholder | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
-| `@repo/email-resend` | A | wired into `@repo/auth` | `RESEND_API_KEY` plus `EMAIL_FROM` |
-| `@repo/jobs-vercel-workflow` | A | wired into `apps/web` when selected | `workloads.durable_jobs: vercel-workflows` (no env var) |
-| `@repo/storage-r2` | A | wired into `apps/web` when selected | `data.files: cloudflare-r2-eu` plus the R2 env vars, including the endpoint or jurisdiction (ADR 70) |
-| `@repo/cms-payload` | B | placeholder | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI` |
-| `@repo/audit-log` | B | placeholder | always-on once mounted |
-| `@repo/cookie-consent` | B | placeholder | always-on once mounted (cookie-driven state) |
-| `@repo/rate-limit-upstash` | A or B | placeholder | `UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN` |
-| `@repo/i18n-next-intl` | B | placeholder | `NEXT_PUBLIC_DEFAULT_LOCALE` plus `NEXT_PUBLIC_SUPPORTED_LOCALES` |
-| `@repo/db-self-hosted-postgres` | B | placeholder | `DATABASE_URL` repointed |
+| Module                          | Pattern | State                               | Activation trigger                                                                                   |
+| ------------------------------- | ------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `@repo/sentry`                  | A       | wired into `apps/web`               | `SENTRY_DSN` plus `NEXT_PUBLIC_SENTRY_DSN`                                                           |
+| `@repo/posthog`                 | A       | wired into `apps/web`               | `NEXT_PUBLIC_POSTHOG_KEY`                                                                            |
+| `@repo/auth-clerk`              | A       | scaffold (alternative repository)   | manual swap, see `docs/AUTH.md` section 6                                                            |
+| `@repo/payment-stripe`          | A or B  | placeholder                         | `STRIPE_SECRET_KEY` plus `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`                                        |
+| `@repo/email-resend`            | A       | wired into `@repo/auth`             | `RESEND_API_KEY` plus `EMAIL_FROM`                                                                   |
+| `@repo/jobs-vercel-workflow`    | A       | wired into `apps/web` when selected | `workloads.durable_jobs: vercel-workflows` (no env var)                                              |
+| `@repo/storage-r2`              | A       | wired into `apps/web` when selected | `data.files: cloudflare-r2-eu` plus the R2 env vars, including the endpoint or jurisdiction (ADR 70) |
+| `@repo/cms-payload`             | B       | placeholder                         | `PAYLOAD_SECRET` plus `PAYLOAD_DATABASE_URI`                                                         |
+| `@repo/audit-log`               | B       | placeholder                         | always-on once mounted                                                                               |
+| `@repo/cookie-consent`          | B       | placeholder                         | always-on once mounted (cookie-driven state)                                                         |
+| `@repo/rate-limit-upstash`      | A or B  | placeholder                         | `UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN`                                             |
+| `@repo/i18n-next-intl`          | B       | placeholder                         | `NEXT_PUBLIC_DEFAULT_LOCALE` plus `NEXT_PUBLIC_SUPPORTED_LOCALES`                                    |
+| `@repo/db-self-hosted-postgres` | B       | placeholder                         | `DATABASE_URL` repointed                                                                             |
 
 For the canonical activation example, read `_modules/observability-sentry/README.md` (Pattern A) and `_modules/payment-stripe/README.md` (Pattern B).
 

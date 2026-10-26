@@ -44,11 +44,7 @@ Create `/Users/folpe/Developer/void-starter/package.json`:
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.13",
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "_modules/*"
-  ],
+  "workspaces": ["apps/*", "packages/*", "_modules/*"],
   "engines": {
     "bun": ">=1.3.0",
     "node": ">=20"
@@ -444,13 +440,7 @@ Create `/Users/folpe/Developer/void-starter/packages/config/biome.base.json`:
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": [
-      "**/.next/**",
-      "**/dist/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "**/node_modules/**"
-    ]
+    "ignore": ["**/.next/**", "**/dist/**", "**/.turbo/**", "**/coverage/**", "**/node_modules/**"]
   },
   "formatter": {
     "enabled": true,
@@ -696,7 +686,19 @@ module.exports = {
     'type-enum': [
       2,
       'always',
-      ['feat', 'fix', 'chore', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'revert'],
+      [
+        'feat',
+        'fix',
+        'chore',
+        'docs',
+        'style',
+        'refactor',
+        'perf',
+        'test',
+        'build',
+        'ci',
+        'revert',
+      ],
     ],
   },
 };
@@ -748,7 +750,14 @@ Create `/Users/folpe/Developer/void-starter/knip.json`:
       "project": "src/**/*.ts"
     },
     "apps/*": {
-      "entry": ["src/app/**/page.tsx", "src/app/**/layout.tsx", "src/app/**/route.ts", "src/middleware.ts", "src/instrumentation.ts", "next.config.ts"],
+      "entry": [
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/app/**/route.ts",
+        "src/middleware.ts",
+        "src/instrumentation.ts",
+        "next.config.ts"
+      ],
       "project": "src/**/*.{ts,tsx}"
     }
   },
@@ -838,11 +847,7 @@ Create `/Users/folpe/Developer/void-starter/renovate.json`:
 ```json
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":semanticCommitTypeAll(chore)"
-  ],
+  "extends": ["config:recommended", ":semanticCommits", ":semanticCommitTypeAll(chore)"],
   "schedule": ["before 6am on monday"],
   "timezone": "Europe/Paris",
   "rangeStrategy": "bump",
@@ -1672,7 +1677,10 @@ describe('defineAction', () => {
     });
 
     const result = await action({ name: 'alice' });
-    expect(handler).toHaveBeenCalledWith({ name: 'alice' }, expect.objectContaining({ user: null }));
+    expect(handler).toHaveBeenCalledWith(
+      { name: 'alice' },
+      expect.objectContaining({ user: null }),
+    );
     expect(result).toEqual({ ok: true, name: 'alice' });
   });
 
@@ -1735,9 +1743,7 @@ type DefineActionConfig<TSchema extends ZodType, TResult> = {
 // until then.
 async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   if (auth === 'public') return { user: null };
-  throw new Error(
-    `defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`,
-  );
+  throw new Error(`defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`);
 }
 
 export function defineAction<TSchema extends ZodType, TResult>({

@@ -19,9 +19,9 @@ If none of the above applies, stay on Neon. Migrating off Neon prematurely is a 
 
 ## Required env vars
 
-| Variable | Type | Description |
-| --- | --- | --- |
-| `DATABASE_URL` | secret | Postgres connection string for the self-hosted instance. Replaces the Neon URL after migration. Same name and shape as the Neon default. |
+| Variable            | Type   | Description                                                                                                                                              |
+| ------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | secret | Postgres connection string for the self-hosted instance. Replaces the Neon URL after migration. Same name and shape as the Neon default.                 |
 | `POSTGRES_PASSWORD` | secret | Used by the docker-compose template to seed the `void` superuser password. Not consumed by the app at runtime; only relevant during `docker compose up`. |
 
 The application code does not change shape. Only the value behind `DATABASE_URL` flips.
@@ -36,7 +36,7 @@ A migration from Neon to self-hosted is irreversible-ish (you can flip back if y
    - Replication: streaming replication for HA, or logical replication for zero-downtime migrations
    - TLS termination: either inside Postgres (`ssl=on` with managed certs) or behind a reverse proxy
    - OS hardening: firewall (only allow connections from the app's IP allowlist or VPN), fail2ban, automated security updates
-   None of this is in scope for the template -- it deliberately stops at "Postgres is reachable on port 5432".
+     None of this is in scope for the template -- it deliberately stops at "Postgres is reachable on port 5432".
 
 2. **Dump from Neon.** Use a recent `pg_dump` matching the Neon Postgres major version (16 at the time of writing):
 

@@ -8,14 +8,14 @@ Per `docs/DECISIONS.md` entry 04, optional infrastructure activates at build tim
 
 ## Required environment variables
 
-| Variable | Where | Purpose |
-| --- | --- | --- |
+| Variable                  | Where  | Purpose                                                                                                                               |
+| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_POSTHOG_KEY` | client | Activates browser capture. When unset, the effect returns before the dynamic `import('posthog-js')` runs, so the SDK is never loaded. |
 
 Optional:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
+| Variable                   | Default   | Purpose                                                                                                                                                                            |
+| -------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `/ingest` | API host for capture. The default points at the EU reverse-proxy rewrites declared in `apps/web/next.config.ts`. Override only if you need a non-EU region or a custom proxy path. |
 
 ## Install

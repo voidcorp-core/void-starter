@@ -31,20 +31,20 @@ qu'aucun code applicatif ne pouvait atteindre.
 
 Pile neuve, six ressources créées en une tentative chacune :
 
-| Ressource | Identifiant |
-|---|---|
-| GitHub | `R_kgDOToADxw` (`void-sandbox/void-starter-canary-documents-20260730`) |
-| Vercel | `prj_4UdpUNdipa8N7OrOOlG7ubtnwEZ3`, `fra1` |
-| Neon | `ancient-star-99013596`, `aws-eu-central-1` |
-| Liaison `DATABASE_URL` | `gIEaggFcbOqoeTfV` |
-| Bucket R2 | `4cbb9b10edad4a5f895e93cd7cb08ac5`, compte `afec34d4c8f123c2235386929f2dcfee`, juridiction `eu` |
-| Règle CORS | posée **et relue**, origine `http://localhost:3000` |
+| Ressource              | Identifiant                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| GitHub                 | `R_kgDOToADxw` (`void-sandbox/void-starter-canary-documents-20260730`)                          |
+| Vercel                 | `prj_4UdpUNdipa8N7OrOOlG7ubtnwEZ3`, `fra1`                                                      |
+| Neon                   | `ancient-star-99013596`, `aws-eu-central-1`                                                     |
+| Liaison `DATABASE_URL` | `gIEaggFcbOqoeTfV`                                                                              |
+| Bucket R2              | `4cbb9b10edad4a5f895e93cd7cb08ac5`, compte `afec34d4c8f123c2235386929f2dcfee`, juridiction `eu` |
+| Règle CORS             | posée **et relue**, origine `http://localhost:3000`                                             |
 
 **Bloqué sur `vercel.r2-binding`**, code `R2_RUNTIME_CREDENTIAL_SCOPE`. Le token déposé dans le
 trousseau est valide mais scopé au mauvais bucket : vérifié avec le SDK AWS, 403 sur
 `void-starter-canary-documents-20260730`, 200 sur `void-starter-canary-20260725`. Les formes sont
 bonnes et les valeurs diffèrent des entrées historiques, donc c'est un token neuf dont le
-*Specify bucket* pointe ailleurs.
+_Specify bucket_ pointe ailleurs.
 
 **Action requise de l'opérateur** : recréer le token R2 Object Read & Write scopé à
 `void-starter-canary-documents-20260730`, remplacer les deux entrées

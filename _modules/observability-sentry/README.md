@@ -8,20 +8,20 @@ Per `docs/DECISIONS.md` entry 04, optional infrastructure activates at build tim
 
 ## Required environment variables
 
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `SENTRY_DSN` | server / edge | Activates server-side capture. Absent value means `registerServer` and `registerEdge` short-circuit before `Sentry.init`. |
-| `NEXT_PUBLIC_SENTRY_DSN` | client | Activates browser capture. Build-time inlined so the entire `initSentryClient` body dead-code-eliminates when unset. |
-| `SENTRY_AUTH_TOKEN` | build | Lets `withSentryConfig` upload source maps to Sentry during `next build`. Set in Vercel under "Sensitive" type. |
-| `SENTRY_ORG` | build | Sentry organization slug used by `withSentryConfig` when uploading source maps. |
-| `SENTRY_PROJECT` | build | Sentry project slug used by `withSentryConfig` when uploading source maps. |
+| Variable                 | Where         | Purpose                                                                                                                   |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `SENTRY_DSN`             | server / edge | Activates server-side capture. Absent value means `registerServer` and `registerEdge` short-circuit before `Sentry.init`. |
+| `NEXT_PUBLIC_SENTRY_DSN` | client        | Activates browser capture. Build-time inlined so the entire `initSentryClient` body dead-code-eliminates when unset.      |
+| `SENTRY_AUTH_TOKEN`      | build         | Lets `withSentryConfig` upload source maps to Sentry during `next build`. Set in Vercel under "Sensitive" type.           |
+| `SENTRY_ORG`             | build         | Sentry organization slug used by `withSentryConfig` when uploading source maps.                                           |
+| `SENTRY_PROJECT`         | build         | Sentry project slug used by `withSentryConfig` when uploading source maps.                                                |
 
 Optional:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Server / edge tracing sample rate. |
-| `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Client tracing sample rate. |
+| Variable                                | Default | Purpose                            |
+| --------------------------------------- | ------- | ---------------------------------- |
+| `SENTRY_TRACES_SAMPLE_RATE`             | `0.1`   | Server / edge tracing sample rate. |
+| `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE` | `0.1`   | Client tracing sample rate.        |
 
 ## Install
 
