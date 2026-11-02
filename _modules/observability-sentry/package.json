@@ -15,13 +15,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.76.2",
+    "@sentry/nextjs": "^10.78.0",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.12",
     "@repo/config": "workspace:*",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   },
