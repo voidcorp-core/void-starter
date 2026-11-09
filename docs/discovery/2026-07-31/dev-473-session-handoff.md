@@ -50,7 +50,7 @@ lancé sans la paire runtime), puis en `R2_RUNTIME_CREDENTIAL_SCOPE` après dép
 mauvais bucket. Vérifié avec le SDK AWS sur les deux buckets : 403 sur
 `void-starter-canary-documents-20260730`, 200 sur `void-starter-canary-20260725`. Les formes sont
 correctes (Access Key ID hex 32, Secret hex 64) et les valeurs diffèrent des entrées historiques,
-donc c'est bien un token neuf dont le *Specify bucket* pointe sur le mauvais bucket.
+donc c'est bien un token neuf dont le _Specify bucket_ pointe sur le mauvais bucket.
 
 Reprise : recréer le token scopé à `void-starter-canary-documents-20260730`, remplacer les deux
 entrées du trousseau, puis

@@ -13,16 +13,16 @@ dit pas qu'il manque, il mesure l'écart entre ce qu'il déclare et ce qui est v
 
 ## Carte des trois
 
-| | Forge | Void Starter | Void Harness |
-|---|---|---|---|
-| commits | 90 | 291 | 669 |
-| code | 0 `.ts`, 9 `.js`/`.mjs` | 254 `.ts` | 665 `.ts` |
-| documentation | 105 `.md` | 45 `.md` | 684 `.md` |
-| runtime | Node >= 22.12 | Bun 1.3.14, Node >= 24 | pnpm 10.34, Node >= 22.12 |
-| licence | MIT, public | privé | MIT, privé |
-| qualité | CI seule | biome, lefthook, commitlint, knip, CI | biome, CI |
-| formateur | aucun | actif, 100 colonnes | **désactivé** |
-| commits conventionnels | 31/40 | 33/40 | 34/40 |
+|                        | Forge                   | Void Starter                          | Void Harness              |
+| ---------------------- | ----------------------- | ------------------------------------- | ------------------------- |
+| commits                | 90                      | 291                                   | 669                       |
+| code                   | 0 `.ts`, 9 `.js`/`.mjs` | 254 `.ts`                             | 665 `.ts`                 |
+| documentation          | 105 `.md`               | 45 `.md`                              | 684 `.md`                 |
+| runtime                | Node >= 22.12           | Bun 1.3.14, Node >= 24                | pnpm 10.34, Node >= 22.12 |
+| licence                | MIT, public             | privé                                 | MIT, privé                |
+| qualité                | CI seule                | biome, lefthook, commitlint, knip, CI | biome, CI                 |
+| formateur              | aucun                   | actif, 100 colonnes                   | **désactivé**             |
+| commits conventionnels | 31/40                   | 33/40                                 | 34/40                     |
 
 Trois natures différentes, et c'est le premier fait de l'audit : Forge est un moteur de méthode
 (markdown, schémas, skills, zéro TypeScript), le Starter est une factory qui produit et provisionne,
@@ -33,14 +33,14 @@ rôles.
 
 C'est le point qui a motivé cet audit, et la fragmentation est plus large qu'attendu.
 
-| Racine | Écrite par | Contenu |
-|---|---|---|
-| `.void/` | Harness | `config.json`, `hooks/`, `receipts/install-v1.json`, `PROJECT-DOCTRINE.md` |
-| `.claude/` | Harness | `skills/`, `agents/`, `commands/` |
-| `.codex/` | Harness | `hooks.json` compilé |
-| `.agents/` | Harness | contexte, dont la cible du project pack Forge |
-| `.void-forge/` | Forge | `artifacts/`, `install-receipt.json` |
-| `.forge/` | Forge | artefacts de run (variante) |
+| Racine           | Écrite par           | Contenu                                                                        |
+| ---------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `.void/`         | Harness              | `config.json`, `hooks/`, `receipts/install-v1.json`, `PROJECT-DOCTRINE.md`     |
+| `.claude/`       | Harness              | `skills/`, `agents/`, `commands/`                                              |
+| `.codex/`        | Harness              | `hooks.json` compilé                                                           |
+| `.agents/`       | Harness              | contexte, dont la cible du project pack Forge                                  |
+| `.void-forge/`   | Forge                | `artifacts/`, `install-receipt.json`                                           |
+| `.forge/`        | Forge                | artefacts de run (variante)                                                    |
 | `.void-starter/` | **Starter et Forge** | reçus de génération/provisioning/livraison, **et** `project-pack-receipt.json` |
 
 Sept racines pour trois outils, et surtout : **deux outils écrivent dans le dossier nommé d'après le
@@ -81,13 +81,13 @@ elle se lit comme une garantie automatisée.
 
 Les trois ont implémenté le même motif, chacun de son côté :
 
-| | Forge | Starter | Harness |
-|---|---|---|---|
-| aperçu non mutant | `preview`, `project-pack-check` | `plan`, `*:preflight` | `check` |
-| application | `foundation apply` | `apply:live`, `*:live` | `install` |
-| reprise | — | `resume`, `*:resume` | `adoption` |
-| diagnostic | `forge-doctor` | `doctor.cli.ts` | `doctor.ts` |
-| reçu | `install-receipt.json`, `project-pack-receipt.json` | 8 fichiers d'état | `receipts/install-v1.json` |
+|                   | Forge                                               | Starter                | Harness                    |
+| ----------------- | --------------------------------------------------- | ---------------------- | -------------------------- |
+| aperçu non mutant | `preview`, `project-pack-check`                     | `plan`, `*:preflight`  | `check`                    |
+| application       | `foundation apply`                                  | `apply:live`, `*:live` | `install`                  |
+| reprise           | —                                                   | `resume`, `*:resume`   | `adoption`                 |
+| diagnostic        | `forge-doctor`                                      | `doctor.cli.ts`        | `doctor.ts`                |
+| reçu              | `install-receipt.json`, `project-pack-receipt.json` | 8 fichiers d'état      | `receipts/install-v1.json` |
 
 Trois `doctor`, trois notions de reçu, trois formats, trois conventions de nommage. Le motif est le
 bon — dry-run, application confirmée, reçu, reprise idempotente — et il a été redécouvert trois

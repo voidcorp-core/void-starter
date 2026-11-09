@@ -1,4 +1,5 @@
 ---
+
 title: Intent-only Void Starter factory migration
 date: 2026-09-01
 status: executing
@@ -423,11 +424,11 @@ reason before Step 1 starts.
 
 ## Review checkpoints
 
-| Checkpoint | After | Human review | Continue when |
-|---|---|---|---|
-| A | Step 4 | Generic infrastructure handoff, legacy warning, removed generic live surface | User explicitly approves remaining lifecycle retirement |
-| B | Steps 5-7 | Complete web/mobile handoff and absence of remote executors | User explicitly approves final consolidation |
-| Final | Step 8 | Acceptance audit, code review, fresh verification, lockfile provenance | User accepts completion; merge remains human |
+| Checkpoint | After     | Human review                                                                 | Continue when                                           |
+| ---------- | --------- | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
+| A          | Step 4    | Generic infrastructure handoff, legacy warning, removed generic live surface | User explicitly approves remaining lifecycle retirement |
+| B          | Steps 5-7 | Complete web/mobile handoff and absence of remote executors                  | User explicitly approves final consolidation            |
+| Final      | Step 8    | Acceptance audit, code review, fresh verification, lockfile provenance       | User accepts completion; merge remains human            |
 
 ## Execution handoff
 
@@ -435,16 +436,16 @@ This is a tracker-backed multi-ticket program. After plan approval, `void-ticket
 tickets with the dependency relations below and installs `.void/active.md`. The tracker then owns
 mutable status and next-ready selection; this plan is not updated with a competing next-step pointer.
 
-| Order key | Ticket title | Depends on | Estimate | Human gate |
-|---|---|---|---|---|
-| F01 | Ship minimal offline provisioning handoff | none | 1 day | plan review cleared |
-| F02 | Cover complete infrastructure intent graph | F01 | 1.5 days | no |
-| F03 | Report legacy operational state locally | F01 | 1 day | no |
-| F04 | Retire generic live provisioning | F02, F03 | 1 day | Checkpoint A after completion |
-| F05 | Replace source publication and migration execution | F04, Checkpoint A | 1.5 days | lockfile refresh if required |
-| F06 | Replace production auth and delivery execution | F04, Checkpoint A | 1.5 days | security review |
-| F07 | Replace EAS project and native-build execution | F04, Checkpoint A | 1.5 days | Checkpoint B after F05-F07 |
-| F08 | Consolidate and enforce the intent-only boundary | F05, F06, F07, Checkpoint B | 1.5 days | doctrine wording, lockfile if required, final review |
+| Order key | Ticket title                                       | Depends on                  | Estimate | Human gate                                           |
+| --------- | -------------------------------------------------- | --------------------------- | -------- | ---------------------------------------------------- |
+| F01       | Ship minimal offline provisioning handoff          | none                        | 1 day    | plan review cleared                                  |
+| F02       | Cover complete infrastructure intent graph         | F01                         | 1.5 days | no                                                   |
+| F03       | Report legacy operational state locally            | F01                         | 1 day    | no                                                   |
+| F04       | Retire generic live provisioning                   | F02, F03                    | 1 day    | Checkpoint A after completion                        |
+| F05       | Replace source publication and migration execution | F04, Checkpoint A           | 1.5 days | lockfile refresh if required                         |
+| F06       | Replace production auth and delivery execution     | F04, Checkpoint A           | 1.5 days | security review                                      |
+| F07       | Replace EAS project and native-build execution     | F04, Checkpoint A           | 1.5 days | Checkpoint B after F05-F07                           |
+| F08       | Consolidate and enforce the intent-only boundary   | F05, F06, F07, Checkpoint B | 1.5 days | doctrine wording, lockfile if required, final review |
 
 F02 and F03 are independently ready after F01. F05, F06, and F07 are independently ready after
 F04 and Checkpoint A. Independence permits flexible ordering but does not authorize autonomous or

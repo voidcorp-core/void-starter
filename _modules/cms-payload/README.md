@@ -10,17 +10,17 @@ Code-as-content rots on marketing-heavy MVPs: every copy tweak becomes a PR, shi
 
 ## Required env vars
 
-| Variable | Type | Description |
-| --- | --- | --- |
-| `PAYLOAD_SECRET` | secret | Payload encryption key for sessions and admin auth. Independent from `BETTER_AUTH_SECRET`. |
+| Variable               | Type   | Description                                                                                                                                                                           |
+| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAYLOAD_SECRET`       | secret | Payload encryption key for sessions and admin auth. Independent from `BETTER_AUTH_SECRET`.                                                                                            |
 | `PAYLOAD_DATABASE_URI` | secret | Postgres connection string for the Payload instance. Reuse `DATABASE_URL` to share the Neon project with `apps/web`, or point at a separate Neon branch for editor-vs-prod isolation. |
 
 Optional:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PAYLOAD_PUBLIC_SERVER_URL` | inferred | Override the public URL of the CMS admin (e.g. `https://cms.your-domain.com`). |
-| `PAYLOAD_CONFIG_PATH` | `payload.config.ts` | Override the path to the Payload config file. |
+| Variable                    | Default             | Purpose                                                                        |
+| --------------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `PAYLOAD_PUBLIC_SERVER_URL` | inferred            | Override the public URL of the CMS admin (e.g. `https://cms.your-domain.com`). |
+| `PAYLOAD_CONFIG_PATH`       | `payload.config.ts` | Override the path to the Payload config file.                                  |
 
 ## Install (when implementing)
 
