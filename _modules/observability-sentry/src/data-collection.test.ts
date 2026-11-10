@@ -18,6 +18,11 @@ describe('SENTRY_DATA_COLLECTION', () => {
     expect(SENTRY_DATA_COLLECTION.mcp).toEqual({ inputs: false, outputs: false });
   });
 
+  it('captures no local variable in stack frames', () => {
+    // A name filter cannot work: minification renames `password` to `a`.
+    expect(SENTRY_DATA_COLLECTION.stackFrameVariables).toBe(false);
+  });
+
   it('leaves user, cookie and header collection to the v11 defaults', () => {
     expect(SENTRY_DATA_COLLECTION).not.toHaveProperty('userInfo');
     expect(SENTRY_DATA_COLLECTION).not.toHaveProperty('cookies');

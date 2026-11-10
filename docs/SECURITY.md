@@ -11,7 +11,7 @@ Every rule here reflects code that already ships in the repo. If you find code t
 The starter ships secure-by-default substrates and documents which primitive addresses which class of risk. Three rules govern every change:
 
 - **Defense in depth.** Validate at every boundary (`defineAction`, `defineFormAction` Zod parse), authorize at the service layer (`requireRole`, `policy.ts`), and enforce headers at the framework layer (`defaultSecurityHeaders` + `next.config.ts`).
-- **Sovereign by default.** No user data leaves the deploy unless an `_modules/*` integration explicitly takes it there (Sentry, PostHog, Resend). See ADR 02 and ADR 04. When Sentry is on, it never receives request or response bodies, bound SQL parameters or queue payloads: `_modules/observability-sentry/src/data-collection.ts` owns that policy for all three runtimes.
+- **Sovereign by default.** No user data leaves the deploy unless an `_modules/*` integration explicitly takes it there (Sentry, PostHog, Resend). See ADR 02 and ADR 04. When Sentry is on, it never receives request or response bodies, bound SQL parameters, queue payloads or stack-frame local variables: `_modules/observability-sentry/src/data-collection.ts` owns that policy for all three runtimes.
 - **Loud failures.** Missing env vars throw at command-time via `required()` (ADR 13). Unsafe `console.log`, raw `process.env`, or bare `'use server'` are forbidden by the patterns doc -- a reviewer or CI catches them before they ship.
 
 ---
