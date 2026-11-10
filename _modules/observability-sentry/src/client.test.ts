@@ -7,6 +7,7 @@ vi.mock('@sentry/nextjs', () => ({
 
 import * as Sentry from '@sentry/nextjs';
 import { initSentryClient } from './client';
+import { SENTRY_DATA_COLLECTION } from './data-collection';
 
 describe('initSentryClient', () => {
   const original = process.env['NEXT_PUBLIC_SENTRY_DSN'];
@@ -27,5 +28,9 @@ describe('initSentryClient', () => {
     process.env['NEXT_PUBLIC_SENTRY_DSN'] = 'https://fake@example.ingest.sentry.io/1';
     initSentryClient();
     expect(Sentry.init).toHaveBeenCalledTimes(1);
+    expect(Sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({ dataCollection: SENTRY_DATA_COLLECTION }),
+    );
+    expect(vi.mocked(Sentry.init).mock.calls[0]?.[0]).not.toHaveProperty('sendDefaultPii');
   });
 });

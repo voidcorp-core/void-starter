@@ -1,6 +1,7 @@
 import 'server-only';
 
 import * as Sentry from '@sentry/nextjs';
+import { SENTRY_DATA_COLLECTION } from './data-collection';
 
 /**
  * Initialize the Sentry Node SDK on the server runtime.
@@ -17,7 +18,7 @@ export function registerServer(): void {
     dsn,
     tracesSampleRate: Number(process.env['SENTRY_TRACES_SAMPLE_RATE'] ?? '0.1'),
     environment: process.env['NODE_ENV'] ?? 'development',
-    sendDefaultPii: true,
+    dataCollection: SENTRY_DATA_COLLECTION,
   });
 }
 

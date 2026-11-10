@@ -222,10 +222,13 @@ describe('createCapabilityFilePlan', () => {
       '@repo/notes': 'workspace:*',
       '@repo/posthog': 'workspace:*',
       '@repo/sentry': 'workspace:*',
-      '@sentry/nextjs': '^10.68.0',
+      '@sentry/nextjs': '^11.12.0',
       'better-auth': '^1.6.25',
     });
     expect(webPackage.devDependencies).toHaveProperty('postgres');
+    expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).toContain(
+      "import { withSentryConfig } from '@sentry/nextjs/config';",
+    );
     expect(readGeneratedFile(plan, 'apps/web/next.config.ts')).toContain("'@repo/email-resend'");
     expect(readGeneratedFile(plan, '.env.example')).toContain('EMAIL_APP_NAME=example-saas');
   });

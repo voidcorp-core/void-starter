@@ -1,6 +1,6 @@
 # @repo/sentry
 
-Opt-in Sentry observability module for void-starter MVPs. Wraps `@sentry/nextjs` 10.x with the modern four-file Next.js 16 integration pattern, gated behind build-time env vars so Sentry never ships in the bundle when DSN values are unset.
+Opt-in Sentry observability module for void-starter MVPs. Wraps `@sentry/nextjs` 11.x with the modern four-file Next.js 16 integration pattern, gated behind build-time env vars so Sentry never ships in the bundle when DSN values are unset.
 
 ## Why opt-in
 
@@ -31,7 +31,7 @@ The module is already wired into `apps/web` so a fresh starter clone activates S
 
    ```json
    "dependencies": {
-     "@sentry/nextjs": "^10.0.0",
+     "@sentry/nextjs": "^11.12.0",
      "@repo/sentry": "workspace:*"
    }
    ```
@@ -75,7 +75,7 @@ The module is already wired into `apps/web` so a fresh starter clone activates S
 5. Wrap `next.config.ts` with `withSentryConfig`:
 
    ```ts
-   import { withSentryConfig } from '@sentry/nextjs';
+   import { withSentryConfig } from '@sentry/nextjs/config';
 
    const config: NextConfig = {
      // ... cacheComponents, headers, transpilePackages
@@ -128,7 +128,7 @@ A manual `apps/<app>/src/app/sentry-tunnel/route.ts` is only required if the pro
 If a future MVP needs to remove Sentry entirely:
 
 1. Drop `"@repo/sentry": "workspace:*"` from `apps/<app>/package.json` deps.
-2. Drop `"@sentry/nextjs": "^10.0.0"` from `apps/<app>/package.json` deps (both are listed because the app also imports `@sentry/nextjs` directly from `next.config.ts` and `app/global-error.tsx`; once those call sites are removed in the steps below, the SDK is unused).
+2. Drop `"@sentry/nextjs": "^11.12.0"` from `apps/<app>/package.json` deps (both are listed because the app also imports `@sentry/nextjs` directly from `next.config.ts` and `app/global-error.tsx`; once those call sites are removed in the steps below, the SDK is unused).
 3. Remove `'@repo/sentry'` from `transpilePackages` in `next.config.ts`.
 4. Replace the `withSentryConfig(config, {...})` wrapper with a plain `export default config;`.
 5. Revert `instrumentation.ts` to a noop `register()` (or remove the dynamic import branch).
@@ -139,8 +139,9 @@ The env vars (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENT
 
 ## Notes
 
-- `@sentry/nextjs` 10.x is shipped as ESM with internal Node-runtime modules. `transpilePackages: ['@repo/sentry']` ensures Next.js compiles our wrapper alongside the other workspace packages; Sentry's own webpack plugin handles its internal transpilation.
+- `@sentry/nextjs` 11.x is shipped as ESM with internal Node-runtime modules. `transpilePackages: ['@repo/sentry']` ensures Next.js compiles our wrapper alongside the other workspace packages; Sentry's own webpack plugin handles its internal transpilation.
 - `src/server.ts` and `src/edge.ts` carry `import 'server-only'` per `docs/DECISIONS.md` entry 25 so a stray client-side import fails loud at build time.
 - `src/client.ts` does NOT carry `'use client'` because `instrumentation-client.ts` is a Next.js instrumentation hook, not a React component file.
+- **Data collection.** Sentry 11 replaced `sendDefaultPii` with `dataCollection`, and an unset `dataCollection` collects every HTTP body and every bound database parameter. All three inits pass `SENTRY_DATA_COLLECTION` from `src/data-collection.ts`, which turns off HTTP bodies, database query data, queue payloads and AI or MCP content: Better Auth carries passwords in request bodies and verification tokens in SQL parameters, which the SDK's key-name filter does not reach. User attribution, cookies and headers keep the v11 defaults (equivalent to the former `sendDefaultPii: true`); the SDK masks any key containing `cookie`, `auth`, `token`, `session` or `password`. Widen a channel only in that file, never in a single runtime's init.
 - The package barrel `@repo/sentry` re-exports nothing meaningful. Always import from the `/server`, `/edge`, or `/client` subpaths so the runtime boundary is explicit at the call site.
-- **Expected build-time warning: "ACTION REQUIRED: ... export `onRouterTransitionStart`".** `@sentry/nextjs` 10.x advises every consumer to re-export `Sentry.captureRouterTransitionStart` from `instrumentation-client.ts`. We deliberately skip that re-export because it requires a static `import * as Sentry from '@sentry/nextjs'` at module top, which defeats the dynamic-import gate around `NEXT_PUBLIC_SENTRY_DSN` (the SDK would ship into the eager bundle whether or not the DSN is set, undoing ADR 04 / ADR 27). The trade-off: App Router navigation transition spans are not captured. Client-side exception capture and request-level tracing still work normally once the DSN is set. The warning is harmless; do not silence it by adding the re-export without re-running the bundle audit in ADR 27.
+- **Expected build-time warning: "ACTION REQUIRED: ... export `onRouterTransitionStart`".** `@sentry/nextjs` advises every consumer to re-export `Sentry.captureRouterTransitionStart` from `instrumentation-client.ts`. We deliberately skip that re-export because it requires a static `import * as Sentry from '@sentry/nextjs'` at module top, which defeats the dynamic-import gate around `NEXT_PUBLIC_SENTRY_DSN` (the SDK would ship into the eager bundle whether or not the DSN is set, undoing ADR 04 / ADR 27). The trade-off: App Router navigation transition spans are not captured. Client-side exception capture and request-level tracing still work normally once the DSN is set. The warning is harmless; do not silence it by adding the re-export without re-running the bundle audit in ADR 27.

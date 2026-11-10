@@ -7,7 +7,7 @@
  * runtime stays out of the client bundle (docs/DECISIONS.md entry 04). When
  * the DSN is set, the import resolves and `Sentry.init` runs.
  *
- * Build-time note: `@sentry/nextjs` 10.x emits a soft "ACTION REQUIRED"
+ * Build-time note: `@sentry/nextjs` emits a soft "ACTION REQUIRED"
  * warning advising consumers to re-export `onRouterTransitionStart` from
  * THIS file. We deliberately do not, because doing so eagerly imports
  * `@sentry/nextjs` at module top and defeats the gate above (the SDK ships

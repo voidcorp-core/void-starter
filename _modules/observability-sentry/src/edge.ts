@@ -1,6 +1,7 @@
 import 'server-only';
 
 import * as Sentry from '@sentry/nextjs';
+import { SENTRY_DATA_COLLECTION } from './data-collection';
 
 /**
  * Initialize the Sentry SDK on the Edge runtime (Routing Middleware, Edge
@@ -15,6 +16,6 @@ export function registerEdge(): void {
     dsn,
     tracesSampleRate: Number(process.env['SENTRY_TRACES_SAMPLE_RATE'] ?? '0.1'),
     environment: process.env['NODE_ENV'] ?? 'development',
-    sendDefaultPii: true,
+    dataCollection: SENTRY_DATA_COLLECTION,
   });
 }
