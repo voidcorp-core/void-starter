@@ -189,7 +189,7 @@ Modules in `_modules/` are opt-in. To activate a real workspace package (Pattern
 - [`CLAUDE.md`](./CLAUDE.md) -- canonical entry point for AI assistants. Read first when the assistant joins a session.
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) -- topology, package boundaries, layering rules, build-time module activation.
 - [`docs/PATTERNS.md`](./docs/PATTERNS.md) -- file naming, service layout, code style, conventional commits.
-- [`docs/DECISIONS.md`](./docs/DECISIONS.md) -- ADR-lite log of every non-obvious choice. Read before challenging an existing decision.
+- [`docs/decisions-log/`](./docs/decisions-log/) -- one immutable record per non-obvious choice. Read before challenging an existing decision. [`docs/DECISIONS.md`](./docs/DECISIONS.md) is the frozen snapshot behind the numbered "ADR NN" references.
 - [`docs/AUTH.md`](./docs/AUTH.md) -- Better-Auth integration, RBAC, magic link flow, the Clerk swap procedure.
 - [`docs/CACHING.md`](./docs/CACHING.md) -- Cache Components conventions, tag taxonomy, `updateTag` write paths.
 - [`docs/SECURITY.md`](./docs/SECURITY.md) -- OWASP Top 10 mapping, RGPD checklist, env var hygiene, secret rotation.
@@ -202,7 +202,7 @@ Modules in `_modules/` are opt-in. To activate a real workspace package (Pattern
 
 ## Contributing
 
-This repo enforces conventional commits via Lefthook pre-commit hooks (Biome, gitleaks, type-check, commitlint) and protects `main` via the branch protection rules described in `docs/CI.md`. Any non-obvious decision lands in `docs/DECISIONS.md` in the same PR. Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guide.
+This repo enforces conventional commits via Lefthook pre-commit hooks (Biome, gitleaks, type-check, commitlint) and protects `main` via the branch protection rules described in `docs/CI.md`. Any non-obvious decision lands as a new record under `docs/decisions-log/` in the same PR. Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guide.
 
 ## License
 

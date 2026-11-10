@@ -1,3 +1,14 @@
+# Decisions log
+
+Each current decision is an immutable file under `docs/decisions-log/`. Create one with
+`void-machine decisions new`, and render the current projection with
+`void-machine decisions render`.
+
+> **Frozen legacy snapshot.** The entries below are preserved as written. They were migrated
+> into docs/decisions-log/ and are no longer the source; edit the records, not this file.
+
+---
+
 # Architecture Decisions
 
 This file is an ADR-lite log of non-obvious architectural choices made for this starter. Each entry captures **what we decided, why, what we rejected, and when to revisit**.
@@ -1739,3 +1750,4 @@ This file is an ADR-lite log of non-obvious architectural choices made for this 
   `@repo/auth` integration suites that need a database stay skipped locally and run in CI.
 - **When to revisit:** On every dependency update, remove each override whose owners resolve a
   patched release themselves. Move to 1.8 deliberately, after reading its upgrade guide.
+
