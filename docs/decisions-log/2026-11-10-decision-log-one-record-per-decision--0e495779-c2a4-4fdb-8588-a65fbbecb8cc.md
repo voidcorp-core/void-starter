@@ -36,6 +36,9 @@ Negative:
 - The 73 migrated records carry no ADR number. Existing "ADR NN" and "entry NN" references in the
   docs and code comments keep resolving through the frozen snapshot, which therefore stays in the
   repo rather than being deleted.
+- Biome excludes `docs/decisions-log/` and `docs/DECISIONS.md`: its Markdown formatter does not
+  recognise front matter and would rewrite every record, and neither path may change once merged.
+  The one record written earlier under `docs/decisions/` moved here in its authored form.
 
 ## Alternatives considered
 
