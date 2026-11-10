@@ -1,5 +1,5 @@
 import { defaultSecurityHeaders } from '@repo/core/security-headers';
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 import { withWorkflow } from 'workflow/next';
 

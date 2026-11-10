@@ -23,7 +23,7 @@
     "@repo/sentry": "workspace:*",
     "@repo/storage-r2": "workspace:*",
     "@repo/ui": "workspace:*",
-    "@sentry/nextjs": "^10.78.0",
+    "@sentry/nextjs": "^11.12.0",
     "better-auth": "~1.7.19",
     "next": "^16.4.5",
     "react": "^19.3.1",

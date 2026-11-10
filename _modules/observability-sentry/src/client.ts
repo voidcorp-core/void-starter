@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
+import { SENTRY_DATA_COLLECTION } from './data-collection';
 
 /**
  * Initialize the Sentry SDK in the browser.
@@ -20,14 +21,14 @@ export function initSentryClient(): void {
     dsn,
     tracesSampleRate: Number(process.env['NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE'] ?? '0.1'),
     environment: process.env['NODE_ENV'] ?? 'development',
-    sendDefaultPii: true,
+    dataCollection: SENTRY_DATA_COLLECTION,
     // The tunnel route is configured in next.config.ts via
     // withSentryConfig(..., { tunnelRoute: '/sentry-tunnel' }).
   });
 }
 
 /**
- * Required by `@sentry/nextjs` 10.x to instrument App Router navigation
+ * Required by `@sentry/nextjs` to instrument App Router navigation
  * transitions. Must be re-exported from `instrumentation-client.ts` as a
  * top-level export named `onRouterTransitionStart` for Next.js to pick it up.
  */

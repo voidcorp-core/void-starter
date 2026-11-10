@@ -11,7 +11,7 @@ Every rule here reflects code that already ships in the repo. If you find code t
 The starter ships secure-by-default substrates and documents which primitive addresses which class of risk. Three rules govern every change:
 
 - **Defense in depth.** Validate at every boundary (`defineAction`, `defineFormAction` Zod parse), authorize at the service layer (`requireRole`, `policy.ts`), and enforce headers at the framework layer (`defaultSecurityHeaders` + `next.config.ts`).
-- **Sovereign by default.** No user data leaves the deploy unless an `_modules/*` integration explicitly takes it there (Sentry, PostHog, Resend). See ADR 02 and ADR 04.
+- **Sovereign by default.** No user data leaves the deploy unless an `_modules/*` integration explicitly takes it there (Sentry, PostHog, Resend). See ADR 02 and ADR 04. When Sentry is on, it never receives request or response bodies, bound SQL parameters, queue payloads or stack-frame local variables: `_modules/observability-sentry/src/data-collection.ts` owns that policy for all three runtimes.
 - **Loud failures.** Missing env vars throw at command-time via `required()` (ADR 13). Unsafe `console.log`, raw `process.env`, or bare `'use server'` are forbidden by the patterns doc -- a reviewer or CI catches them before they ship.
 
 ---
@@ -199,11 +199,12 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
   reproducible. Remove the pin once the owner requires a patched minimum and audit
   remains green. See [the advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).
 
-- **Range-crossing glob and minimatch overrides (2026-11-10).** Sentry 10 bundler plugins
-  hold `glob` ^13, and `@oclif/core`, `@swc/cli`, `@vercel/queue` and `filelist` hold
-  `minimatch` ^5 to ^10; the `glob` 13 and `minimatch` 9 and 10 ranges are vulnerable. `glob` 14.0.4 and `minimatch` 11.0.5 are pinned because every owner calls
-  only `glob()`, `minimatch()` or `minimatch.match()`, which both majors keep. Remove
-  `glob` with the Sentry 11 upgrade, and `minimatch` once its owners require 11. See ADR 73.
+- **Range-crossing minimatch override (2026-11-10).** `@oclif/core`, `@swc/cli`,
+  `@vercel/queue` and `filelist` hold `minimatch` ^5 to ^10, and the 9 and 10 ranges are
+  vulnerable. `minimatch` 11.0.5 is pinned because every owner calls only `minimatch()` or
+  `minimatch.match()`, which 11 keeps. Remove it once its owners require 11. See ADR 73. The
+  companion `glob` 14 override was dropped with the Sentry 11 upgrade, whose bundler plugins
+  require `glob` ^14 themselves.
 
 ---
 

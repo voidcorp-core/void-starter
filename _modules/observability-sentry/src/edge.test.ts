@@ -7,6 +7,7 @@ vi.mock('@sentry/nextjs', () => ({
 }));
 
 import * as Sentry from '@sentry/nextjs';
+import { SENTRY_DATA_COLLECTION } from './data-collection';
 import { registerEdge } from './edge';
 
 describe('registerEdge', () => {
@@ -28,5 +29,9 @@ describe('registerEdge', () => {
     process.env['SENTRY_DSN'] = 'https://fake@example.ingest.sentry.io/1';
     registerEdge();
     expect(Sentry.init).toHaveBeenCalledTimes(1);
+    expect(Sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({ dataCollection: SENTRY_DATA_COLLECTION }),
+    );
+    expect(vi.mocked(Sentry.init).mock.calls[0]?.[0]).not.toHaveProperty('sendDefaultPii');
   });
 });

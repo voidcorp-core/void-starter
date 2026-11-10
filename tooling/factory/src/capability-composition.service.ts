@@ -122,7 +122,7 @@ function createWebPackageJson(manifest: BuildManifest): GeneratedFile {
   }
   if (usesSentry) {
     dependencies['@repo/sentry'] = 'workspace:*';
-    dependencies['@sentry/nextjs'] = '^10.68.0';
+    dependencies['@sentry/nextjs'] = '^11.12.0';
   }
   if (usesClerk) {
     dependencies['@clerk/nextjs'] = '^7.6.0';
@@ -228,7 +228,7 @@ function createNextConfig(manifest: BuildManifest): GeneratedFile {
 
   const imports = [
     "import { defaultSecurityHeaders } from '@repo/core/security-headers';",
-    ...(usesSentry ? ["import { withSentryConfig } from '@sentry/nextjs';"] : []),
+    ...(usesSentry ? ["import { withSentryConfig } from '@sentry/nextjs/config';"] : []),
     "import type { NextConfig } from 'next';",
     ...(usesDurableJobs ? ["import { withWorkflow } from 'workflow/next';"] : []),
   ].join('\n');
