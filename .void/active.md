@@ -13,11 +13,11 @@ tracker:
   doneStates: [Done]
 humanGates: [DEV-688, DEV-691, DEV-692]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   enabled: true
   clusterSize: 3
-  base: main
-  mergeGate: human
+  base: develop
+  deployBranch: main
   verifyCommands:
     - [bun, install, --frozen-lockfile]
     - [bun, run, audit]
@@ -44,4 +44,6 @@ DEV-690 are also done; DEV-692 carries the final doctrine, lockfile, verificatio
 gates. Every remaining gate requires explicit human approval.
 
 Autopilot execution is enabled and sequential for every planned Factory, documentation, and active
-program path. Lockfile changes, checkpoint continuation, and merge remain human-controlled.
+program path. Lockfile changes and checkpoint continuation remain human-controlled.
+Reviewed ticket branches merge automatically into `develop`; only promotion from `develop`
+to `main` requires human approval.
