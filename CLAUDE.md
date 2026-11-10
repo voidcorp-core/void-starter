@@ -37,7 +37,7 @@ Run `void-machine doctor` to verify the install.
 
 This is the void-starter repo. Read these files in order before writing code:
 
-1. `docs/DECISIONS.md` -- non-obvious choices, alternatives rejected, do NOT re-litigate
+1. `docs/decisions-log/` -- non-obvious choices, alternatives rejected, do NOT re-litigate (one immutable record per decision; `docs/DECISIONS.md` is the frozen snapshot that the numbered "ADR NN" references point to)
 2. `docs/PATTERNS.md` -- KISS / DRY / SoC + file naming + service layout
 3. `docs/ARCHITECTURE.md` -- package boundaries + dependency direction
 
@@ -67,7 +67,7 @@ For specific tasks:
 ## Meta-rules
 
 - Any new convention MUST be added to the matching `docs/*.md` in the same commit
-- Any non-obvious decision (where a credible alternative exists) MUST be logged in `docs/DECISIONS.md`
+- Any non-obvious decision (where a credible alternative exists) MUST be recorded as a new file under `docs/decisions-log/` via `void-machine decisions new`; never edit `docs/DECISIONS.md` or an existing record (supersede it instead)
 - Removed concepts must be removed from the docs at the same time
 - Unit tests run through `bun run test` from the root (Turborepo fans out to each workspace's own vitest config); `bunx vitest run` only works from inside a package, never from the root, where it would collect the Playwright specs and the jsdom suites with no environment
 - E2E tests run through `bun run test:e2e` from `apps/web`; do not skip TDD when adding business logic

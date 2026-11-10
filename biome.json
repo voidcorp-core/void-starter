@@ -2,6 +2,6 @@
   "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
   "extends": ["./packages/config/biome.base.json"],
   "files": {
-    "includes": ["!.claude"]
+    "includes": ["!.claude", "!docs/decisions-log", "!docs/DECISIONS.md"]
   }
 }

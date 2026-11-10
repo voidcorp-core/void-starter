@@ -71,4 +71,4 @@ able to answer three questions from memory after reading these examples:
 2. Where does auth live? (`.actions.ts` via `defineFormAction`, never inline)
 3. What does the barrel export? (component + types only, no internals)
 
-Deviating from this structure requires an ADR entry in `docs/DECISIONS.md`.
+Deviating from this structure requires a decision record under `docs/decisions-log/`.
