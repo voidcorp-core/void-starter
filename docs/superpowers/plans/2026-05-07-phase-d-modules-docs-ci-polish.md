@@ -9,6 +9,7 @@
 **Reference:** `context.md` Modules system + Documentation policy + Security and RGPD, `starter-plan.md` Steps 10-14, `docs/DECISIONS.md` (all 10 entries).
 
 **Pre-conditions:**
+
 - `git tag phase-c-complete` exists on origin
 - `apps/web` runs end-to-end (auth flows verified manually)
 - All unit tests pass (Vitest + Playwright)
@@ -18,6 +19,7 @@
 ## Phase A + B + C learnings inherited
 
 Read the prior phase plans' "learnings inherited" sections. Critical reminders unchanged. New learnings from Phase C:
+
 - `experimental.cacheComponents: true` enabled in `next.config.ts`; verify the flag is still under experimental in current Next 16.x.
 - `transpilePackages` must list every consumed `@repo/*` package.
 - E2E auth tests rely on a live DB and the dev server; CI must replicate this via service container + parallel `bun run dev`.
@@ -304,6 +306,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 - [ ] **Create the package** with an alternative `auth.repository.ts` that wraps Clerk and exposes the same surface as `@repo/auth`'s repository (so the swap is one-file).
 
 The README documents the swap procedure:
+
 1. Replace `packages/auth/src/auth.repository.ts` with the Clerk version (copy from `_modules/auth-clerk/src/auth.repository.ts`)
 2. Update `packages/auth/package.json` deps: replace `better-auth` with `@clerk/nextjs`
 3. Update env vars: replace `BETTER_AUTH_*` and `GOOGLE_*` with `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
@@ -365,6 +368,7 @@ entry 11). This module documents the rare migration path to a self-hosted
 Postgres on a VPS or your own infrastructure.
 
 The README documents:
+
 - When to activate this module: data sovereignty hard requirement (regulated
   industries, specific country/hardware), cost optimization at scale (>$500/mo
   Neon bill), exotic Postgres extensions Neon does not support, or contractual
@@ -405,6 +409,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D16: docs/PATTERNS.md
 
 **Sections:**
+
 - Principles: KISS, DRY, SoC (3 paragraphs max)
 - File naming conventions
 - Service file layout (5 standard + 5 optional layers, per DECISIONS.md entry 08)
@@ -420,6 +425,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D17: docs/ARCHITECTURE.md
 
 **Sections:**
+
 - Topology overview (apps, packages, _modules)
 - Package boundary table: tier 1 (always-on) vs tier 2 (opt-in via env)
 - Layering rules with the dependency graph (component -> service -> repository -> I/O)
@@ -433,6 +439,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D18: docs/SECURITY.md
 
 **Sections:**
+
 - OWASP Top 10 mapping (each item with a pointer to the primitive that addresses it)
 - RGPD checklist with primitive references
 - Secret management (env validation, never commit secrets, gitleaks pre-commit)
@@ -447,6 +454,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D19: docs/AUTH.md
 
 **Sections:**
+
 - Public API of `@repo/auth`
 - Sign-in flow diagram (email/password, Google OAuth, magic link)
 - Session lifecycle
@@ -460,6 +468,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D20: docs/CACHING.md
 
 **Sections:**
+
 - Cache Components in Next 16: `"use cache"` directive, `cacheTag`, `cacheLife`
 - Convention: cache lives at service layer for reads
 - Convention: `updateTag()` lives in actions for writes
@@ -472,6 +481,7 @@ The meta-rule: every convention reflected in code must appear in the matching `d
 ### Task D21: docs/MODULES.md
 
 **Sections:**
+
 - Catalogue of all modules with state (real/placeholder)
 - Activation pattern A (real workspace package) vs pattern B (copy-paste)
 - How to write a new module: package.json shape, env var declaration, instrumentation hook (server) or AnalyticsProvider-style (client)
@@ -501,6 +511,7 @@ This is the void-starter repo. Read these files in order before writing code:
 3. `docs/ARCHITECTURE.md` - package boundaries + dependency direction
 
 For specific tasks:
+
 - Touching auth: read `docs/AUTH.md` + the canonical service `packages/auth/`
 - Touching cache: read `docs/CACHING.md`
 - Touching security: read `docs/SECURITY.md`
@@ -603,7 +614,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.13'
+          bun-version: "1.3.13"
       - name: Cache bun + turbo
         uses: actions/cache@v4
         with:
@@ -652,7 +663,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.13'
+          bun-version: "1.3.13"
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bunx drizzle-kit migrate
       - run: cd apps/web && bunx playwright install --with-deps chromium
@@ -718,6 +729,7 @@ Push a small change to a feature branch, open a PR, verify CI runs both jobs and
 ### Task D31: VS Code workspace settings
 
 **Files:**
+
 - Create: `.vscode/settings.json`
 - Create: `.vscode/extensions.json`
 
@@ -788,6 +800,7 @@ trim_trailing_whitespace = false
 **Files:** `README.md` (replace the seed)
 
 Sections:
+
 - Project description (1-2 paragraphs)
 - Stack overview (table from context.md)
 - Topology (tree diagram)
@@ -867,6 +880,7 @@ This proves the build-time activation pattern works end-to-end.
 ### Task D39: docs sanity check
 
 Read every doc/*.md from top to bottom. Confirm:
+
 - Every conventionn the doc claims is implemented in code
 - Every code primitive has a doc reference
 - No dangling TODOs
@@ -890,6 +904,7 @@ git push --tags
 ## Phase D done. The starter is ready to template.
 
 After completion:
+
 - Push announcement to whatever channel Folpe uses (Linear, Slack, etc.)
 - Begin templating MVPs from the starter and iterate based on real-world friction
 - Future work tracked separately:

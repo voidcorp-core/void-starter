@@ -1,7 +1,7 @@
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
- * Users table -- Better-Auth canonical schema (1.6.x) including the admin
+ * Users table -- Better-Auth canonical schema (1.6.x, unchanged in 1.7.x) including the admin
  * plugin's ban controls, plus a Void soft-delete extension.
  *
  *   - `role` (admin-plugin convention, kept as text not enum so new roles

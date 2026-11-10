@@ -6,19 +6,19 @@ The starter follows a Wing Chun engineering philosophy: maximum efficiency, econ
 
 ## Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Topology | Turborepo + Bun workspaces | DAG-aware builds, fast install (ADR 01) |
-| Framework | Next.js 16.3 / React 19.3 | Cache Components stable, App Router |
-| Language | TypeScript 7.0 strict | Native compiler; Expo blueprint tracks its SDK-supported TypeScript |
-| Styling | Tailwind CSS v4 with `@theme` | Token-based design system, zero-runtime |
-| UI | Radix-backed primitives via `@repo/ui` | Accessibility for free (ADR 16, 18, 19) |
-| Auth | Better-Auth (default), Clerk (opt-in) | Data sovereignty (ADR 02) |
-| DB | Drizzle + Neon Postgres | Branch-per-environment (ADR 11, 12) |
-| Logger | pino | Structured logs, dev-pretty (ADR 22) |
-| Tooling | Biome, Lefthook, knip, gitleaks | Quality gates from commit one |
-| Tests | Vitest, Playwright | Unit, integration, E2E |
-| Deploy | Vercel-ready, monorepo-aware | Auto preview branches |
+| Layer     | Choice                                 | Why                                                                 |
+| --------- | -------------------------------------- | ------------------------------------------------------------------- |
+| Topology  | Turborepo + Bun workspaces             | DAG-aware builds, fast install (ADR 01)                             |
+| Framework | Next.js 16.3 / React 19.3              | Cache Components stable, App Router                                 |
+| Language  | TypeScript 7.0 strict                  | Native compiler; Expo blueprint tracks its SDK-supported TypeScript |
+| Styling   | Tailwind CSS v4 with `@theme`          | Token-based design system, zero-runtime                             |
+| UI        | Radix-backed primitives via `@repo/ui` | Accessibility for free (ADR 16, 18, 19)                             |
+| Auth      | Better-Auth (default), Clerk (opt-in)  | Data sovereignty (ADR 02)                                           |
+| DB        | Drizzle + Neon Postgres                | Branch-per-environment (ADR 11, 12)                                 |
+| Logger    | pino                                   | Structured logs, dev-pretty (ADR 22)                                |
+| Tooling   | Biome, Lefthook, knip, gitleaks        | Quality gates from commit one                                       |
+| Tests     | Vitest, Playwright                     | Unit, integration, E2E                                              |
+| Deploy    | Vercel-ready, monorepo-aware           | Auto preview branches                                               |
 
 Optional opt-in modules in `_modules/`: Sentry, PostHog, Stripe, Resend, Clerk (auth alternative), Payload CMS, audit-log, cookie consent, Upstash rate limit, next-intl, self-hosted Postgres.
 
@@ -164,7 +164,7 @@ below clones the complete source baseline.
    ```
 
 The commands above explicitly load the root environment file for each workspace.
-   Run the following command in a second terminal from the repository root.
+Run the following command in a second terminal from the repository root.
 
 6. **(Optional) Run E2E tests:**
 

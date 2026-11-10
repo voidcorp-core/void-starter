@@ -33,30 +33,30 @@ Build a production-grade Next.js 16 monorepo starter that serves as the foundati
 
 ## Stack (locked)
 
-| Layer | Choice | Why |
-|---|---|---|
-| Topology | Turborepo 2.x + Bun workspaces | Multi-target ready, build cache, mature |
-| Framework | Next.js 16.2 (App Router) | Latest stable, Turbopack default, React Compiler, Cache Components |
-| React | 19.2 | Comes with Next 16 |
-| Language | TypeScript 5.x strict | Non-negotiable |
-| Styling | Tailwind CSS v4 | Latest, design tokens via `@theme` |
-| Linting + Formatting | Biome | Single tool, no ESLint/Prettier conflicts |
-| Git hooks | Lefthook | Replaces Husky, faster, parallel |
-| Commit lint | commitlint + conventional commits | Standard |
-| Logger | Pino | Structured logs, pretty in dev |
-| Validation | Zod | Runtime + types |
-| Env validation | `@t3-oss/env-nextjs` | Server/client split, build-time safety |
-| Auth | Better-Auth | Open source, TS-first, multi-provider, data sovereignty, brand integrity |
-| ORM | Drizzle | Type-safe, Edge-compatible, aligned with other Void projects |
-| Tests unit | Vitest | Fast, native ESM |
-| Tests E2E | Playwright | Standard |
-| Dead code detection | knip | CI gate, prevents drift |
-| Secret scanning | gitleaks | Pre-commit hook |
-| Package manager | Bun | 10-25x faster installs, native workspaces |
-| Runtime (app) | Node.js | Next.js stability |
-| Runtime (scripts/workers) | Bun | Speed when standalone |
-| Updates | Renovate | Auto-merge patches, manual minor/major |
-| Deploy | Vercel (default) | Standard for Next.js, monorepo-aware |
+| Layer                     | Choice                            | Why                                                                      |
+| ------------------------- | --------------------------------- | ------------------------------------------------------------------------ |
+| Topology                  | Turborepo 2.x + Bun workspaces    | Multi-target ready, build cache, mature                                  |
+| Framework                 | Next.js 16.2 (App Router)         | Latest stable, Turbopack default, React Compiler, Cache Components       |
+| React                     | 19.2                              | Comes with Next 16                                                       |
+| Language                  | TypeScript 5.x strict             | Non-negotiable                                                           |
+| Styling                   | Tailwind CSS v4                   | Latest, design tokens via `@theme`                                       |
+| Linting + Formatting      | Biome                             | Single tool, no ESLint/Prettier conflicts                                |
+| Git hooks                 | Lefthook                          | Replaces Husky, faster, parallel                                         |
+| Commit lint               | commitlint + conventional commits | Standard                                                                 |
+| Logger                    | Pino                              | Structured logs, pretty in dev                                           |
+| Validation                | Zod                               | Runtime + types                                                          |
+| Env validation            | `@t3-oss/env-nextjs`              | Server/client split, build-time safety                                   |
+| Auth                      | Better-Auth                       | Open source, TS-first, multi-provider, data sovereignty, brand integrity |
+| ORM                       | Drizzle                           | Type-safe, Edge-compatible, aligned with other Void projects             |
+| Tests unit                | Vitest                            | Fast, native ESM                                                         |
+| Tests E2E                 | Playwright                        | Standard                                                                 |
+| Dead code detection       | knip                              | CI gate, prevents drift                                                  |
+| Secret scanning           | gitleaks                          | Pre-commit hook                                                          |
+| Package manager           | Bun                               | 10-25x faster installs, native workspaces                                |
+| Runtime (app)             | Node.js                           | Next.js stability                                                        |
+| Runtime (scripts/workers) | Bun                               | Speed when standalone                                                    |
+| Updates                   | Renovate                          | Auto-merge patches, manual minor/major                                   |
+| Deploy                    | Vercel (default)                  | Standard for Next.js, monorepo-aware                                     |
 
 ## Topology
 
@@ -109,9 +109,9 @@ Future targets without breaking changes: `apps/mobile/` (Expo), `apps/admin/` (N
 
 ### Package boundaries
 
-| Tier | Packages | Activation |
-|---|---|---|
-| Always-on (core) | `core`, `auth`, `db`, `ui`, `config` | Imported directly, no toggle |
+| Tier             | Packages                                                          | Activation                      |
+| ---------------- | ----------------------------------------------------------------- | ------------------------------- |
+| Always-on (core) | `core`, `auth`, `db`, `ui`, `config`                              | Imported directly, no toggle    |
 | Opt-in (modules) | `sentry`, `posthog`, `stripe`, `email-resend`, `auth-clerk`, etc. | Build-time via env var presence |
 
 A workspace package exists if and only if (a) it has a clear domain scope, OR (b) it will be consumed by 2+ apps. Resist sub-packages like `@repo/utils`, `@repo/constants`, `@repo/hooks`. Three similar lines is better than a premature abstraction.
@@ -194,6 +194,7 @@ Single source of truth: cache lives in the service layer.
 Optional packages are toggled by env var presence at build time. There is no runtime feature flag service. Activation requires a redeploy (Vercel rebuilds in ~30s on env change). This is intentional: build-time activation keeps the bundle minimal, the attack surface small, and aligns with the Next.js native pattern.
 
 - **Server-side opt-in**: `apps/web/src/instrumentation.ts` does conditional dynamic imports
+
   ```ts
   export async function register() {
     if (process.env.SENTRY_DSN) {
@@ -202,12 +203,15 @@ Optional packages are toggled by env var presence at build time. There is no run
     }
   }
   ```
+
   Result: lazy chunk, never loaded if env var absent.
 
 - **Client-side opt-in**: `NEXT_PUBLIC_*` env vars are inlined at build, enabling DCE
+
   ```ts
   if (process.env.NEXT_PUBLIC_POSTHOG_KEY) { /* ... */ }
   ```
+
   Result: branch eliminated at build if env var absent.
 
 ### Server Action wrapper
@@ -217,9 +221,9 @@ Optional packages are toggled by env var presence at build time. There is no run
 ```ts
 export const updateProfile = defineAction({
   schema: z.object({ name: z.string().min(1) }),
-  auth: 'required',                // or 'public', 'role:admin'
+  auth: 'required', // or 'public', 'role:admin'
   handler: async (input, ctx) => userService.updateProfile(ctx.user.id, input),
-})
+});
 ```
 
 Handles: Zod parsing, auth via `@repo/auth`, error normalization, structured logging via `@repo/core/logger`. Zero external dependency.
@@ -264,6 +268,7 @@ Modules live in `_modules/`. Workspaces config includes `_modules/*`, so most mo
 **Pattern B - Copy-paste**: when files must live inside the consuming app (e.g. specific page templates). README documents file paths and dependencies to add.
 
 Default modules at J0:
+
 - `_modules/auth-clerk/` - alternative auth backend (real package)
 - `_modules/observability-sentry/` - error tracking with tunnel proxy (real package)
 - `_modules/analytics-posthog/` - product analytics with rewrites proxy (real package)
@@ -311,17 +316,20 @@ If a doc grows past 600 lines, split it.
 ## Security and RGPD
 
 Primitives shipped in `@repo/core`:
+
 - `security-headers.ts` - CSP, HSTS, X-Frame-Options, Permissions-Policy defaults
 - `rate-limit.ts` - in-memory adapter, Upstash adapter via module
 - `sanitize.ts` - PII helpers (maskEmail, truncate)
 
 Conventions enforced:
+
 - Drizzle parameterized queries only (no raw SQL)
 - `@t3-oss/env-nextjs` validation at startup
 - Sessions: httpOnly + secure + sameSite=lax + rotation on login
 - Soft delete pattern with `deletedAt`, hard delete via cron in module
 
 OWASP Top 10 mapping (full detail in `docs/SECURITY.md`):
+
 - A01 Broken Access Control - policy layer + `requireRole()`
 - A02 Cryptographic Failures - secret env validation + HSTS + secure cookies
 - A03 Injection - Drizzle params + Zod input validation
@@ -334,6 +342,7 @@ OWASP Top 10 mapping (full detail in `docs/SECURITY.md`):
 - A10 SSRF - URL validation primitive in `@repo/core`
 
 RGPD checklist (full detail in `docs/SECURITY.md`):
+
 - Cookie consent - `_modules/cookie-consent/`
 - Data export endpoint - template in canonical examples
 - Data deletion (right to erasure) - soft delete + hard delete cron
@@ -346,6 +355,7 @@ RGPD checklist (full detail in `docs/SECURITY.md`):
 [gstack](https://github.com/garrytan/gstack) is user-level meta-tooling installed at `~/.claude/skills/gstack/`. It operates on top of the starter when working in any MVP: design brainstorming, code review, QA, security audit, ship workflows.
 
 The starter MUST NEVER:
+
 - Depend on gstack (must work without it installed)
 - Duplicate gstack features (no in-starter design orchestration, no comparison board, no model benchmark)
 

@@ -9,6 +9,7 @@ build/
 .next/
 out/
 *.tsbuildinfo
+.swc/
 
 # Turborepo
 .turbo/

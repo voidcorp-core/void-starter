@@ -2,7 +2,7 @@ import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
 
 /**
- * Accounts table — Better-Auth canonical schema (1.6.x). Stores OAuth
+ * Accounts table — Better-Auth canonical schema (1.6.x, unchanged in 1.7.x). Stores OAuth
  * provider links (providerId + accountId) and the email/password
  * credential hash (`password`) for the email-and-password plugin.
  *

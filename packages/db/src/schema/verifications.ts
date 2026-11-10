@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
- * Verifications table — Better-Auth canonical schema (1.6.x). Backs
+ * Verifications table — Better-Auth canonical schema (1.6.x, unchanged in 1.7.x). Backs
  * magic-link tokens, email-verification tokens, password-reset tokens,
  * and any other short-lived identifier/value pair the auth library
  * needs to persist with an expiry. The 1.6.x shape includes
