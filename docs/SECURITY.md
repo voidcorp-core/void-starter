@@ -199,6 +199,12 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
   reproducible. Remove the pin once the owner requires a patched minimum and audit
   remains green. See [the advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).
 
+- **Range-crossing glob and minimatch overrides (2026-11-10).** Sentry 10 bundler plugins
+  hold `glob` ^13 and Workflow tooling holds `minimatch` ^9 or ^10; both majors are
+  vulnerable. `glob` 14.0.4 and `minimatch` 11.0.5 are pinned because every owner calls
+  only `glob()`, `minimatch()` or `minimatch.match()`, which both majors keep. Remove
+  `glob` with the Sentry 11 upgrade, and `minimatch` once its owners require 11. See ADR 73.
+
 ---
 
 ## Cross-references
