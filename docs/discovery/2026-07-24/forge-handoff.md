@@ -78,23 +78,23 @@ surfaces:
 
 ## Doctrine de stack décidée
 
-| Charge | Défaut |
-|---|---|
-| Web Next.js | Vercel |
-| API HTTP/BFF | Vercel Functions |
-| Jobs durables | Vercel Workflows |
-| Cron critique | Cron vers Workflow idempotent |
-| Voix continue | WebRTC direct fournisseur |
-| État temps réel partagé | Cloudflare Durable Objects EU si nécessaire |
-| Service toujours actif | Render ou Fly seulement sur justification |
-| PostgreSQL | Neon + Drizzle |
-| Auth | Better Auth industrialisé |
-| Documents privés pérennes | Cloudflare R2 EU |
-| Assets simples | Vercel Blob possible |
-| Email | Resend |
-| Erreurs | Sentry |
-| Analytics produit | PostHog |
-| Mobile | Expo + EAS |
+| Charge                    | Défaut                                      |
+| ------------------------- | ------------------------------------------- |
+| Web Next.js               | Vercel                                      |
+| API HTTP/BFF              | Vercel Functions                            |
+| Jobs durables             | Vercel Workflows                            |
+| Cron critique             | Cron vers Workflow idempotent               |
+| Voix continue             | WebRTC direct fournisseur                   |
+| État temps réel partagé   | Cloudflare Durable Objects EU si nécessaire |
+| Service toujours actif    | Render ou Fly seulement sur justification   |
+| PostgreSQL                | Neon + Drizzle                              |
+| Auth                      | Better Auth industrialisé                   |
+| Documents privés pérennes | Cloudflare R2 EU                            |
+| Assets simples            | Vercel Blob possible                        |
+| Email                     | Resend                                      |
+| Erreurs                   | Sentry                                      |
+| Analytics produit         | PostHog                                     |
+| Mobile                    | Expo + EAS                                  |
 
 Next.js, Drizzle et Better Auth sont conservés. Neon Auth et TanStack Start restent à surveiller
 mais ne sont pas les défauts actuels. Clerk est un profil d'exception pour un besoin B2B/SSO ou

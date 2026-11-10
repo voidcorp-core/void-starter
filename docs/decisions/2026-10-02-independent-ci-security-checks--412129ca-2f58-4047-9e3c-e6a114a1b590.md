@@ -1,4 +1,5 @@
 ---
+
 schemaVersion: 1
 id: "adr:412129ca-2f58-4047-9e3c-e6a114a1b590"
 createdAt: "2026-10-02T15:05:00.000Z"

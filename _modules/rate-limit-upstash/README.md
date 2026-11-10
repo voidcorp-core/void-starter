@@ -10,9 +10,9 @@ Opt-in scaffold for an Upstash Redis adapter implementing the `RateLimiter` inte
 
 ## Required env vars
 
-| Variable | Type | Description |
-| --- | --- | --- |
-| `UPSTASH_REDIS_REST_URL` | public | REST endpoint URL of the Upstash Redis database (e.g. `https://eu1-foo-12345.upstash.io`). |
+| Variable                   | Type   | Description                                                                                          |
+| -------------------------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| `UPSTASH_REDIS_REST_URL`   | public | REST endpoint URL of the Upstash Redis database (e.g. `https://eu1-foo-12345.upstash.io`).           |
 | `UPSTASH_REDIS_REST_TOKEN` | secret | REST API token for the Upstash Redis database. Read-write scope is required for rate limit counters. |
 
 Both are auto-provisioned by the Vercel Marketplace integration when an Upstash Redis is added to a project. No manual copying needed if the integration is used.

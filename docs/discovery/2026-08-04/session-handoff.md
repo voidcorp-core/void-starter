@@ -11,13 +11,13 @@ manquante, pins de sécurité périmés). Plus rien n'est en attente sur le dép
 
 ## 1. Ce qui a été fusionné, et dans quel ordre
 
-| PR | Contenu | Merge |
-|---|---|---|
+| PR  | Contenu                                                 | Merge                              |
+| --- | ------------------------------------------------------- | ---------------------------------- |
 | #21 | `fix(storage-r2)`: endpoint composé avec la juridiction | `aa706d9`, dans la branche DEV-473 |
-| #20 | `feat(storage)`: profil documents privés EU | `95a45d0`, dans `main` |
-| #22 | `chore(deps)`: bump hebdomadaire | `a2f4b83`, dans `main` |
-| #24 | `fix(deps)`: pins de sécurité, voir section 3 | `60b13d6`, dans `main` |
-| #23 | `docs`: ADR 70 et le présent document | la PR qui porte ce fichier |
+| #20 | `feat(storage)`: profil documents privés EU             | `95a45d0`, dans `main`             |
+| #22 | `chore(deps)`: bump hebdomadaire                        | `a2f4b83`, dans `main`             |
+| #24 | `fix(deps)`: pins de sécurité, voir section 3           | `60b13d6`, dans `main`             |
+| #23 | `docs`: ADR 70 et le présent document                   | la PR qui porte ce fichier         |
 
 L'ordre n'était pas libre. #21 devait précéder #20 : sans elle, `storage.object-store.ts` compose
 `https://<account>.r2.cloudflarestorage.com`, hôte qui refuse un bucket à juridiction, donc `main`

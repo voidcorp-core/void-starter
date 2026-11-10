@@ -16,18 +16,18 @@ This is a per-MVP decision, not a global one. The starter's default stays Better
 
 ## Conceptual differences vs Better-Auth
 
-| Dimension | Better-Auth (default) | Clerk (this module) |
-| --- | --- | --- |
-| Data location | Your Postgres (`@repo/db`) | Clerk's infrastructure |
-| User table | `users` row owned by you | Clerk-owned; mirror via webhook if you need a local copy |
-| Session read | `getAuth().api.getSession({ headers })` | `auth()` reads `next/headers` internally; `currentUser()` returns the `User` |
-| Sign-in surface | `authClient` (browser fetch client) | `<SignIn />` / `<SignUp />` Clerk components |
-| Roles | `users.role` text column on your DB | `publicMetadata.role` on the Clerk user, or organization role |
-| Sign-out (server) | `getAuth().api.signOut({ headers })` | No server export; use `<UserButton>` or the `useClerk()` browser hook |
-| Auth handler | `apps/web/src/app/api/auth/[...all]/route.ts` (`toNextJsHandler`) | None; `clerkMiddleware()` in `apps/web/src/proxy.ts` handles auth |
-| Custom domain | Yes, via `BETTER_AUTH_URL` | Requires Clerk Pro (paid plan) |
-| Branding (free tier) | None (your code, your UI) | Clerk badge on hosted UI |
-| Cost | Self-hosted (your Vercel + Neon plan) | Free up to 10k MAU, then per-MAU |
+| Dimension            | Better-Auth (default)                                             | Clerk (this module)                                                          |
+| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Data location        | Your Postgres (`@repo/db`)                                        | Clerk's infrastructure                                                       |
+| User table           | `users` row owned by you                                          | Clerk-owned; mirror via webhook if you need a local copy                     |
+| Session read         | `getAuth().api.getSession({ headers })`                           | `auth()` reads `next/headers` internally; `currentUser()` returns the `User` |
+| Sign-in surface      | `authClient` (browser fetch client)                               | `<SignIn />` / `<SignUp />` Clerk components                                 |
+| Roles                | `users.role` text column on your DB                               | `publicMetadata.role` on the Clerk user, or organization role                |
+| Sign-out (server)    | `getAuth().api.signOut({ headers })`                              | No server export; use `<UserButton>` or the `useClerk()` browser hook        |
+| Auth handler         | `apps/web/src/app/api/auth/[...all]/route.ts` (`toNextJsHandler`) | None; `clerkMiddleware()` in `apps/web/src/proxy.ts` handles auth            |
+| Custom domain        | Yes, via `BETTER_AUTH_URL`                                        | Requires Clerk Pro (paid plan)                                               |
+| Branding (free tier) | None (your code, your UI)                                         | Clerk badge on hosted UI                                                     |
+| Cost                 | Self-hosted (your Vercel + Neon plan)                             | Free up to 10k MAU, then per-MAU                                             |
 
 ## Swap procedure
 
@@ -51,21 +51,21 @@ Five steps. Do them all in one PR; partial swaps leave the app broken.
 
 3. **Update env vars.** Remove the Better-Auth block from your environment, add the Clerk block. The Better-Auth call sites in `auth.repository.ts` go away with the file replacement; `auth.client.ts` and `auth-action.ts` need their imports re-pointed (see steps 4 and 5).
 
-   | Remove | Add |
-   | --- | --- |
-   | `BETTER_AUTH_SECRET` | `CLERK_SECRET_KEY` |
-   | `BETTER_AUTH_URL` | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` |
-   | `GOOGLE_CLIENT_ID` | (Google OAuth lives in Clerk dashboard) |
+   | Remove                 | Add                                     |
+   | ---------------------- | --------------------------------------- |
+   | `BETTER_AUTH_SECRET`   | `CLERK_SECRET_KEY`                      |
+   | `BETTER_AUTH_URL`      | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`     |
+   | `GOOGLE_CLIENT_ID`     | (Google OAuth lives in Clerk dashboard) |
    | `GOOGLE_CLIENT_SECRET` | (Google OAuth lives in Clerk dashboard) |
 
    Optional Clerk env vars:
 
-   | Variable | Purpose |
-   | --- | --- |
-   | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Override the default `/sign-in` route. |
-   | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Override the default `/sign-up` route. |
-   | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Where to send users post sign-in. |
-   | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Where to send users post sign-up. |
+   | Variable                                          | Purpose                                |
+   | ------------------------------------------------- | -------------------------------------- |
+   | `NEXT_PUBLIC_CLERK_SIGN_IN_URL`                   | Override the default `/sign-in` route. |
+   | `NEXT_PUBLIC_CLERK_SIGN_UP_URL`                   | Override the default `/sign-up` route. |
+   | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Where to send users post sign-in.      |
+   | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Where to send users post sign-up.      |
 
 4. **Replace the Better-Auth catch-all handler with Clerk middleware.** Delete `apps/web/src/app/api/auth/[...all]/route.ts` — Clerk does not use a catch-all route handler. Replace the body of `apps/web/src/proxy.ts` with `clerkMiddleware()` from `@clerk/nextjs/server`:
 

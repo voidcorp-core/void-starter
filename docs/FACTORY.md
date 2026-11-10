@@ -51,7 +51,7 @@ surfaces:
   mobile:
     adapter: expo-eas | none
     ios_bundle_identifier: com.example.product # required for expo-eas
-    android_package: com.example.product       # required for expo-eas
+    android_package: com.example.product # required for expo-eas
   worker: persistent-node | none
 ```
 
@@ -79,28 +79,28 @@ single RPC abstraction.
 
 ## 5. Workload routing
 
-| Workload | Default | Escalation trigger |
-|---|---|---|
-| Next.js web, SSR, RSC | Vercel | Framework incompatible with Vercel |
-| HTTP API and BFF | Vercel Functions | Persistent process or native runtime |
+| Workload                         | Default                                             | Escalation trigger                       |
+| -------------------------------- | --------------------------------------------------- | ---------------------------------------- |
+| Next.js web, SSR, RSC            | Vercel                                              | Framework incompatible with Vercel       |
+| HTTP API and BFF                 | Vercel Functions                                    | Persistent process or native runtime     |
 | Durable jobs and agent workflows | Vercel Workflows (US `iad1` backend, see section 8) | Container, Python or specialized compute |
-| Critical schedules | Vercel Cron -> idempotent Workflow | External scheduler required |
-| Continuous voice | Client -> provider WebRTC | Provider constraint |
-| Shared realtime state | Cloudflare Durable Objects EU | No shared state: do not provision |
-| Always-on Node service | Render, then Fly for custom needs | No persistent workload: do not provision |
+| Critical schedules               | Vercel Cron -> idempotent Workflow                  | External scheduler required              |
+| Continuous voice                 | Client -> provider WebRTC                           | Provider constraint                      |
+| Shared realtime state            | Cloudflare Durable Objects EU                       | No shared state: do not provision        |
+| Always-on Node service           | Render, then Fly for custom needs                   | No persistent workload: do not provision |
 
 Vercel remains the center of gravity, not the universal runtime. Cloudflare is an approved second
 provider. A third compute provider requires a concrete workload and an explicit plan.
 
 ## 6. Data and storage defaults
 
-| Capability | Default |
-|---|---|
-| PostgreSQL | Neon EU + Drizzle |
-| Private durable documents | Cloudflare R2 with EU jurisdiction |
-| Simple app assets | Vercel Blob allowed |
-| Strict WORM/legal hold | AWS S3 EU profile |
-| Vector search at initial scale | pgvector in Neon |
+| Capability                     | Default                            |
+| ------------------------------ | ---------------------------------- |
+| PostgreSQL                     | Neon EU + Drizzle                  |
+| Private durable documents      | Cloudflare R2 with EU jurisdiction |
+| Simple app assets              | Vercel Blob allowed                |
+| Strict WORM/legal hold         | AWS S3 EU profile                  |
+| Vector search at initial scale | pgvector in Neon                   |
 
 Application code depends on project-owned ports such as `ObjectStorage`, not directly on a
 provider throughout the codebase. Provider adapters must be replaceable without rewriting domain

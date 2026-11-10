@@ -18,18 +18,18 @@ The starter ships secure-by-default substrates and documents which primitive add
 
 ## 2. OWASP Top 10 (2021) mapping
 
-| OWASP # | Risk | Primitive in this starter |
-|---|---|---|
-| A01 | Broken Access Control | `requireAuth`, `requireRole` (`packages/auth/src/auth.service.ts`); `auth.policy.ts` per service; `defineAction({ auth: 'role:admin' })` (`packages/auth/src/auth-action.ts`) |
-| A02 | Cryptographic Failures | Better-Auth password hashing (Argon2id); Vercel TLS termination at the edge; httpOnly Secure SameSite=Lax cookies (Better-Auth defaults, `packages/auth/src/auth.repository.ts`); no plaintext storage anywhere in `packages/db/src/schema/*` |
-| A03 | Injection | Drizzle parameterized queries (`packages/db/src/schema/*`, every repository); Zod validation at every boundary via `defineAction` and `defineFormAction` (`packages/core/src/server-action.ts`); no string interpolation into SQL or shell |
-| A04 | Insecure Design | ADR-driven architecture (`docs/DECISIONS.md`, 25 entries); service-layer authorization separated via `policy.ts` (ADR 08); component to action to service to repository import direction enforced (ADR 03 and `docs/ARCHITECTURE.md` section 3) |
-| A05 | Security Misconfiguration | `defaultSecurityHeaders()` from `@repo/core/security-headers` wired in `apps/web/next.config.ts`; no debug routes; no public source maps unless `_modules/observability-sentry` uploads them privately to Sentry |
-| A06 | Vulnerable and Outdated Components | `bun audit` blocks CI on published advisories, and only on published ones: it detects, it does not upgrade; root overrides patch lagging transitive ranges (ADR 36); no automated update mechanism remains since ADR 72 retired Renovate, so upgrades are manual and unscheduled; `bunx knip` keeps the dependency surface minimal but says nothing about freshness |
-| A07 | Identification and Authentication Failures | Better-Auth session rotation on auth-state change; httpOnly Secure cookies; magic-link expiry (`verifications.expiresAt`); role-based admin (`admin` plugin in `auth.repository.ts`); `requireEmailVerification: true` (Better-Auth config) |
-| A08 | Software and Data Integrity Failures | Conventional commits enforced by review; signed merges recommended at the GitHub branch-protection layer; pre-commit hooks (`lefthook.yml`); no `eval`, no dynamic `require`, no untrusted code paths in core |
-| A09 | Security Logging and Monitoring Failures | `pino` structured logger (ADR 22, `packages/core/src/logger.ts`); captured by Vercel function logs and Sentry when enabled (`_modules/observability-sentry`) |
-| A10 | Server-Side Request Forgery (SSRF) | No user-controlled outbound URLs in core; modules that perform outbound calls (`_modules/payment-stripe`, `_modules/email-resend`) use vendor SDKs with allow-listed endpoints; rate-limited via `@repo/core/rate-limit` once a path goes live |
+| OWASP # | Risk                                       | Primitive in this starter                                                                                                                                                                                                                                                                                                                                           |
+| ------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A01     | Broken Access Control                      | `requireAuth`, `requireRole` (`packages/auth/src/auth.service.ts`); `auth.policy.ts` per service; `defineAction({ auth: 'role:admin' })` (`packages/auth/src/auth-action.ts`)                                                                                                                                                                                       |
+| A02     | Cryptographic Failures                     | Better-Auth password hashing (Argon2id); Vercel TLS termination at the edge; httpOnly Secure SameSite=Lax cookies (Better-Auth defaults, `packages/auth/src/auth.repository.ts`); no plaintext storage anywhere in `packages/db/src/schema/*`                                                                                                                       |
+| A03     | Injection                                  | Drizzle parameterized queries (`packages/db/src/schema/*`, every repository); Zod validation at every boundary via `defineAction` and `defineFormAction` (`packages/core/src/server-action.ts`); no string interpolation into SQL or shell                                                                                                                          |
+| A04     | Insecure Design                            | ADR-driven architecture (`docs/DECISIONS.md`, 25 entries); service-layer authorization separated via `policy.ts` (ADR 08); component to action to service to repository import direction enforced (ADR 03 and `docs/ARCHITECTURE.md` section 3)                                                                                                                     |
+| A05     | Security Misconfiguration                  | `defaultSecurityHeaders()` from `@repo/core/security-headers` wired in `apps/web/next.config.ts`; no debug routes; no public source maps unless `_modules/observability-sentry` uploads them privately to Sentry                                                                                                                                                    |
+| A06     | Vulnerable and Outdated Components         | `bun audit` blocks CI on published advisories, and only on published ones: it detects, it does not upgrade; root overrides patch lagging transitive ranges (ADR 36); no automated update mechanism remains since ADR 72 retired Renovate, so upgrades are manual and unscheduled; `bunx knip` keeps the dependency surface minimal but says nothing about freshness |
+| A07     | Identification and Authentication Failures | Better-Auth session rotation on auth-state change; httpOnly Secure cookies; magic-link expiry (`verifications.expiresAt`); role-based admin (`admin` plugin in `auth.repository.ts`); `requireEmailVerification: true` (Better-Auth config)                                                                                                                         |
+| A08     | Software and Data Integrity Failures       | Conventional commits enforced by review; signed merges recommended at the GitHub branch-protection layer; pre-commit hooks (`lefthook.yml`); no `eval`, no dynamic `require`, no untrusted code paths in core                                                                                                                                                       |
+| A09     | Security Logging and Monitoring Failures   | `pino` structured logger (ADR 22, `packages/core/src/logger.ts`); captured by Vercel function logs and Sentry when enabled (`_modules/observability-sentry`)                                                                                                                                                                                                        |
+| A10     | Server-Side Request Forgery (SSRF)         | No user-controlled outbound URLs in core; modules that perform outbound calls (`_modules/payment-stripe`, `_modules/email-resend`) use vendor SDKs with allow-listed endpoints; rate-limited via `@repo/core/rate-limit` once a path goes live                                                                                                                      |
 
 Each row points to the file the reader can open today. Where a primitive is opt-in, the row points at the `_modules/*` path that activates it.
 
@@ -143,11 +143,11 @@ The starter ships one soft-delete column (`users.deletedAt`) and otherwise prefe
 - **Cascade: declare `onDelete` explicitly in the Drizzle schema.** Never rely on the Postgres default (no action). Every foreign key referencing a deletable parent declares either `onDelete: 'cascade'` (drop dependent rows), `onDelete: 'set null'` (orphan), or `onDelete: 'restrict'` (block deletion).
 - **Current cascade map:**
 
-  | Child | Parent | onDelete | Why |
-  |---|---|---|---|
-  | `accounts.userId` | `users.id` | cascade | Removing a user must drop every linked OAuth identity (`packages/db/src/schema/accounts.ts`) |
-  | `sessions.userId` | `users.id` | cascade | Removing a user must drop every outstanding session (`packages/db/src/schema/sessions.ts`) |
-  | `verifications.identifier` | n/a | n/a | Verifications use a string identifier, not an FK; expiry is the cleanup mechanism |
+  | Child                      | Parent     | onDelete | Why                                                                                          |
+  | -------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------- |
+  | `accounts.userId`          | `users.id` | cascade  | Removing a user must drop every linked OAuth identity (`packages/db/src/schema/accounts.ts`) |
+  | `sessions.userId`          | `users.id` | cascade  | Removing a user must drop every outstanding session (`packages/db/src/schema/sessions.ts`)   |
+  | `verifications.identifier` | n/a        | n/a      | Verifications use a string identifier, not an FK; expiry is the cleanup mechanism            |
 
 When a new domain table joins the schema, add it to this map and pick the cascade behavior in the same commit as the migration. No silent defaults.
 
@@ -198,6 +198,12 @@ The `@pii` tag also signals to a future export-or-delete tool which columns to t
   the same major to exclude the affected release while keeping the frozen install
   reproducible. Remove the pin once the owner requires a patched minimum and audit
   remains green. See [the advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).
+
+- **Range-crossing glob and minimatch overrides (2026-11-10).** Sentry 10 bundler plugins
+  hold `glob` ^13, and `@oclif/core`, `@swc/cli`, `@vercel/queue` and `filelist` hold
+  `minimatch` ^5 to ^10; the `glob` 13 and `minimatch` 9 and 10 ranges are vulnerable. `glob` 14.0.4 and `minimatch` 11.0.5 are pinned because every owner calls
+  only `glob()`, `minimatch()` or `minimatch.match()`, which both majors keep. Remove
+  `glob` with the Sentry 11 upgrade, and `minimatch` once its owners require 11. See ADR 73.
 
 ---
 

@@ -2,7 +2,7 @@ import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
 
 /**
- * Sessions table -- Better-Auth canonical schema (1.6.x) including the
+ * Sessions table -- Better-Auth canonical schema (1.6.x, unchanged in 1.7.x) including the
  * admin plugin's `impersonatedBy` column. Includes the `token` column
  * required by Better-Auth 1.6.x (unique, used as the session cookie value).
  *

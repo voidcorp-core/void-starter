@@ -11,6 +11,7 @@
 **Reference:** `context.md` (architecture spec), `starter-plan.md` Steps 0-3, `docs/DECISIONS.md` (decisions 01, 04, 05, 07).
 
 **Pre-conditions verified:**
+
 - Bun 1.3.13 installed at `~/.bun/bin/bun`
 - Git initialized with two commits on `main` tracking `origin/main` (`voidcorp-core/void-starter`)
 - Files already present: `context.md`, `starter-plan.md`, `LICENSE`, `README.md`, `docs/DECISIONS.md`
@@ -31,6 +32,7 @@
 ### Task 1: Root package.json with workspaces declaration
 
 **Files:**
+
 - Create: `package.json`
 
 - [ ] **Step 1: Create the root package.json**
@@ -44,11 +46,7 @@ Create `/Users/folpe/Developer/void-starter/package.json`:
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.13",
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "_modules/*"
-  ],
+  "workspaces": ["apps/*", "packages/*", "_modules/*"],
   "engines": {
     "bun": ">=1.3.0",
     "node": ">=20"
@@ -81,6 +79,7 @@ git push
 ### Task 2: bunfig.toml
 
 **Files:**
+
 - Create: `bunfig.toml`
 
 - [ ] **Step 1: Create bunfig.toml**
@@ -111,6 +110,7 @@ git push
 ### Task 3: Root .gitignore
 
 **Files:**
+
 - Create: `.gitignore`
 
 - [ ] **Step 1: Create .gitignore**
@@ -174,6 +174,7 @@ git push
 ### Task 4: Install Turborepo and create turbo.json
 
 **Files:**
+
 - Create: `turbo.json`
 - Modify: `package.json` (deps via bun add)
 
@@ -233,11 +234,13 @@ git push
 ### Task 5: Create the directory skeleton
 
 **Files:**
+
 - Create: `apps/.gitkeep`, `packages/.gitkeep`, `_modules/.gitkeep`, `tooling/.gitkeep`
 
 - [ ] **Step 1: Create directories with .gitkeep so git tracks them**
 
 Run:
+
 ```bash
 mkdir -p apps packages _modules tooling
 touch apps/.gitkeep packages/.gitkeep _modules/.gitkeep tooling/.gitkeep
@@ -261,6 +264,7 @@ git push
 ### Task 6: Create @repo/config package skeleton
 
 **Files:**
+
 - Create: `packages/config/package.json`
 
 - [ ] **Step 1: Create the package.json**
@@ -313,6 +317,7 @@ git push
 ### Task 7: Shared tsconfig.base.json
 
 **Files:**
+
 - Create: `packages/config/tsconfig.base.json`
 
 - [ ] **Step 1: Create the base TS config**
@@ -356,6 +361,7 @@ git push
 ### Task 8: tsconfig.lib.json for library packages
 
 **Files:**
+
 - Create: `packages/config/tsconfig.lib.json`
 
 - [ ] **Step 1: Create the lib TS config**
@@ -390,6 +396,7 @@ git push
 ### Task 9: tsconfig.next.json for Next.js apps
 
 **Files:**
+
 - Create: `packages/config/tsconfig.next.json`
 
 - [ ] **Step 1: Create the Next.js TS config**
@@ -423,6 +430,7 @@ git push
 ### Task 10: biome.base.json shared rules
 
 **Files:**
+
 - Create: `packages/config/biome.base.json`
 
 - [ ] **Step 1: Read the Biome official documentation**
@@ -444,13 +452,7 @@ Create `/Users/folpe/Developer/void-starter/packages/config/biome.base.json`:
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": [
-      "**/.next/**",
-      "**/dist/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "**/node_modules/**"
-    ]
+    "ignore": ["**/.next/**", "**/dist/**", "**/.turbo/**", "**/coverage/**", "**/node_modules/**"]
   },
   "formatter": {
     "enabled": true,
@@ -502,6 +504,7 @@ git push
 ### Task 11: vitest.base.ts shared test config
 
 **Files:**
+
 - Create: `packages/config/vitest.base.ts`
 
 - [ ] **Step 1: Create the shared Vitest base**
@@ -538,6 +541,7 @@ git push
 ### Task 12: Root biome.json + install Biome + scripts
 
 **Files:**
+
 - Create: `biome.json`
 - Modify: `package.json` (deps + scripts)
 
@@ -607,6 +611,7 @@ git push
 ### Task 13: Install Lefthook and configure git hooks
 
 **Files:**
+
 - Create: `lefthook.yml`
 - Modify: `package.json` (dep)
 
@@ -674,6 +679,7 @@ If the commit fails: run the next 3 tasks (commitlint, knip, gitleaks installs) 
 ### Task 14: Install commitlint and config
 
 **Files:**
+
 - Create: `commitlint.config.cjs`
 - Modify: `package.json` (deps)
 
@@ -696,7 +702,19 @@ module.exports = {
     'type-enum': [
       2,
       'always',
-      ['feat', 'fix', 'chore', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'revert'],
+      [
+        'feat',
+        'fix',
+        'chore',
+        'docs',
+        'style',
+        'refactor',
+        'perf',
+        'test',
+        'build',
+        'ci',
+        'revert',
+      ],
     ],
   },
 };
@@ -723,6 +741,7 @@ git push
 ### Task 15: Install knip with workspace-aware config
 
 **Files:**
+
 - Create: `knip.json`
 - Modify: `package.json` (dep)
 
@@ -748,7 +767,14 @@ Create `/Users/folpe/Developer/void-starter/knip.json`:
       "project": "src/**/*.ts"
     },
     "apps/*": {
-      "entry": ["src/app/**/page.tsx", "src/app/**/layout.tsx", "src/app/**/route.ts", "src/middleware.ts", "src/instrumentation.ts", "next.config.ts"],
+      "entry": [
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/app/**/route.ts",
+        "src/middleware.ts",
+        "src/instrumentation.ts",
+        "next.config.ts"
+      ],
       "project": "src/**/*.{ts,tsx}"
     }
   },
@@ -775,6 +801,7 @@ git push
 ### Task 16: Configure gitleaks
 
 **Files:**
+
 - Create: `.gitleaks.toml`
 
 - [ ] **Step 1: Verify gitleaks is reachable via bunx**
@@ -825,6 +852,7 @@ git push
 ### Task 17: Renovate config
 
 **Files:**
+
 - Create: `renovate.json`
 
 - [ ] **Step 1: Read Renovate docs for monorepo defaults**
@@ -838,11 +866,7 @@ Create `/Users/folpe/Developer/void-starter/renovate.json`:
 ```json
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":semanticCommitTypeAll(chore)"
-  ],
+  "extends": ["config:recommended", ":semanticCommits", ":semanticCommitTypeAll(chore)"],
   "schedule": ["before 6am on monday"],
   "timezone": "Europe/Paris",
   "rangeStrategy": "bump",
@@ -934,6 +958,7 @@ This proves the hook chain works end-to-end.
 ### Task 19: @repo/core package skeleton
 
 **Files:**
+
 - Create: `packages/core/package.json`, `packages/core/tsconfig.json`, `packages/core/src/index.ts`, `packages/core/vitest.config.ts`
 
 - [ ] **Step 1: Create the package.json**
@@ -1027,6 +1052,7 @@ git push
 ### Task 20: @repo/core logger (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/logger.ts`, `packages/core/src/logger.test.ts`
 
 - [ ] **Step 1: Read Pino docs for the recommended Next.js setup**
@@ -1105,6 +1131,7 @@ git push
 ### Task 21: @repo/core errors (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/errors.ts`, `packages/core/src/errors.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1267,6 +1294,7 @@ git push
 ### Task 22: @repo/core env validation with @t3-oss/env-nextjs
 
 **Files:**
+
 - Create: `packages/core/src/env.ts`, `packages/core/src/env.test.ts`
 
 - [ ] **Step 1: Read @t3-oss/env-nextjs documentation**
@@ -1359,6 +1387,7 @@ git push
 ### Task 23: @repo/core sanitize helpers (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/sanitize.ts`, `packages/core/src/sanitize.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1440,6 +1469,7 @@ git push
 ### Task 24: @repo/core security-headers (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/security-headers.ts`, `packages/core/src/security-headers.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1522,6 +1552,7 @@ git push
 ### Task 25: @repo/core rate-limit in-memory adapter (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/rate-limit.ts`, `packages/core/src/rate-limit.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1650,6 +1681,7 @@ git push
 ### Task 26: @repo/core defineAction Server Action wrapper (TDD)
 
 **Files:**
+
 - Create: `packages/core/src/server-action.ts`, `packages/core/src/server-action.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1672,7 +1704,10 @@ describe('defineAction', () => {
     });
 
     const result = await action({ name: 'alice' });
-    expect(handler).toHaveBeenCalledWith({ name: 'alice' }, expect.objectContaining({ user: null }));
+    expect(handler).toHaveBeenCalledWith(
+      { name: 'alice' },
+      expect.objectContaining({ user: null }),
+    );
     expect(result).toEqual({ ok: true, name: 'alice' });
   });
 
@@ -1735,9 +1770,7 @@ type DefineActionConfig<TSchema extends ZodType, TResult> = {
 // until then.
 async function resolveAuth(auth: ActionAuth): Promise<ActionContext> {
   if (auth === 'public') return { user: null };
-  throw new Error(
-    `defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`,
-  );
+  throw new Error(`defineAction: auth mode "${auth}" requires @repo/auth, available in Phase B`);
 }
 
 export function defineAction<TSchema extends ZodType, TResult>({
@@ -1776,6 +1809,7 @@ git push
 ### Task 27: @repo/core barrel exports
 
 **Files:**
+
 - Modify: `packages/core/src/index.ts`
 
 - [ ] **Step 1: Update the index to re-export the public surface**
@@ -1884,6 +1918,7 @@ git push
 
 Run: `tree -I 'node_modules|.next|dist|.turbo' -L 3 -a`
 Expected output should show:
+
 - `apps/`, `packages/`, `_modules/`, `tooling/`, `docs/` directories
 - `packages/config/` with the 5 config files
 - `packages/core/` with `src/{index,logger,env,errors,security-headers,rate-limit,sanitize,server-action}.ts` and matching `.test.ts` files

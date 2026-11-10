@@ -11,6 +11,7 @@
 **Reference:** `context.md` Architecture principles + Auth strategy + DB schema, `starter-plan.md` Steps 4-6, `docs/DECISIONS.md` entries 02 (Better-Auth), 08 (service file layout), 09 (schemas/types merged).
 
 **Pre-conditions (verify before starting):**
+
 - `git tag phase-a-complete` exists on origin
 - `bun run test` passes 28 tests in `@repo/core`
 - `bun run lint` clean
@@ -88,6 +89,7 @@ These are NOT pre-flight checks; they are constraints baked into Phase A that th
 ### Task B1: @repo/db package skeleton
 
 **Files:**
+
 - Create: `packages/db/package.json`
 - Create: `packages/db/tsconfig.json`
 - Create: `packages/db/src/index.ts`
@@ -163,6 +165,7 @@ cd packages/db && bunx tsc --noEmit && cd ../..
 - [ ] **Step 6: Update `knip.json` to add `packages/db` workspace entry**
 
 In `knip.json`, add inside `workspaces`:
+
 ```json
 "packages/db": {
   "entry": "src/index.ts",
@@ -190,11 +193,13 @@ git push
 ### Task B2: Drizzle config and client
 
 **Files:**
+
 - Create: `packages/db/src/client.ts`
 - Create: `packages/db/drizzle.config.ts`
 
 The starter uses Neon Postgres (free tier via Vercel Marketplace) for both dev
 and prod. Local dev workflow:
+
 1. Provision a Neon project via Vercel Marketplace (10 projects free per team)
 2. Pull env vars: `vercel env pull .env.local` (drops DATABASE_URL,
    DATABASE_URL_UNPOOLED, etc.)
@@ -205,6 +210,7 @@ and prod. Local dev workflow:
 - [ ] **Step 1: Read Drizzle ORM official docs**
 
 Reference: `https://orm.drizzle.team/docs/get-started/postgresql-new` and `https://orm.drizzle.team/docs/connect-postgresql`. Confirm:
+
 - The current `drizzle()` API for postgres adapter
 - `drizzle.config.ts` schema for the installed `drizzle-kit` major
 - Whether `postgres` (postgres-js) or `pg` is the recommended adapter for the installed major
@@ -271,6 +277,7 @@ git push
 > CRITICAL (added 2026-05-07): Better-Auth 1.6.x has a CANONICAL schema shape that the Drizzle adapter expects: singular table names (`user`, `session`, `account`, `verification`), `id` as a TEXT primary key (not uuid), `emailVerified` as a BOOLEAN (not timestamp), session has a `token` column, account has `accessTokenExpiresAt` / `refreshTokenExpiresAt` / `scope` / `password`, and verification has an `updatedAt`. The fields below have been REWRITTEN on 2026-05-07 to match Better-Auth canonical schema - the plural-name aesthetic is preserved by remapping via `modelName` in Better-Auth's adapter config (Task B13). The `role` and `deletedAt` columns are extensions that Better-Auth tolerates but does not manage. If Better-Auth schema drifts at exec time, run `bunx @better-auth/cli generate` and reconcile. (See https://www.better-auth.com/docs/concepts/database for the canonical shape.)
 
 **Files:**
+
 - Create: `packages/db/src/schema/users.ts`
 - Create: `packages/db/src/schema/index.ts`
 
@@ -322,6 +329,7 @@ git push
 ### Task B4: schema/sessions table
 
 **Files:**
+
 - Create: `packages/db/src/schema/sessions.ts`
 - Modify: `packages/db/src/schema/index.ts`
 
@@ -369,6 +377,7 @@ git push
 ### Task B5: schema/accounts table
 
 **Files:**
+
 - Create: `packages/db/src/schema/accounts.ts`
 - Modify: `packages/db/src/schema/index.ts`
 
@@ -415,6 +424,7 @@ git push
 ### Task B6: schema/verifications table
 
 **Files:**
+
 - Create: `packages/db/src/schema/verifications.ts`
 - Modify: `packages/db/src/schema/index.ts`
 
@@ -451,6 +461,7 @@ git push
 ### Task B7: @repo/db barrel export
 
 **Files:**
+
 - Modify: `packages/db/src/index.ts`
 
 - [ ] **Step 1: Replace placeholder with real exports**
@@ -490,6 +501,7 @@ git push
 The original Task B8 created `tooling/docker-compose.yml` plus `db:up` / `db:down` / `db:logs` scripts for a local Postgres container. That approach has been dropped: the starter defaults to Neon Postgres via Vercel Marketplace for both dev and prod (DECISIONS.md entry 11). No docker-compose ships in the core repo. A self-hosted Postgres path is documented in `_modules/db-self-hosted-postgres/` (Phase D Task D14a) for the rare cases where Neon is not acceptable (data sovereignty, exotic extensions, or a >$500/mo Neon bill).
 
 Practical consequences for downstream tasks:
+
 - `bun run db:up` / `db:down` / `db:logs` are NOT added to `package.json`.
 - `tooling/docker-compose.yml` is NOT created. (removed; see `_modules/db-self-hosted-postgres/` in Phase D for opt-in self-hosted setup.)
 - `.env.example` (still useful at repo root) should document the Neon-via-Vercel pattern instead. Suggested content:
@@ -505,6 +517,7 @@ Add a `.env.example` commit if it has not already been created in an earlier tas
 ### Task B9: First migration generation
 
 **Files:**
+
 - Create: `packages/db/migrations/*` (auto-generated)
 
 Pre-requisite: a Neon Postgres project provisioned via the Vercel Marketplace integration (see DECISIONS.md entry 11). The Vercel project is linked locally (`vercel link`).
@@ -562,6 +575,7 @@ git push
 ### Task B10: @repo/db integration test
 
 **Files:**
+
 - Create: `packages/db/src/schema/users.integration.test.ts`
 
 - [ ] **Step 1: Read Drizzle docs on testing**
@@ -614,9 +628,7 @@ describe.skipIf(!databaseUrl)('users schema integration', () => {
   it('enforces email uniqueness', async () => {
     const email = `dup-${Date.now()}@example.com`;
     const [first] = await db.insert(users).values({ id: randomUUID(), email }).returning();
-    await expect(
-      db.insert(users).values({ id: randomUUID(), email }),
-    ).rejects.toThrow();
+    await expect(db.insert(users).values({ id: randomUUID(), email })).rejects.toThrow();
     if (first) {
       await db.delete(users).where(eq(users.id, first.id));
     }
@@ -728,6 +740,7 @@ git push
 ### Task B12: auth.types.ts
 
 **Files:**
+
 - Create: `packages/auth/src/auth.types.ts`
 
 - [ ] **Step 1: Create the types**
@@ -766,6 +779,7 @@ git push
 ### Task B13: auth.repository.ts (Better-Auth setup)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.repository.ts`
 
 - [ ] **Step 1: Read Better-Auth docs for the Drizzle adapter and Next.js integration**
@@ -775,6 +789,7 @@ git push
 Confirm the current API of `betterAuth({...})`, the `drizzleAdapter` import, and how to enable plugins (admin, magic-link).
 
 NOTE (API verified 2026-05-07 against the URLs above):
+
 - The drizzle adapter is now a SEPARATE package: `@better-auth/drizzle-adapter` (import: `import { drizzleAdapter } from '@better-auth/drizzle-adapter'`). The earlier `better-auth/adapters/drizzle` sub-path is GONE in 1.6.x.
 - The admin plugin's option is `adminRoles` (array), not `adminRole` (singular). Defaults: `defaultRole: 'user'`, `adminRoles: ['admin']`.
 - The magicLink `sendMagicLink` callback receives `({ email, token, url, metadata }, ctx)` - NOT just `{ email, url }`. The `token` and `metadata` args are useful for custom flows.
@@ -864,6 +879,7 @@ git push
 ### Task B14: auth.service.ts (public API)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.service.ts`
 
 - [ ] **Step 1: Read Better-Auth API surface**
@@ -930,6 +946,7 @@ git push
 ### Task B15: auth.policy.ts (example policies)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.policy.ts`
 - Create: `packages/auth/src/auth.policy.test.ts`
 
@@ -985,6 +1002,7 @@ git push
 ### Task B16: auth.errors.ts (domain errors)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.errors.ts`
 - Create: `packages/auth/src/auth.errors.test.ts`
 
@@ -993,7 +1011,11 @@ git push
 ```ts
 import { describe, expect, it } from 'vitest';
 import { isAppError } from '@repo/core/errors';
-import { EmailAlreadyTakenError, InvalidCredentialsError, MagicLinkExpiredError } from './auth.errors';
+import {
+  EmailAlreadyTakenError,
+  InvalidCredentialsError,
+  MagicLinkExpiredError,
+} from './auth.errors';
 
 describe('auth errors', () => {
   it('InvalidCredentialsError has 401 + INVALID_CREDENTIALS code', () => {
@@ -1024,14 +1046,24 @@ import { AppError } from '@repo/core/errors';
 
 export class InvalidCredentialsError extends AppError {
   constructor(cause?: unknown) {
-    super({ message: 'Invalid email or password', code: 'INVALID_CREDENTIALS', status: 401, cause });
+    super({
+      message: 'Invalid email or password',
+      code: 'INVALID_CREDENTIALS',
+      status: 401,
+      cause,
+    });
     this.name = 'InvalidCredentialsError';
   }
 }
 
 export class EmailAlreadyTakenError extends AppError {
   constructor(email: string, cause?: unknown) {
-    super({ message: `Email already registered: ${email}`, code: 'EMAIL_TAKEN', status: 409, cause });
+    super({
+      message: `Email already registered: ${email}`,
+      code: 'EMAIL_TAKEN',
+      status: 409,
+      cause,
+    });
     this.name = 'EmailAlreadyTakenError';
   }
 }
@@ -1056,6 +1088,7 @@ git push
 ### Task B17: auth.client.ts (browser-side helpers)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.client.ts`
 
 - [ ] **Step 1: Read Better-Auth client docs**
@@ -1092,6 +1125,7 @@ git push
 ### Task B18: defineAction integration with @repo/auth
 
 **Files:**
+
 - Modify: `packages/core/src/server-action.ts`
 
 This task replaces the Phase A scaffolding stub in `defineAction` with real auth resolution via `@repo/auth`. Note this creates a circular-looking dep at the package level (core does NOT import auth), so we use a runtime dynamic import inside `resolveAuth` to avoid the build-time cycle.
@@ -1099,6 +1133,7 @@ This task replaces the Phase A scaffolding stub in `defineAction` with real auth
 Actually a cleaner approach: parameterize the auth resolver. Let `defineAction` accept an optional `resolveAuth` function in its config, and let the app pass it in once. But this complicates the API.
 
 The simplest correct path:
+
 - `@repo/core` stays auth-agnostic. The auth resolution stays as a stub that throws.
 - The app (`apps/web`) provides its own thin wrapper around `defineAction` that injects auth via `@repo/auth`.
 
@@ -1170,6 +1205,7 @@ git push
 ### Task B19: extend defineAction tests for required + role:* paths
 
 **Files:**
+
 - Modify: `packages/core/src/server-action.test.ts` (extend, do not replace existing tests)
 
 Already in Phase A, the core defineAction has 3 tests covering 'public'. Phase B adds tests that mock the auth module to cover 'required' and 'role:*' through the auth wrapper.
@@ -1266,6 +1302,7 @@ git push
 ### Task B20: auth.service test (mocked Better-Auth)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.service.test.ts`
 
 Better-Auth's API uses next/headers internally. Tests must mock both `next/headers` and `auth.repository.auth.api.*` calls.
@@ -1363,6 +1400,7 @@ git push
 ### Task B21: auth.helper.ts and tests
 
 **Files:**
+
 - Create: `packages/auth/src/auth.helper.ts`
 - Create: `packages/auth/src/auth.helper.test.ts`
 
@@ -1433,6 +1471,7 @@ git push
 ### Task B22: @repo/auth barrel export
 
 **Files:**
+
 - Modify: `packages/auth/src/index.ts`
 
 ```ts
@@ -1474,6 +1513,7 @@ git push
 ### Task B23: env vars documented
 
 **Files:**
+
 - Create: `packages/auth/README.md`
 - Modify: `.env.example`
 
@@ -1541,6 +1581,7 @@ All five must pass with zero errors. If any fail, fix before proceeding to Secti
 ### Task B25: integration test for auth flow (with real DB)
 
 **Files:**
+
 - Create: `packages/auth/src/auth.integration.test.ts`
 
 This test exercises the full auth flow against a real Better-Auth + Postgres setup. Skips when DATABASE_URL is not set.
@@ -1548,6 +1589,7 @@ This test exercises the full auth flow against a real Better-Auth + Postgres set
 - [ ] **Step 1: Create the integration test**
 
 The test should:
+
 1. Sign up a new user via `auth.api.signUpEmail({ body: { email, password, name } })`
 2. Sign in with the same credentials via `auth.api.signInEmail({ body: { email, password } })`
 3. Verify session contains the user (use the returned token to read session)
@@ -1672,6 +1714,7 @@ git push
 ### Task B27: design tokens via Tailwind v4 @theme
 
 **Files:**
+
 - Create: `packages/ui/src/styles/globals.css`
 - Create: `packages/ui/src/tokens.ts`
 
@@ -1776,6 +1819,7 @@ git push
 ### Task B28: cn() utility (clsx + tailwind-merge)
 
 **Files:**
+
 - Create: `packages/ui/src/cn.ts`
 - Create: `packages/ui/src/cn.test.ts`
 
@@ -1828,6 +1872,7 @@ git push
 ### Task B29: Button component
 
 **Files:**
+
 - Create: `packages/ui/src/Button/Button.tsx`
 - Create: `packages/ui/src/Button/Button.helper.ts`
 - Create: `packages/ui/src/Button/Button.helper.test.ts`
@@ -1910,11 +1955,7 @@ import type { ButtonProps } from './Button.types';
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'primary', size = 'md', className, children, ...props }, ref) => (
-    <button
-      ref={ref}
-      className={cn(getButtonClasses(variant, size), className)}
-      {...props}
-    >
+    <button ref={ref} className={cn(getButtonClasses(variant, size), className)} {...props}>
       {children}
     </button>
   ),
@@ -1942,6 +1983,7 @@ git push
 ### Task B30: Input component
 
 **Files:**
+
 - Create: `packages/ui/src/Input/Input.tsx`
 - Create: `packages/ui/src/Input/Input.types.ts`
 - Create: `packages/ui/src/Input/index.ts`
@@ -2010,7 +2052,10 @@ export const Label = forwardRef<HTMLLabelElement, LabelHTMLAttributes<HTMLLabelE
   ({ className, ...props }, ref) => (
     <label
       ref={ref}
-      className={cn('text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70', className)}
+      className={cn(
+        'text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
+        className,
+      )}
       {...props}
     />
   ),
@@ -2167,6 +2212,7 @@ find packages/{db,auth,ui} -type f -not -path '*/node_modules/*'
 ```
 
 Expected:
+
 - packages/db: package.json, tsconfig.json, drizzle.config.ts, src/client.ts, src/index.ts, src/schema/{users,sessions,accounts,verifications,index}.ts, src/schema/users.integration.test.ts, migrations/0000_*.sql
 - packages/auth: package.json, README.md, tsconfig.json, src/{auth.types,auth.repository,auth.service,auth.policy,auth.errors,auth.client,auth.helper,auth-action,index}.ts, with matching .test.ts files
 - packages/ui: package.json, tsconfig.json, src/styles/globals.css, src/tokens.ts, src/cn.ts (+ test), src/{Button,Input,Label,Card,Avatar}/* with matching test files

@@ -11,11 +11,11 @@
 **Constat.** Les échecs sont remontés sous la forme `<provider>_HTTP_<status>` sans le corps de
 la réponse. Or chaque provider nomme la cause exacte dans ce corps :
 
-| Remonté par la factory | Corps réel de la réponse |
-|---|---|
-| `CLOUDFLARE_HTTP_403` | `code 10042: Please enable R2 through the Cloudflare Dashboard.` |
-| `SENTRY_HTTP_403` | `Your organization has disabled this feature for members.` |
-| `VERCEL_HTTP_400` | l'intégration GitHub ne voit pas le namespace cible |
+| Remonté par la factory | Corps réel de la réponse                                         |
+| ---------------------- | ---------------------------------------------------------------- |
+| `CLOUDFLARE_HTTP_403`  | `code 10042: Please enable R2 through the Cloudflare Dashboard.` |
+| `SENTRY_HTTP_403`      | `Your organization has disabled this feature for members.`       |
+| `VERCEL_HTTP_400`      | l'intégration GitHub ne voit pas le namespace cible              |
 
 **Impact.** Chacun de ces trois échecs a demandé une reproduction manuelle en `curl` pour
 obtenir une information que le provider avait déjà fournie. C'est la source principale du coût
@@ -32,8 +32,8 @@ ces trois providers ne contiennent pas de secret. À défaut, l'inclure derrièr
 avec `org:read` + `project:write` passe la moitié des appels puis échoue en 403.
 
 **Correctif.** Documenter les quatre scopes nécessaires : `org:read`, `team:read`,
-`project:read`, `project:write`. Préciser qu'il s'agit d'un *User* Auth Token, pas d'un
-*Organization* Auth Token (dont les scopes figés ne couvrent pas ces lectures).
+`project:read`, `project:write`. Préciser qu'il s'agit d'un _User_ Auth Token, pas d'un
+_Organization_ Auth Token (dont les scopes figés ne couvrent pas ces lectures).
 
 ## 2. Sentry : `allowMemberProjectCreation` non vérifié au preflight
 
