@@ -22,6 +22,7 @@ const jobSchema = z.object({
       matrix: z.object({ shard: z.array(z.number()) }).optional(),
     })
     .optional(),
+  container: z.object({ image: z.string() }).optional(),
   steps: z.array(stepSchema),
 });
 const workflow = z
@@ -46,9 +47,21 @@ describe('starter CI contract', () => {
   });
 
   it('runs the browser suite in shards, in parallel with the code checks', () => {
+    const versions = workflow.jobs['versions'];
+    expect(versions?.needs).toBeUndefined();
+    expect(versions?.if).toBe(workflow.jobs['code']?.if);
+    expect(
+      versions?.steps.some((step) => step.run === 'node .github/scripts/ci-versions.mjs'),
+    ).toBe(true);
     const shard = workflow.jobs['e2e-shard'];
-    expect(shard?.needs).toBeUndefined();
+    expect(shard?.needs).toBe('versions');
     expect(shard?.if).toBe(workflow.jobs['code']?.if);
+    // Browsers and their system libraries come with the image: no apt mirror on the path.
+    expect(shard?.container?.image).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expression syntax is literal YAML.
+      'mcr.microsoft.com/playwright:v${{ needs.versions.outputs.playwright }}-noble',
+    );
+    expect(shard?.steps.some((step) => step.run?.includes('playwright install'))).toBe(false);
     expect(shard?.strategy?.['fail-fast']).toBe(false);
     expect(shard?.strategy?.matrix?.shard.length).toBeGreaterThanOrEqual(2);
     expect(

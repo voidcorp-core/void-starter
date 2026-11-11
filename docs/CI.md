@@ -5,10 +5,10 @@ This document describes the CI pipeline shipped in `.github/workflows/ci.yml` an
 ## Pipeline overview
 
 CI runs on every push to `main`, on every pull request that is ready for review, on the merge
-queue (`merge_group`) and on manual dispatch. Four jobs start independently:
+queue (`merge_group`) and on manual dispatch. These jobs start independently:
 
 - `code`: lint, migrations, one Turbo run of `type-check`, `test` and `build`, then knip.
-- `e2e-shard`: the Playwright suite, split in shards (one runner each).
+- `versions` then `e2e-shard`: the Playwright suite, split in shards (one runner each).
 - `dependency-audit` and `secrets`: the independent security checks.
 
 Two aggregation jobs carry the required check names:
@@ -60,22 +60,30 @@ cancellation, and skipped results.
 
 ### Jobs: `e2e-shard` and `e2e`
 
-`e2e-shard` runs alongside `code`, not after it: each shard starts its own Postgres service and
-`next dev` server and uses no output of `code`. It is a matrix (`shard: [1, 2]`); each runner:
+`versions` (`.github/scripts/ci-versions.mjs`, a few seconds, no install) reads the one
+Playwright version `bun.lock` resolves and the bun version of `package.json#packageManager`.
+Any ambiguity fails it, which skips the shards and turns `e2e` red.
 
-1. Checkout, set up Bun and Node 24, restore the bun cache, install with the frozen lockfile.
-2. Applies DB migrations against its own Postgres service container.
-3. Installs the Playwright Chromium browser with system dependencies.
-4. Runs `bun run test:e2e --shard=<i>/<n>` from `apps/web`. On CI the config writes a blob report.
-5. On failure, uploads `blob-report-<i>` (kept one day).
+`e2e-shard` runs alongside `code`, not after it: each shard starts its own Postgres service and
+`next dev` server and uses no output of `code`. It is a matrix (`shard: [1, 2]`) running in the
+official image `mcr.microsoft.com/playwright:v<version>-noble`, which carries the browsers and
+their system libraries: no `playwright install --with-deps`, whose apt mirror took 4.5 minutes on
+2026-10-22 and failed outright on 2026-11-11. Each runner:
+
+1. Checkout, set up Node 24, install bun from npm at the pinned version (`setup-bun` needs
+   `unzip`, absent from the image), install with the frozen lockfile.
+2. Applies DB migrations against its own Postgres service, reached as `postgres:5432` (a
+   container job reaches services by label, not `localhost`).
+3. Runs `bun run test:e2e --shard=<i>/<n>` from `apps/web`. On CI the config writes a blob report.
+4. On failure, uploads `blob-report-<i>` (kept one day).
 
 `e2e` is the required check. It fails unless every shard succeeded. When a shard failed, it
 downloads the blob reports and runs `playwright merge-reports` into one `playwright-report`
 artifact.
 
 To split further, add a number to `matrix.shard`: the `n` of `--shard=i/n` is
-`strategy.job-total`. Each shard pays a fixed setup (about one minute: services, install,
-browser, dev server compile), so add one when the suite itself exceeds that per shard.
+`strategy.job-total`. Each shard pays a fixed setup (about one minute: image and services,
+install, dev server compile), so add one when the suite itself exceeds that per shard.
 Playwright keeps one worker per shard on CI, as its documentation recommends.
 
 E2E tests under `apps/web/tests/e2e/` skip gracefully when `DATABASE_URL` is unset (per `docs/AUTH.md`). In CI we provide `DATABASE_URL`, so all of them run.
@@ -109,10 +117,10 @@ contract test.
 
 ## Cache strategy
 
-| Cache       | Path                   | Key                         | Restored by                        | Saved by                    |
-| ----------- | ---------------------- | --------------------------- | ---------------------------------- | --------------------------- |
-| Bun install | `~/.bun/install/cache` | `<os>-bun-<hash(bun.lock)>` | every job that installs, by prefix | `main` push, exact key only |
-| Turbo       | `.turbo/cache`         | `<os>-turbo-<sha>`          | `code`, by prefix: the latest seed | `main` push, after pruning  |
+| Cache       | Path                   | Key                         | Restored by                               | Saved by                    |
+| ----------- | ---------------------- | --------------------------- | ----------------------------------------- | --------------------------- |
+| Bun install | `~/.bun/install/cache` | `<os>-bun-<hash(bun.lock)>` | `code`, by prefix except on `main` pushes | `main` push, exact key only |
+| Turbo       | `.turbo/cache`         | `<os>-turbo-<sha>`          | `code`, by prefix: the latest seed        | `main` push, after pruning  |
 
 Why this shape:
 
@@ -134,9 +142,8 @@ Why this shape:
 - **Task hashes must match across events.** The `code` job env is identical for every event,
   and `TURBO_SCM_*` are not task inputs, so a pull request hits the entries a `main` push saved.
 
-The browser binary is not cached: Playwright's documentation advises against it (restoring
-takes about as long as downloading). The official Playwright container was measured in
-Rekalibr and was not faster for a suite this size (see the decision record).
+The browser shards use no cache: the image carries the browsers, and in Rekalibr restoring the
+bun cache inside the container measured slower (57 s) than a cold install (37 s).
 
 **Vercel Remote Cache (opt-in).** A project already on Vercel can share hits between pull
 requests and local machines through `vercel/setup-turborepo-remote-cache-action` with an OIDC
