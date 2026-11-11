@@ -100,9 +100,12 @@ own global inputs, and when the checkout is too shallow to compare.
 Lint and knip always cover the whole repository: they are fast and outside Turbo.
 
 **A test that reads a file outside its package** must declare it in a package `turbo.json`
-with `$TURBO_ROOT$`, or Turbo neither re-runs it on that file's change nor marks it affected.
-Example: `tooling/factory/turbo.json` declares `.github/workflows/ci.yml` and `biome.json` for
-the CI contract test.
+with `$TURBO_ROOT$`, or Turbo replays it from cache when only that file changed. `--affected`
+is package-level (Turbo 2.11), so it never selects a package for a root file: the scope plan
+covers that by running the full graph for any root path that is not documentation. Keep a
+read root file out of the documentation patterns of `ci-scope.mjs`. Example:
+`tooling/factory/turbo.json` declares `.github/workflows/ci.yml` and `biome.json` for the CI
+contract test.
 
 ## Cache strategy
 

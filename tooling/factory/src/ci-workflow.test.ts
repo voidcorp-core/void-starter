@@ -111,6 +111,25 @@ describe('starter CI contract', () => {
     for (const save of saves) expect(code.indexOf(save)).toBeGreaterThan(prune);
   });
 
+  it('restores the bun cache by exact key on pushes and by prefix elsewhere', () => {
+    const restore = workflow.jobs['code']?.steps.find((step) => step.name === 'Restore bun cache');
+    const expression = String(restore?.with?.['restore-keys'] ?? '').replace(
+      /^\$\{\{\s*|\s*\}\}$/g,
+      '',
+    );
+    // Actions expressions share JavaScript's `&&`/`||` short-circuit and falsy ''.
+    const evaluate = (eventName: string): unknown =>
+      new Function('github', 'runner', 'format', `return (${expression});`)(
+        { event_name: eventName },
+        { os: 'Linux' },
+        (template: string, value: string) => template.replace('{0}', value),
+      );
+    expect(evaluate('push')).toBe('');
+    for (const eventName of ['pull_request', 'merge_group', 'workflow_dispatch']) {
+      expect(evaluate(eventName)).toBe('Linux-bun-');
+    }
+  });
+
   it('scans all available repository history without installing project packages', () => {
     const steps = workflow.jobs['secrets']?.steps ?? [];
     const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
