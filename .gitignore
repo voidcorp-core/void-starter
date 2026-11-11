@@ -19,6 +19,8 @@ coverage/
 *.lcov
 .vitest-cache/
 playwright-report/
+blob-report/
+all-blob-reports/
 test-results/
 playwright/.cache/
 

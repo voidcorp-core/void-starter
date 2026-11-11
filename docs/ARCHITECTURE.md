@@ -216,7 +216,7 @@ The four-tier split keeps each test fast in isolation: a contributor running `bu
 
 ### CI
 
-The full pipeline lives in `.github/workflows/ci.yml` (lands in Phase D Task D26). Today the local pipeline is the de-facto contract.
+The full pipeline lives in `.github/workflows/ci.yml`; `docs/CI.md` describes its jobs, affected scope, caches and time budget.
 
 The full CI pipeline runs:
 

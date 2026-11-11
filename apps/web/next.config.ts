@@ -8,8 +8,9 @@ const config: NextConfig = {
   // It controls ppr, useCache, and dynamicIO as a single unified configuration.
   cacheComponents: true,
   // TypeScript 7 is a native compiler without the legacy programmatic API that
-  // Next 16 probes during `next build`. CI runs `tsc --noEmit` before the build,
-  // so this only removes Next's duplicate TypeScript 6-specific check.
+  // Next 16 probes during `next build`. CI runs `tsc --noEmit` in the same
+  // Turbo run as the build, so this only removes Next's duplicate TypeScript
+  // 6-specific check.
   typescript: {
     ignoreBuildErrors: true,
   },
