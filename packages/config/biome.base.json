@@ -17,6 +17,8 @@
       "!**/node_modules/**",
       "!**/migrations/**",
       "!**/playwright-report/**",
+      "!**/blob-report/**",
+      "!**/all-blob-reports/**",
       "!**/test-results/**",
       "!**/next-env.d.ts"
     ]

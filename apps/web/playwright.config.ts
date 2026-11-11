@@ -7,7 +7,9 @@ export default defineConfig({
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 2 : 0,
   workers: process.env['CI'] ? 1 : undefined,
-  reporter: 'html',
+  // CI runs the suite in shards (.github/workflows/ci.yml): each writes a blob
+  // report that the required `e2e` job merges into one HTML report on failure.
+  reporter: process.env['CI'] ? [['blob'], ['list']] : 'html',
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',

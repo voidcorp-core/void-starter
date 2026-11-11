@@ -11,9 +11,10 @@ Secret scanning remains active on drafts. Required check names, application chec
 frozen installs, review protection and deployment/migration workflows are retained.
 Push validation remains because this change does not prove it redundant.
 
-Run `bun test ./.github/scripts/ci-admission.test.mjs` for the guard, actual workflow
-conditions, required-check outcomes and lifecycle regression tests. The code job
-also runs this contract in CI. No new dependency or test runner is required.
+Run `bun test ./.github/scripts` for the guard, actual workflow conditions,
+required-check outcomes and lifecycle regression tests. The code job also runs
+this contract in CI. The required `e2e` check runs the same guard over the
+browser shards. No new dependency or test runner is required.
 
 Rollback: revert the workflow and admission files together. This restores full draft
 CI (more minutes), while keeping remote protection and existing evidence unchanged.
