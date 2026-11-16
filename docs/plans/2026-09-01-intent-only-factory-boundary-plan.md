@@ -483,11 +483,11 @@ parallel execution; execution mode remains a separate human decision.
 ### Implementation tasks
 
 - [ ] **P1 / F01** — split generation exclusions from doctor-forbidden artifacts and keep historical
-  receipt comparisons tolerant, satisfying the absorbed DEV-556 contract.
+      receipt comparisons tolerant, satisfying the absorbed DEV-556 contract.
 - [ ] **P1 / F01** — record a fresh `local_ready` measurement and a warm generation-plus-doctor
-  measurement against the approved 10-minute and 2-minute budgets.
+      measurement against the approved 10-minute and 2-minute budgets.
 - [ ] **P2 / F01** — fail the test if the supported generation/doctor path spawns a provider CLI or
-  performs provider networking.
+      performs provider networking.
 - [ ] **P2 / F01** — prove pre-write validation failures leave no partial handoff artifacts.
 - [ ] **P2 / F08** — re-run both TTHW measurements on the final supported surface and record the
-  exact commands, environment, and elapsed times in the acceptance audit.
+      exact commands, environment, and elapsed times in the acceptance audit.
